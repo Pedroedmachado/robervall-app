@@ -368,7 +368,6 @@ class _Paper extends StatelessWidget {
                             KeyValue('Franquia (cliente)',
                                 money(totals.deductible)),
                           KeyValue('Seguradora', money(totals.insurerPays)),
-                          KeyValue('Cliente', money(totals.customerPays)),
                         ],
                       ],
                     ),

@@ -401,7 +401,6 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
                     if (c.type == ClaimType.seguradora)
                       totalRow('Franquia (cliente)', money(totals.deductible)),
                     totalRow('Seguradora', money(totals.insurerPays)),
-                    totalRow('Cliente', money(totals.customerPays)),
                   ],
                 ]),
               ),
