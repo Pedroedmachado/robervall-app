@@ -468,6 +468,7 @@ class _ItemsTable extends StatelessWidget {
         child: Text(
           opCode(it.op, it.laborHours, it.paintHours,
               removeInstall: it.removeInstall),
+          softWrap: false,
           style: const TextStyle(
               color: brandSeed, fontWeight: FontWeight.w800, fontSize: 12),
         ),
@@ -487,7 +488,7 @@ class _ItemsTable extends StatelessWidget {
     ];
     return Table(
       columnWidths: {
-        0: const FixedColumnWidth(64),
+        0: const FixedColumnWidth(78),
         1: const FlexColumnWidth(),
         2: const FixedColumnWidth(78),
         3: const FixedColumnWidth(40),
