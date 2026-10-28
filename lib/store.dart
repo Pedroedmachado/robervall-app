@@ -130,11 +130,49 @@ class AppStore extends ChangeNotifier {
     _saveTimer = Timer(const Duration(milliseconds: 400), _write);
   }
 
-  /// Agenda gravação sem reconstruir a interface (edição de texto).
+  Timer? _notifyTimer;
+
+  /// Edição de texto: grava e atualiza a interface quando a pessoa para de
+  /// digitar (título, lista e totais acompanham o que foi digitado).
   void saveLater([Claim? c]) {
     if (c != null) c.updatedAt = DateTime.now();
     _saveTimer?.cancel();
     _saveTimer = Timer(const Duration(milliseconds: 600), _write);
+    _notifyTimer?.cancel();
+    _notifyTimer = Timer(const Duration(milliseconds: 350), notifyListeners);
+  }
+
+  /// Registro recém-criado que ficou sem nenhuma informação.
+  bool isBlank(Claim c) =>
+      c.customerName.trim().isEmpty &&
+      c.vehicle.plate.trim().isEmpty &&
+      c.vehicle.brand.trim().isEmpty &&
+      c.vehicle.model.trim().isEmpty &&
+      c.claimNumber.trim().isEmpty &&
+      c.insurerName.trim().isEmpty &&
+      c.description.trim().isEmpty &&
+      c.accidentDate == null &&
+      c.dueDate == null &&
+      c.items.isEmpty &&
+      c.photos.isEmpty &&
+      c.damages.isEmpty &&
+      c.timeline.length <= 1;
+
+  /// Remove um registro vazio (aberto por engano) e devolve o número.
+  void discardIfBlank(Claim c) {
+    if (!claims.contains(c) || !isBlank(c)) return;
+    claims.remove(c);
+    final expected =
+        '${settings.numberPrefix}-${(settings.nextNumber - 1).toString().padLeft(4, '0')}';
+    if (c.number == expected) settings.nextNumber--;
+    changed();
+  }
+
+  @override
+  void dispose() {
+    _notifyTimer?.cancel();
+    _saveTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> flush() async {

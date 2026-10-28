@@ -15,6 +15,8 @@ if [ -f "$manifest" ]; then
     rm -f "$manifest.bak"
   fi
   sed -i.bak 's#android:label="[^"]*"#android:label="Funilar"#' "$manifest" && rm -f "$manifest.bak"
+  grep -q 'android.permission.INTERNET' "$manifest" || { echo "ERRO: permissão INTERNET não foi aplicada"; exit 1; }
+  echo "AndroidManifest:"; grep -E 'uses-permission|android:label' "$manifest"
 fi
 
 # Linux: título da janela

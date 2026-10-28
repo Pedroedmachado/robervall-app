@@ -433,13 +433,14 @@ Future<void> showReportOptions(
                 icon: const Icon(Icons.print_outlined),
                 label: const Text('Visualizar / imprimir'),
               ),
-              const SizedBox(height: 8),
-              FilledButton.tonalIcon(
-                onPressed: () => Navigator.pop(ctx, 'share'),
-                icon: const Icon(Icons.share_outlined),
-                label: const Text('Compartilhar (WhatsApp, e-mail…)'),
-              ),
-              if (!(Platform.isAndroid || Platform.isIOS)) ...[
+              if (Platform.isAndroid || Platform.isIOS) ...[
+                const SizedBox(height: 8),
+                FilledButton.tonalIcon(
+                  onPressed: () => Navigator.pop(ctx, 'share'),
+                  icon: const Icon(Icons.share_outlined),
+                  label: const Text('Compartilhar (WhatsApp, e-mail…)'),
+                ),
+              ] else ...[
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: () => Navigator.pop(ctx, 'save'),

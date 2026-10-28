@@ -52,6 +52,14 @@ class BudgetTab extends StatelessWidget {
       icon: Icons.list_alt,
       children: [
         actions,
+        if (c.items.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              'Toque num item para editar · caixa marca aprovado · arraste pela alça para reordenar',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
         const SizedBox(height: 12),
         if (c.items.isEmpty)
           const Padding(

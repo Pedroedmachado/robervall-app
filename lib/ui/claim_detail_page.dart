@@ -8,7 +8,6 @@ import '../store.dart';
 import '../theme.dart';
 import 'budget_tab.dart';
 import 'claim_form_tab.dart';
-import 'claims_page.dart';
 import 'damage_tab.dart';
 import 'photos_tab.dart';
 import 'timeline_tab.dart';
@@ -32,7 +31,14 @@ class _ClaimDetailPageState extends State<ClaimDetailPage> {
       // registra cliente/seguradora/regulador nos cadastros ao sair
       final store = _store;
       if (store != null && store.claims.contains(c)) {
-        Future.microtask(() => store.rememberContactsFrom(c));
+        Future.microtask(() {
+          if (store.isBlank(c)) {
+            store.discardIfBlank(c);
+          } else {
+            store.rememberContactsFrom(c);
+            store.changed(); // lista e painel refletem o que foi editado
+          }
+        });
         store.flush();
       }
     }
@@ -90,10 +96,9 @@ class _ClaimDetailPageState extends State<ClaimDetailPage> {
                 switch (v) {
                   case 'dup':
                     final copy = store.duplicate(c);
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                      openClaim(context, copy);
-                    }
+                    Navigator.of(context).pushReplacement(MaterialPageRoute(
+                        builder: (_) => ClaimDetailPage(claimId: copy.id)));
+                    toast(context, 'Cópia criada: ${copy.number}');
                   case 'del':
                     final ok = await confirm(
                       context,
@@ -274,7 +279,10 @@ class _TotalBar extends StatelessWidget {
         claim.type == ClaimType.terceiro;
     return Material(
       color: t.colorScheme.surfaceContainer,
-      child: SafeArea(
+      child: InkWell(
+        // toque no total leva para a aba Orçamento
+        onTap: () => DefaultTabController.of(context).animateTo(3),
+        child: SafeArea(
         top: false,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -306,6 +314,7 @@ class _TotalBar extends StatelessWidget {
             ],
           ),
         ),
+      ),
       ),
     );
   }
