@@ -92,7 +92,7 @@ class _CatalogPageState extends State<CatalogPage> {
                         ),
                         title: Text(e.description),
                         subtitle: Text([
-                          ...opDetails(e.op, e.laborHours, e.paintHours),
+                          ...opDetails(e.op, e.laborHours, e.paintHours, removeInstall: e.removeInstall),
                           if (e.partNumber.isNotEmpty) e.partNumber,
                           if (e.price > 0) money(e.price),
                         ].join(' · ')),

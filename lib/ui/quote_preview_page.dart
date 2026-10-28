@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
 
@@ -331,13 +332,7 @@ class _Paper extends StatelessWidget {
               if (items.isEmpty)
                 const Text('Nenhum item lançado.')
               else
-                for (final (i, it) in items.indexed)
-                  _ItemLine(
-                    item: it,
-                    values: itemValues(it, s),
-                    withPrices: withPrices,
-                    shaded: i.isOdd,
-                  ),
+                _ItemsTable(items: items, settings: s, withPrices: withPrices),
               if (withPrices) ...[
                 const SizedBox(height: 12),
                 Align(
@@ -383,6 +378,10 @@ class _Paper extends StatelessWidget {
                 if (c.dueDate != null)
                   Text('Previsão de entrega: ${date(c.dueDate)}'),
                 Text('Validade do orçamento: ${s.budgetValidityDays} dias'),
+              ],
+              if (items.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _Legend(items: items, withPrices: withPrices),
               ],
               if (withPhotos) ...[
                 const SizedBox(height: 16),
@@ -433,56 +432,204 @@ class _Paper extends StatelessWidget {
   }
 }
 
-class _ItemLine extends StatelessWidget {
-  const _ItemLine(
-      {required this.item,
-      required this.values,
-      required this.withPrices,
-      required this.shaded});
-  final BudgetItem item;
-  final ItemValues values;
+const _head = TextStyle(
+    color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700);
+const _num = TextStyle(fontSize: 13, fontFeatures: [FontFeature.tabularFigures()]);
+
+String _originShort(PartOrigin o) => switch (o) {
+      PartOrigin.nenhuma => '',
+      PartOrigin.original => 'Original',
+      PartOrigin.genuina => 'Genuína',
+      PartOrigin.paralela => 'Paralela',
+      PartOrigin.usada => 'Usada',
+    };
+
+/// Tabela de peças e serviços com siglas (igual ao PDF).
+class _ItemsTable extends StatelessWidget {
+  const _ItemsTable(
+      {required this.items, required this.settings, required this.withPrices});
+  final List<BudgetItem> items;
+  final Settings settings;
   final bool withPrices;
-  final bool shaded;
 
   @override
   Widget build(BuildContext context) {
-    final it = item;
-    final qty = it.qty <= 0 ? 1.0 : it.qty;
-    final extra = <String>[
-      if (it.partNumber.isNotEmpty) it.partNumber,
-      if (it.op == ItemOp.troca && it.origin != PartOrigin.nenhuma)
-        it.origin.label,
-      if (withPrices && (it.op == ItemOp.troca || it.op == ItemOp.servico))
-        '${qty == 1 ? '' : '${num2(qty)} × '}${money(it.price)}',
+    return LayoutBuilder(builder: (context, cons) {
+      return cons.maxWidth >= 560 ? _wide() : _narrow();
+    });
+  }
+
+  Widget _code(BudgetItem it) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: brandSeed.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          opCode(it.op, it.laborHours, it.paintHours,
+              removeInstall: it.removeInstall),
+          style: const TextStyle(
+              color: brandSeed, fontWeight: FontWeight.w800, fontSize: 12),
+        ),
+      );
+
+  Widget _wide() {
+    Widget cell(String t, {bool right = false, TextStyle? style}) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
+          child: Text(t,
+              textAlign: right ? TextAlign.right : TextAlign.left,
+              style: style ?? _num),
+        );
+    final headers = [
+      'Sigla', 'Peça / serviço', 'Origem', 'Qtd', 'M.O. (h)', 'Pint. (h)',
+      if (withPrices) 'Peça/serv.',
+      if (withPrices) 'Total',
+    ];
+    return Table(
+      columnWidths: {
+        0: const FixedColumnWidth(64),
+        1: const FlexColumnWidth(),
+        2: const FixedColumnWidth(78),
+        3: const FixedColumnWidth(40),
+        4: const FixedColumnWidth(64),
+        5: const FixedColumnWidth(64),
+        if (withPrices) 6: const FixedColumnWidth(96),
+        if (withPrices) 7: const FixedColumnWidth(104),
+      },
+      defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+      border: TableBorder(
+          horizontalInside: BorderSide(color: Colors.grey.shade300, width: 0.6)),
+      children: [
+        TableRow(
+          decoration: const BoxDecoration(color: brandSeed),
+          children: [
+            for (final (i, h) in headers.indexed)
+              cell(h, right: i >= 3, style: _head),
+          ],
+        ),
+        for (final (i, it) in items.indexed)
+          () {
+            final v = itemValues(it, settings);
+            final priced = it.op == ItemOp.troca || it.op == ItemOp.servico;
+            return TableRow(
+              decoration: BoxDecoration(
+                  color: i.isOdd ? const Color(0xFFF3F6F8) : null),
+              children: [
+                Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: Align(
+                        alignment: Alignment.centerLeft, child: _code(it))),
+                cell(it.partNumber.isEmpty
+                    ? it.description
+                    : '${it.description}  (${it.partNumber})'),
+                cell(it.op == ItemOp.troca ? _originShort(it.origin) : ''),
+                cell(priced ? num2(it.qty <= 0 ? 1 : it.qty) : '', right: true),
+                cell(it.laborHours > 0 ? num2(it.laborHours) : '', right: true),
+                cell(it.paintHours > 0 ? num2(it.paintHours) : '', right: true),
+                if (withPrices)
+                  cell(priced ? money(v.parts + v.services) : '', right: true),
+                if (withPrices)
+                  cell(money(v.total),
+                      right: true,
+                      style: _num.copyWith(fontWeight: FontWeight.w700)),
+              ],
+            );
+          }(),
+      ],
+    );
+  }
+
+  Widget _narrow() {
+    return Column(
+      children: [
+        for (final (i, it) in items.indexed)
+          () {
+            final v = itemValues(it, settings);
+            final info = <String>[
+              if (it.laborHours > 0) 'M.O. ${num2(it.laborHours)} h',
+              if (it.paintHours > 0) 'Pint. ${num2(it.paintHours)} h',
+              if (it.op == ItemOp.troca && it.origin != PartOrigin.nenhuma)
+                _originShort(it.origin),
+              if (withPrices &&
+                  (it.op == ItemOp.troca || it.op == ItemOp.servico))
+                'peça/serv. ${money(v.parts + v.services)}',
+            ];
+            return Container(
+              color: i.isOdd ? const Color(0xFFF3F6F8) : null,
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(width: 58, child: Align(
+                      alignment: Alignment.centerLeft, child: _code(it))),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(it.description,
+                            style: const TextStyle(fontWeight: FontWeight.w600)),
+                        if (info.isNotEmpty)
+                          Text(info.join('  ·  '),
+                              style: TextStyle(
+                                  fontSize: 12, color: Colors.grey.shade700)),
+                      ],
+                    ),
+                  ),
+                  if (withPrices)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: Text(money(v.total),
+                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                    ),
+                ],
+              ),
+            );
+          }(),
+      ],
+    );
+  }
+}
+
+class _Legend extends StatelessWidget {
+  const _Legend({required this.items, required this.withPrices});
+  final List<BudgetItem> items;
+  final bool withPrices;
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = [
+      ...legendFor(items),
+      ('M.O.', 'horas de mão de obra'),
+      ('Pint.', 'horas de pintura'),
+      if (withPrices) ('Peça/serv.', 'valor da peça nova ou do serviço'),
     ];
     return Container(
-      color: shaded ? const Color(0xFFF3F6F8) : null,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      child: Row(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(it.description,
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
-                Text(
-                  [
-                    opDetails(it.op, it.laborHours, it.paintHours).join(' · '),
-                    ...extra,
-                  ].join(' · '),
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-                ),
-              ],
-            ),
+          const Text('Legenda',
+              style: TextStyle(color: brandSeed, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 16,
+            runSpacing: 4,
+            children: [
+              for (final (code, meaning) in entries)
+                Text.rich(TextSpan(children: [
+                  TextSpan(
+                      text: '$code  ',
+                      style: const TextStyle(
+                          color: brandSeed, fontWeight: FontWeight.w800)),
+                  TextSpan(text: meaning),
+                ]), style: const TextStyle(fontSize: 12)),
+            ],
           ),
-          if (withPrices)
-            Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: Text(money(values.total),
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
-            ),
         ],
       ),
     );

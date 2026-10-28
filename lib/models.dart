@@ -200,6 +200,9 @@ class BudgetItem {
   bool approved;
   String note;
 
+  /// Mão de obra na peça é remoção e instalação (R I), não reparo.
+  bool removeInstall;
+
   BudgetItem({
     String? id,
     this.description = '',
@@ -216,6 +219,7 @@ class BudgetItem {
     this.region = '',
     this.approved = true,
     this.note = '',
+    this.removeInstall = false,
   }) : id = id ?? newId();
 
   BudgetItem copy() => BudgetItem.fromJson(toJson())..id = newId();
@@ -236,6 +240,7 @@ class BudgetItem {
         'region': region,
         'approved': approved,
         'note': note,
+        'ri': removeInstall,
       };
 
   factory BudgetItem.fromJson(Map<String, dynamic> j) => BudgetItem(
@@ -255,6 +260,7 @@ class BudgetItem {
         region: _s(j['region']),
         approved: j['approved'] != false,
         note: _s(j['note']),
+        removeInstall: j['ri'] == true,
       );
 }
 
@@ -524,6 +530,7 @@ class CatalogItem {
   double laborHours;
   double paintHours;
   String region;
+  bool removeInstall;
 
   CatalogItem({
     String? id,
@@ -535,6 +542,7 @@ class CatalogItem {
     this.laborHours = 0,
     this.paintHours = 0,
     this.region = '',
+    this.removeInstall = false,
   }) : id = id ?? newId();
 
   BudgetItem toBudgetItem() => BudgetItem(
@@ -546,6 +554,7 @@ class CatalogItem {
         laborHours: laborHours,
         paintHours: paintHours,
         region: region,
+        removeInstall: removeInstall,
       );
 
   Map<String, dynamic> toJson() => {
@@ -558,6 +567,7 @@ class CatalogItem {
         'laborHours': laborHours,
         'paintHours': paintHours,
         'region': region,
+        'ri': removeInstall,
       };
 
   factory CatalogItem.fromJson(Map<String, dynamic> j) => CatalogItem(
@@ -571,6 +581,7 @@ class CatalogItem {
         laborHours: _d(j['laborHours']),
         paintHours: _d(j['paintHours']),
         region: _s(j['region']),
+        removeInstall: j['ri'] == true,
       );
 }
 
@@ -666,12 +677,47 @@ class Settings {
 // ---------------------------------------------------------------------------
 // Peça unificada: uma linha por peça, com as operações por extenso.
 
+/// Siglas das operações (usadas no PDF e na pré-visualização).
+const opLegend = <(String, String)>[
+  ('T', 'Troca da peça (peça nova)'),
+  ('R I', 'Remoção e instalação'),
+  ('R', 'Reparo / recuperação da peça'),
+  ('P', 'Pintura'),
+  ('S', 'Serviço'),
+];
+
+/// Sigla da linha, ex.: "T / P", "R I / P", "R / P".
+String opCode(ItemOp op, double laborHours, double paintHours,
+    {bool removeInstall = false}) {
+  if (op == ItemOp.servico) return 'S';
+  final parts = <String>[
+    if (op == ItemOp.troca) 'T',
+    if (op != ItemOp.troca && laborHours > 0) removeInstall ? 'R I' : 'R',
+    if (paintHours > 0) 'P',
+  ];
+  if (parts.isEmpty) return op == ItemOp.troca ? 'T' : (removeInstall ? 'R I' : 'R');
+  return parts.join(' / ');
+}
+
+/// Siglas usadas num conjunto de linhas, na ordem da legenda.
+List<(String, String)> legendFor(Iterable<BudgetItem> items) {
+  final used = <String>{};
+  for (final it in items) {
+    used.addAll(opCode(it.op, it.laborHours, it.paintHours,
+            removeInstall: it.removeInstall)
+        .split(' / '));
+  }
+  return [for (final e in opLegend) if (used.contains(e.$1)) e];
+}
+
 /// Nome das operações sem horas, ex.: "Troca + pintura".
-String opNames(ItemOp op, double laborHours, double paintHours) {
+String opNames(ItemOp op, double laborHours, double paintHours,
+    {bool removeInstall = false}) {
   if (op == ItemOp.servico) return 'Serviço';
   final parts = <String>[
     if (op == ItemOp.troca) 'Troca',
-    if (op != ItemOp.troca && laborHours > 0) 'Reparo',
+    if (op != ItemOp.troca && laborHours > 0)
+      removeInstall ? 'Remoção e instalação' : 'Reparo',
     if (paintHours > 0) 'Pintura',
   ];
   if (parts.isEmpty) return op == ItemOp.troca ? 'Troca' : 'Reparo';
@@ -685,12 +731,17 @@ String _h(double v) {
 }
 
 /// Operações com horas, ex.: ["Troca", "Mão de obra 1 h", "Pintura 2 h"].
-List<String> opDetails(ItemOp op, double laborHours, double paintHours) {
+List<String> opDetails(ItemOp op, double laborHours, double paintHours,
+    {bool removeInstall = false}) {
   if (op == ItemOp.servico) return ['Serviço'];
   return [
     if (op == ItemOp.troca) 'Troca',
     if (laborHours > 0)
-      op == ItemOp.troca ? 'Mão de obra ${_h(laborHours)}' : 'Reparo ${_h(laborHours)}',
+      op == ItemOp.troca
+          ? 'Mão de obra ${_h(laborHours)}'
+          : (removeInstall
+              ? 'Remoção e instalação ${_h(laborHours)}'
+              : 'Reparo ${_h(laborHours)}'),
     if (paintHours > 0) 'Pintura ${_h(paintHours)}',
     if (op != ItemOp.troca && laborHours <= 0 && paintHours <= 0) 'Reparo',
   ];
@@ -739,6 +790,7 @@ List<BudgetItem> mergePartLines(List<BudgetItem> items) {
     }
     same.laborHours += it.laborHours;
     same.paintHours += it.paintHours;
+    same.removeInstall = same.removeInstall || it.removeInstall;
     if (same.op != ItemOp.troca) {
       same.op = opFor(
           service: false,

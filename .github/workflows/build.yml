@@ -28,7 +28,7 @@ jobs:
       - name: Dependências do Linux
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev poppler-utils fonts-dejavu-core
       - name: Build
         shell: bash
         run: |
@@ -42,6 +42,13 @@ jobs:
             echo "== analyze"; flutter analyze --no-fatal-infos --no-fatal-warnings || echo "ANALYZE_FAILED"
             echo "== test"; flutter test || echo "TEST_FAILED"
           } 2>&1 | tee ci/checks.log
+          {
+            echo "== exemplos visuais"
+            mkdir -p ci/exemplo
+            SAMPLE_OUT=$PWD/ci/exemplo flutter test test/sample_preview_test.dart --update-goldens \
+              && cp test/goldens/*.png ci/exemplo/ \
+              && (cd ci/exemplo && for f in *.pdf; do pdftoppm -png -r 75 "$f" "${f%.pdf}"; done; ls -la)
+          } 2>&1 | tee -a ci/checks.log || true
           flutter build apk --release 2>&1 | tee ci/android.log || status=1
           flutter build linux --release 2>&1 | tee ci/linux.log || status=$((status+2))
           echo "$status" > ci/android-linux.status

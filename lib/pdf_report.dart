@@ -232,66 +232,81 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
           ]),
           pw.SizedBox(height: 8),
         ],
-        pw.Text('Itens', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: primary)),
+        pw.Text('Peças e serviços',
+            style: pw.TextStyle(
+                fontSize: 11, fontWeight: pw.FontWeight.bold, color: primary)),
         pw.SizedBox(height: 4),
         if (items.isEmpty)
           pw.Text('Nenhum item lançado.', style: normal)
         else
           pw.TableHelper.fromTextArray(
-            headers: withPrices
-                ? ['Operação', 'Peça / serviço', 'Origem', 'Qtd', 'Peça/serv.', 'MO h', 'Pint. h', 'Total']
-                : ['Operação', 'Peça / serviço', 'Origem', 'Qtd', 'MO h', 'Pint. h'],
+            headers: [
+              'Sigla',
+              'Peça / serviço',
+              'Origem',
+              'Qtd',
+              'M.O. (h)',
+              'Pint. (h)',
+              if (withPrices) 'Peça/serv.',
+              if (withPrices) 'Total',
+            ],
             data: [
               for (final it in items)
                 () {
                   final v = itemValues(it, s);
-                  final row = <String>[
-                    _t(opNames(it.op, it.laborHours, it.paintHours)),
+                  final priced =
+                      it.op == ItemOp.troca || it.op == ItemOp.servico;
+                  return <String>[
+                    opCode(it.op, it.laborHours, it.paintHours,
+                        removeInstall: it.removeInstall),
                     _t(it.description +
-                        (it.partNumber.isEmpty ? '' : ' (${it.partNumber})')),
-                    _t(it.op == ItemOp.troca && it.origin != PartOrigin.nenhuma
-                        ? it.origin.label
-                        : ''),
-                    num2(it.qty),
+                        (it.partNumber.isEmpty ? '' : '  (${it.partNumber})')),
+                    _t(it.op == ItemOp.troca ? _originShort(it.origin) : ''),
+                    priced ? num2(it.qty <= 0 ? 1 : it.qty) : '',
+                    it.laborHours > 0 ? num2(it.laborHours) : '',
+                    it.paintHours > 0 ? num2(it.paintHours) : '',
+                    if (withPrices)
+                      priced ? _t(money(v.parts + v.services)) : '',
+                    if (withPrices) _t(money(v.total)),
                   ];
-                  if (withPrices) row.add(_t(money(v.parts + v.services)));
-                  row.add(it.laborHours > 0 ? num2(it.laborHours) : '');
-                  row.add(it.paintHours > 0 ? num2(it.paintHours) : '');
-                  if (withPrices) row.add(_t(money(v.total)));
-                  return row;
                 }(),
             ],
+            border: const pw.TableBorder(
+              horizontalInside:
+                  pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+              bottom: pw.BorderSide(color: PdfColors.grey400, width: 0.6),
+            ),
             headerStyle: pw.TextStyle(
-                fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+                fontSize: 8,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.white),
             headerDecoration: const pw.BoxDecoration(color: primary),
-            cellStyle: const pw.TextStyle(fontSize: 8),
+            headerAlignment: pw.Alignment.centerLeft,
+            cellStyle: const pw.TextStyle(fontSize: 8.5),
+            cellPadding:
+                const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 4),
             oddRowDecoration: const pw.BoxDecoration(color: light),
             cellAlignment: pw.Alignment.centerLeft,
-            cellAlignments: withPrices
-                ? {
-                    3: pw.Alignment.centerRight,
-                    4: pw.Alignment.centerRight,
-                    5: pw.Alignment.centerRight,
-                    6: pw.Alignment.centerRight,
-                    7: pw.Alignment.centerRight,
-                  }
-                : {
-                    3: pw.Alignment.centerRight,
-                    4: pw.Alignment.centerRight,
-                    5: pw.Alignment.centerRight,
-                  },
-            columnWidths: withPrices
-                ? {
-                    0: const pw.FixedColumnWidth(70),
-                    1: const pw.FlexColumnWidth(4),
-                    2: const pw.FlexColumnWidth(2),
-                    3: const pw.FixedColumnWidth(26),
-                    4: const pw.FixedColumnWidth(62),
-                    5: const pw.FixedColumnWidth(32),
-                    6: const pw.FixedColumnWidth(34),
-                    7: const pw.FixedColumnWidth(62),
-                  }
-                : null,
+            headerAlignments: {
+              for (var i = 3; i < (withPrices ? 8 : 6); i++)
+                i: pw.Alignment.centerRight,
+              0: pw.Alignment.center,
+            },
+            cellAlignments: {
+              for (var i = 3; i < (withPrices ? 8 : 6); i++)
+                i: pw.Alignment.centerRight,
+              0: pw.Alignment.center,
+            },
+            columnWidths: {
+              0: const pw.FixedColumnWidth(38),
+              1: const pw.FlexColumnWidth(4),
+              2: const pw.FixedColumnWidth(50),
+              3: const pw.FixedColumnWidth(24),
+              4: const pw.FixedColumnWidth(36),
+              5: const pw.FixedColumnWidth(36),
+              if (withPrices) 6: const pw.FixedColumnWidth(62),
+              if (withPrices) 7: const pw.FixedColumnWidth(66),
+            },
           ),
         if (withPrices) ...[
           pw.SizedBox(height: 10),
@@ -344,6 +359,53 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
             ],
           ),
         ],
+        if (items.isNotEmpty) ...[
+          pw.SizedBox(height: 10),
+          pw.Container(
+            padding: const pw.EdgeInsets.all(8),
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.grey300, width: 0.6),
+              borderRadius: pw.BorderRadius.circular(4),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text('Legenda',
+                    style: pw.TextStyle(
+                        fontSize: 8.5,
+                        fontWeight: pw.FontWeight.bold,
+                        color: primary)),
+                pw.SizedBox(height: 3),
+                pw.Wrap(
+                  spacing: 14,
+                  runSpacing: 3,
+                  children: [
+                    for (final (code, meaning) in [
+                      ...legendFor(items),
+                      ('M.O.', 'horas de mão de obra'),
+                      ('Pint.', 'horas de pintura'),
+                      if (withPrices)
+                        ('Peça/serv.', 'valor da peça nova ou do serviço'),
+                    ])
+                      pw.RichText(
+                        text: pw.TextSpan(children: [
+                          pw.TextSpan(
+                              text: '$code  ',
+                              style: pw.TextStyle(
+                                  fontSize: 8,
+                                  fontWeight: pw.FontWeight.bold,
+                                  color: primary)),
+                          pw.TextSpan(
+                              text: _t(meaning),
+                              style: const pw.TextStyle(fontSize: 8)),
+                        ]),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
         if (images.isNotEmpty) ...[
           pw.SizedBox(height: 14),
           pw.Text('Fotos', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: primary)),
@@ -386,6 +448,21 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
     ),
   );
   return doc.save();
+}
+
+String _originShort(PartOrigin o) {
+  switch (o) {
+    case PartOrigin.nenhuma:
+      return '';
+    case PartOrigin.original:
+      return 'Original';
+    case PartOrigin.genuina:
+      return 'Genuína';
+    case PartOrigin.paralela:
+      return 'Paralela';
+    case PartOrigin.usada:
+      return 'Usada';
+  }
 }
 
 pw.Widget _signature(String name) => pw.Column(children: [

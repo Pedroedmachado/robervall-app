@@ -9,3 +9,4 @@ build/
 pubspec.lock.bak
 out/
 ci/
+test/goldens/

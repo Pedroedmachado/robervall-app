@@ -140,4 +140,21 @@ void main() {
     expect(opFor(service: false, replace: false, laborHours: 0, paintHours: 2),
         ItemOp.pintura);
   });
+
+  test('siglas das operações e legenda', () {
+    expect(opCode(ItemOp.troca, 1, 0), 'T');
+    expect(opCode(ItemOp.troca, 1, 4), 'T / P');
+    expect(opCode(ItemOp.reparo, 2, 3), 'R / P');
+    expect(opCode(ItemOp.reparo, 1, 4, removeInstall: true), 'R I / P');
+    expect(opCode(ItemOp.reparo, 1, 0, removeInstall: true), 'R I');
+    expect(opCode(ItemOp.pintura, 0, 2), 'P');
+    expect(opCode(ItemOp.servico, 0, 0), 'S');
+    final legend = legendFor([
+      BudgetItem(op: ItemOp.troca, paintHours: 2),
+      BudgetItem(op: ItemOp.reparo, laborHours: 1, removeInstall: true),
+    ]);
+    expect(legend.map((e) => e.\$1), ['T', 'R I', 'P']);
+    final it = BudgetItem(op: ItemOp.reparo, laborHours: 1, removeInstall: true);
+    expect(BudgetItem.fromJson(it.toJson()).removeInstall, isTrue);
+  });
 }

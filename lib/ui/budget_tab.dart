@@ -290,7 +290,8 @@ class _ItemRow extends StatelessWidget {
                         runSpacing: 4,
                         children: [
                           for (final d in opDetails(
-                              it.op, it.laborHours, it.paintHours))
+                              it.op, it.laborHours, it.paintHours,
+                              removeInstall: it.removeInstall))
                             OpChip(d),
                         ],
                       ),
@@ -415,11 +416,13 @@ class _ItemEditorState extends State<_ItemEditor> {
       it.paintHours = ci.paintHours;
       _service = ci.op == ItemOp.servico;
       _replace = ci.op == ItemOp.troca;
+      it.removeInstall = ci.removeInstall;
       if (ci.region.isNotEmpty) it.region = ci.region;
     });
   }
 
   void _applyOp() {
+    if (_service || _replace) it.removeInstall = false;
     if (_service) {
       it.laborHours = 0;
       it.paintHours = 0;
@@ -465,6 +468,7 @@ class _ItemEditorState extends State<_ItemEditor> {
                     laborHours: it.laborHours,
                     paintHours: it.paintHours,
                     region: it.region,
+                    removeInstall: it.removeInstall,
                   ));
                 }
                 Navigator.pop(context, it);
@@ -510,6 +514,21 @@ class _ItemEditorState extends State<_ItemEditor> {
               value: _replace,
               onChanged: (b) => setState(() => _replace = b),
             ),
+            if (!_replace) ...[
+              const SizedBox(height: 4),
+              Wrap(spacing: 8, runSpacing: 4, children: [
+                ChoiceChip(
+                  label: const Text('Reparo (R)'),
+                  selected: !it.removeInstall,
+                  onSelected: (_) => setState(() => it.removeInstall = false),
+                ),
+                ChoiceChip(
+                  label: const Text('Remoção e instalação (R I)'),
+                  selected: it.removeInstall,
+                  onSelected: (_) => setState(() => it.removeInstall = true),
+                ),
+              ]),
+            ],
           ],
           const SizedBox(height: 8),
           FieldGrid(maxColumns: 2, children: [
@@ -530,7 +549,9 @@ class _ItemEditorState extends State<_ItemEditor> {
               NumField(
                 label: _replace
                     ? 'Horas de mão de obra (tirar e colocar)'
-                    : 'Horas de reparo',
+                    : (it.removeInstall
+                        ? 'Horas de remoção e instalação'
+                        : 'Horas de reparo'),
                 suffix: 'h',
                 value: it.laborHours,
                 onChanged: (n) => setState(() => it.laborHours = n),
@@ -608,7 +629,7 @@ class _ItemEditorState extends State<_ItemEditor> {
           ),
           const Divider(height: 24),
           Wrap(spacing: 4, runSpacing: 4, children: [
-            for (final d in opDetails(it.op, it.laborHours, it.paintHours))
+            for (final d in opDetails(it.op, it.laborHours, it.paintHours, removeInstall: it.removeInstall))
               OpChip(d),
           ]),
           const SizedBox(height: 8),
@@ -683,7 +704,7 @@ class _CatalogAutocomplete extends StatelessWidget {
                     dense: true,
                     title: Text(o.description),
                     subtitle: Text([
-                      ...opDetails(o.op, o.laborHours, o.paintHours),
+                      ...opDetails(o.op, o.laborHours, o.paintHours, removeInstall: o.removeInstall),
                       if (o.price > 0) money(o.price),
                     ].join(' · ')),
                     onTap: () => onSelected(o),
@@ -739,7 +760,7 @@ Future<List<CatalogItem>> pickFromCatalog(
                                 b == true ? selected.add(e) : selected.remove(e)),
                             title: Text(e.description),
                             subtitle: Text([
-                              ...opDetails(e.op, e.laborHours, e.paintHours),
+                              ...opDetails(e.op, e.laborHours, e.paintHours, removeInstall: e.removeInstall),
                               if (e.price > 0) money(e.price),
                             ].join(' · ')),
                           );
