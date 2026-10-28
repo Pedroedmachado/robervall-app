@@ -107,6 +107,22 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: dl
+      - name: Criar release
+        if: needs.android-linux.result == 'success' && needs.windows.result == 'success'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          mkdir -p /tmp/logs
+          tag="v1.0.${GITHUB_RUN_NUMBER}"
+          ls -laR dl > /tmp/logs/release.log 2>&1
+          gh release create "$tag" dl/out-*/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Robervall $tag" \
+            --notes "Android: instale o Robervall-android.apk. Windows: extraia o .zip e abra robervall.exe. Linux: extraia o .tar.gz e rode bundle/robervall." \
+            >> /tmp/logs/release.log 2>&1 && echo RELEASE_OK >> /tmp/logs/release.log || echo RELEASE_FAILED >> /tmp/logs/release.log
       - name: Publicar logs no branch ci-logs
         shell: bash
         run: |
@@ -127,14 +143,3 @@ jobs:
           git add -A
           git commit -m "logs ${GITHUB_RUN_NUMBER} ${GITHUB_SHA}" >/dev/null
           git push -f origin ci-logs
-      - name: Criar release
-        if: needs.android-linux.result == 'success' && needs.windows.result == 'success'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          tag="v1.0.${GITHUB_RUN_NUMBER}"
-          gh release create "$tag" dl/out-*/* \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "Robervall $tag" \
-            --notes "Android: instale o Robervall-android.apk. Windows: extraia o .zip e abra robervall.exe. Linux: extraia o .tar.gz e rode bundle/robervall."
