@@ -68,23 +68,18 @@ class _ClaimDetailPageState extends State<ClaimDetailPage> {
               Text(
                 '${c.number}${c.vehicle.plate.isEmpty ? '' : ' · ${c.vehicle.plate}'}',
                 style: const TextStyle(fontWeight: FontWeight.w800),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
               Text(
                 c.vehicle.title,
                 style: Theme.of(context).textTheme.bodySmall,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
           actions: [
-            Padding(
-              padding: const EdgeInsets.only(right: 4),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: () => _changeStatus(context, c),
-                child: StatusChip(c.status),
-              ),
-            ),
             IconButton(
               tooltip: 'PDF do orçamento',
               icon: const Icon(Icons.picture_as_pdf_outlined),
@@ -128,22 +123,63 @@ class _ClaimDetailPageState extends State<ClaimDetailPage> {
               ],
             ),
           ],
-          bottom: TabBar(
-            isScrollable: !wide,
-            tabAlignment: wide ? TabAlignment.fill : TabAlignment.start,
-            tabs: [
-              const Tab(icon: Icon(Icons.description_outlined), text: 'Dados'),
-              Tab(
-                  icon: const Icon(Icons.car_repair),
-                  text: 'Avarias (${c.damages.length})'),
-              Tab(
-                  icon: const Icon(Icons.photo_library_outlined),
-                  text: 'Fotos (${c.photos.length})'),
-              Tab(
-                  icon: const Icon(Icons.request_quote_outlined),
-                  text: 'Orçamento (${c.items.length})'),
-              const Tab(icon: Icon(Icons.timeline), text: 'Histórico'),
-            ],
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(72 + 44),
+            child: Column(
+              children: [
+                SizedBox(
+                  height: 44,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        InkWell(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: () => _changeStatus(context, c),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            StatusChip(c.status),
+                            const Icon(Icons.arrow_drop_down, size: 20),
+                          ]),
+                        ),
+                        const SizedBox(width: 8),
+                        if (c.isOverdue)
+                          const Flexible(
+                            child: Text('Entrega atrasada',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.w600)),
+                          )
+                        else if (c.dueDate != null)
+                          Flexible(
+                            child: Text('Entrega ${date(c.dueDate)}',
+                                maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                TabBar(
+
+                  isScrollable: !wide,
+                  tabAlignment: wide ? TabAlignment.fill : TabAlignment.start,
+                  tabs: [
+                    const Tab(icon: Icon(Icons.description_outlined), text: 'Dados'),
+                    Tab(
+                        icon: const Icon(Icons.car_repair),
+                        text: 'Avarias (${c.damages.length})'),
+                    Tab(
+                        icon: const Icon(Icons.photo_library_outlined),
+                        text: 'Fotos (${c.photos.length})'),
+                    Tab(
+                        icon: const Icon(Icons.request_quote_outlined),
+                        text: 'Orçamento (${c.items.length})'),
+                    const Tab(icon: Icon(Icons.timeline), text: 'Histórico'),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
         body: TabBarView(

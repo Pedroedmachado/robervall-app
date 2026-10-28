@@ -149,9 +149,12 @@ class _ClaimsPageState extends State<ClaimsPage> {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
             child: Row(
               children: [
-                Text('${list.length} ${list.length == 1 ? 'registro' : 'registros'}',
-                    style: Theme.of(context).textTheme.bodySmall),
-                const Spacer(),
+                Expanded(
+                  child: Text(
+                      '${list.length} ${list.length == 1 ? 'registro' : 'registros'}',
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall),
+                ),
                 Text('Total ${money(sum)}',
                     style: Theme.of(context)
                         .textTheme
@@ -268,6 +271,10 @@ class _ClaimCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: [
+                        Expanded(
+                          child: Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
                         Icon(Icons.photo_camera_outlined,
                             size: 14, color: th.colorScheme.outline),
                         Text(' ${c.photos.length}  ',
@@ -286,7 +293,9 @@ class _ClaimCard extends StatelessWidget {
                               style: th.textTheme.bodySmall?.copyWith(
                                   color: c.isOverdue ? Colors.red : null)),
                         ],
-                        const Spacer(),
+                            ],
+                          ),
+                        ),
                         if (t.possibleTotalLoss)
                           const Padding(
                             padding: EdgeInsets.only(right: 6),

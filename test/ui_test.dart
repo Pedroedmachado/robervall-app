@@ -69,6 +69,16 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Future<void> tapTab(WidgetTester tester, String label) async {
+    final f = find
+        .descendant(of: find.byType(TabBar), matching: find.textContaining(label))
+        .first;
+    await tester.ensureVisible(f);
+    await tester.pumpAndSettle();
+    await tester.tap(f);
+    await tester.pumpAndSettle();
+  }
+
   for (final (name, size) in [
     ('celular', const Size(390, 844)),
     ('celular pequeno', const Size(360, 640)),
@@ -89,13 +99,11 @@ void main() {
       expect(find.textContaining(claim.number), findsWidgets);
 
       for (final tab in ['Avarias', 'Fotos', 'Orçamento', 'Histórico', 'Dados']) {
-        await tester.tap(find.textContaining(tab).last);
-        await tester.pumpAndSettle();
+        await tapTab(tester, tab);
       }
 
       // gera itens pelo mapa de avarias
-      await tester.tap(find.textContaining('Avarias').last);
-      await tester.pumpAndSettle();
+      await tapTab(tester, 'Avarias');
       final gen = find.text('Gerar itens no orçamento');
       await tester.ensureVisible(gen);
       await tester.pumpAndSettle();
@@ -103,8 +111,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // editor de item
-      await tester.tap(find.textContaining('Orçamento').last);
-      await tester.pumpAndSettle();
+      await tapTab(tester, 'Orçamento');
       await tester.tap(find.text('Novo item'));
       await tester.pumpAndSettle();
       expect(find.text('Tipo de mão de obra'), findsWidgets);
@@ -119,7 +126,9 @@ void main() {
       await tester.pumpAndSettle();
 
       // troca de status
-      await tester.tap(find.text(claim.status.label).first);
+      final chip = find.text(claim.status.label).first;
+      await tester.ensureVisible(chip);
+      await tester.tap(chip);
       await tester.pumpAndSettle();
       await tester.tap(find.text(ClaimStatus.emReparo.label).last);
       await tester.pumpAndSettle();

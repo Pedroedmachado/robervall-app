@@ -316,20 +316,38 @@ class _ItemRow extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                Text(money(values.total),
-                    style: const TextStyle(fontWeight: FontWeight.w700)),
-                Tooltip(
-                  message: it.approved ? 'Aprovado' : 'Não aprovado',
-                  child: Checkbox(
-                    value: it.approved,
-                    onChanged: (v) => onToggle(v ?? true),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Remover',
-                  icon: const Icon(Icons.delete_outline, size: 20),
-                  onPressed: onDelete,
+                const SizedBox(width: 6),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(money(values.total),
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Tooltip(
+                          message: it.approved ? 'Aprovado' : 'Não aprovado',
+                          child: Checkbox(
+                            value: it.approved,
+                            visualDensity: VisualDensity.compact,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                            onChanged: (v) => onToggle(v ?? true),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Remover',
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints:
+                              const BoxConstraints(minWidth: 32, minHeight: 32),
+                          icon: const Icon(Icons.delete_outline, size: 20),
+                          onPressed: onDelete,
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ],
             ),
