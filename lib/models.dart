@@ -111,7 +111,8 @@ enum ContactKind {
   cliente('Cliente'),
   seguradora('Seguradora'),
   regulador('Regulador / perito'),
-  fornecedor('Fornecedor');
+  fornecedor('Fornecedor'),
+  funcionario('Funcionário');
 
   const ContactKind(this.label);
   final String label;
@@ -750,4 +751,80 @@ List<BudgetItem> mergePartLines(List<BudgetItem> items) {
     }
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Financeiro
+
+enum ExpenseCategory {
+  fixo('Gastos fixos'),
+  fornecedor('Fornecedores / peças'),
+  funcionario('Funcionários'),
+  materiais('Materiais'),
+  impostos('Impostos e taxas'),
+  outros('Outros');
+
+  const ExpenseCategory(this.label);
+  final String label;
+}
+
+/// Lançamento manual do financeiro (gasto ou receita avulsa).
+class FinanceEntry {
+  String id;
+  bool isIncome;
+  DateTime date;
+  String description;
+  ExpenseCategory category;
+  double amount;
+  String contact; // fornecedor, funcionário, cliente...
+  String claimId; // sinistro vinculado (opcional)
+  bool recurring; // repete todo mês a partir de [date]
+  DateTime? recurringUntil;
+  String notes;
+
+  FinanceEntry({
+    String? id,
+    this.isIncome = false,
+    DateTime? date,
+    this.description = '',
+    this.category = ExpenseCategory.outros,
+    this.amount = 0,
+    this.contact = '',
+    this.claimId = '',
+    this.recurring = false,
+    this.recurringUntil,
+    this.notes = '',
+  })  : id = id ?? newId(),
+        date = date ?? DateTime.now();
+
+  String get categoryLabel => isIncome ? 'Outras receitas' : category.label;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'isIncome': isIncome,
+        'date': date.toIso8601String(),
+        'description': description,
+        'category': category.name,
+        'amount': amount,
+        'contact': contact,
+        'claimId': claimId,
+        'recurring': recurring,
+        'recurringUntil': recurringUntil?.toIso8601String(),
+        'notes': notes,
+      };
+
+  factory FinanceEntry.fromJson(Map<String, dynamic> j) => FinanceEntry(
+        id: _s(j['id'], newId()),
+        isIncome: j['isIncome'] == true,
+        date: _dt(j['date']),
+        description: _s(j['description']),
+        category:
+            _enum(ExpenseCategory.values, j['category'], ExpenseCategory.outros),
+        amount: _d(j['amount']),
+        contact: _s(j['contact']),
+        claimId: _s(j['claimId']),
+        recurring: j['recurring'] == true,
+        recurringUntil: _dt(j['recurringUntil']),
+        notes: _s(j['notes']),
+      );
 }

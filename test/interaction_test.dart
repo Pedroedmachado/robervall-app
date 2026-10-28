@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:funilar/format.dart';
 import 'package:funilar/main.dart';
 import 'package:funilar/models.dart';
 import 'package:funilar/store.dart';
@@ -326,6 +327,40 @@ void main() {
     await tap(t, find.text('Sem valores'));
     expect(find.text('LAUDO DE VISTORIA'), findsOneWidget);
     expect(c.timeline.length, before); // nada de PDF gerado só por olhar
+    await settle(t);
+  });
+
+  itest('financeiro: lançar gasto fixo e ver o lucro', (t) async {
+    await start(t);
+    final c = seed();
+    c.items.add(BudgetItem(op: ItemOp.servico, price: 5000));
+    store.setStatus(c, ClaimStatus.aprovado);
+    await settle(t);
+
+    await tap(t, find.text('Financeiro').last);
+    expect(find.text('Orçamentos fechados (1)'), findsOneWidget);
+    expect(find.text(money(5000)), findsWidgets);
+
+    await tap(t, find.text('Lançar gasto'));
+    await tap(t, find.byType(DropdownMenu<ExpenseCategory>));
+    await tap(t, find.text('Gastos fixos').last);
+    await type(t, field('Descrição'), 'Aluguel');
+    await type(t, field('Valor'), '1.500,00');
+    await tap(t, find.text('Salvar'));
+    expect(store.entries.single.amount, 1500);
+    expect(store.entries.single.recurring, isTrue);
+    expect(find.text('Lucro'), findsOneWidget);
+    expect(find.text(money(3500)), findsWidgets);
+
+    // aparece no fluxo de caixa e na lista de gastos
+    expect(find.text('Aluguel'), findsOneWidget);
+    await tap(t, find.text('Gastos').last);
+    expect(find.text('Aluguel'), findsOneWidget);
+
+    // próximo mês: o gasto fixo se repete e não há orçamento
+    await tap(t, find.byTooltip('Próximo'));
+    expect(find.text('Prejuízo'), findsOneWidget);
+    expect(find.text(money(-1500)), findsWidgets);
     await settle(t);
   });
 }

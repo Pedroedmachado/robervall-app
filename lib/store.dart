@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'models.dart';
+import 'finance.dart';
 import 'seed.dart';
 
 /// Armazenamento local (offline) em JSON + pasta de fotos.
@@ -18,6 +19,7 @@ class AppStore extends ChangeNotifier {
   final List<Claim> claims = [];
   final List<Contact> contacts = [];
   final List<CatalogItem> catalog = [];
+  final List<FinanceEntry> entries = [];
   Timer? _saveTimer;
   bool _saving = false;
   bool _pendingSave = false;
@@ -94,6 +96,9 @@ class AppStore extends ChangeNotifier {
     catalog
       ..clear()
       ..addAll(list(j['catalog']).map(CatalogItem.fromJson));
+    entries
+      ..clear()
+      ..addAll(list(j['entries']).map(FinanceEntry.fromJson));
   }
 
   Map<String, dynamic> toJson() => {
@@ -104,6 +109,7 @@ class AppStore extends ChangeNotifier {
         'claims': claims.map((e) => e.toJson()).toList(),
         'contacts': contacts.map((e) => e.toJson()).toList(),
         'catalog': catalog.map((e) => e.toJson()).toList(),
+        'entries': entries.map((e) => e.toJson()).toList(),
       };
 
   Future<void> _write() async {
@@ -213,6 +219,8 @@ class AppStore extends ChangeNotifier {
   void setStatus(Claim c, ClaimStatus s, {String? note}) {
     if (c.status == s) return;
     c.status = s;
+    // orçamento fechado: a data de aprovação é a data da receita
+    if (isClosedStatus(s) && c.approvedAt == null) c.approvedAt = DateTime.now();
     c.timeline.add(TimelineEvent(
       text: 'Status: ${s.label}${note == null || note.isEmpty ? '' : ' — $note'}',
       isStatus: true,
@@ -389,6 +397,19 @@ class AppStore extends ChangeNotifier {
     _fromJson(data);
     changed();
     await flush();
+  }
+
+  // -------------------------------------------------------------- financeiro
+
+  void upsertEntry(FinanceEntry e) {
+    if (!entries.contains(e)) entries.add(e);
+    entries.sort((a, b) => b.date.compareTo(a.date));
+    changed();
+  }
+
+  void removeEntry(FinanceEntry e) {
+    entries.remove(e);
+    changed();
   }
 
   // ------------------------------------------------------------- utilidades

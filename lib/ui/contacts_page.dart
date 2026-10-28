@@ -107,6 +107,9 @@ class _ContactsPageState extends State<ContactsPage> {
             case ContactKind.fornecedor:
               return cl.items
                   .any((it) => it.supplier.trim().toLowerCase() == n);
+            case ContactKind.funcionario:
+              return store.entries.any((e) =>
+                  e.claimId == cl.id && e.contact.trim().toLowerCase() == n);
           }
         }).toList();
         return ListTile(

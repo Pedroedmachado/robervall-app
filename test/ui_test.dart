@@ -89,7 +89,7 @@ void main() {
       await pumpApp(tester, size);
       expect(find.textContaining('Em aberto'), findsWidgets);
 
-      for (final page in ['Sinistros', 'Catálogo', 'Cadastros', 'Ajustes', 'Painel']) {
+      for (final page in ['Sinistros', 'Financeiro', 'Catálogo', 'Cadastros', 'Ajustes', 'Painel']) {
         await tapText(tester, page);
       }
 

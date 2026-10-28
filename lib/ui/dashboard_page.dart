@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../calc.dart';
+import '../finance.dart';
 import '../format.dart';
 import '../models.dart';
 import '../theme.dart';
@@ -8,8 +9,10 @@ import 'claims_page.dart';
 import 'widgets.dart';
 
 class DashboardPage extends StatelessWidget {
-  const DashboardPage({super.key, required this.onOpenClaims});
+  const DashboardPage(
+      {super.key, required this.onOpenClaims, this.onOpenFinance});
   final VoidCallback onOpenClaims;
+  final VoidCallback? onOpenFinance;
 
   @override
   Widget build(BuildContext context) {
@@ -32,10 +35,10 @@ class DashboardPage extends StatelessWidget {
       if (c.isOverdue) overdue++;
       if (c.status == ClaimStatus.aguardandoAprovacao) waiting++;
       if (c.status == ClaimStatus.emReparo) repairing++;
-      if ((c.status == ClaimStatus.entregue ||
-              c.status == ClaimStatus.concluido) &&
-          c.updatedAt.year == now.year &&
-          c.updatedAt.month == now.month) {
+      final closedAt = closedDate(c);
+      if (isClosedStatus(c.status) &&
+          closedAt.year == now.year &&
+          closedAt.month == now.month) {
         monthValue += t.total;
         monthCount++;
       }
@@ -47,6 +50,9 @@ class DashboardPage extends StatelessWidget {
       ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
     final recent = [...claims]
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+
+    final fin = summarize(
+        store.claims, store.entries, s, Period.month(now.year, now.month));
 
     final kpis = [
       _Kpi('Em aberto', '$open', Icons.folder_open, brandSeed),
@@ -63,6 +69,14 @@ class DashboardPage extends StatelessWidget {
       _Kpi('Fechado no mês', money(monthValue), Icons.trending_up,
           const Color(0xFF2E7D32),
           sub: '$monthCount ${monthCount == 1 ? 'serviço' : 'serviços'}'),
+      _Kpi(
+        fin.profit >= 0 ? 'Lucro do mês' : 'Prejuízo do mês',
+        money(fin.profit),
+        Icons.account_balance_wallet,
+        fin.profit >= 0 ? const Color(0xFF2E7D32) : Colors.red,
+        sub: 'gastos ${money(fin.expenses)}',
+        onTap: onOpenFinance,
+      ),
     ];
 
     return Scaffold(
@@ -166,7 +180,8 @@ class _Kpi {
   final IconData icon;
   final Color color;
   final String? sub;
-  _Kpi(this.label, this.value, this.icon, this.color, {this.sub});
+  final VoidCallback? onTap;
+  _Kpi(this.label, this.value, this.icon, this.color, {this.sub, this.onTap});
 }
 
 class _KpiCard extends StatelessWidget {
@@ -176,7 +191,7 @@ class _KpiCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    return Container(
+    final card = Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: t.colorScheme.surface,
@@ -219,6 +234,9 @@ class _KpiCard extends StatelessWidget {
         ],
       ),
     );
+    if (k.onTap == null) return card;
+    return InkWell(
+        borderRadius: BorderRadius.circular(14), onTap: k.onTap, child: card);
   }
 }
 

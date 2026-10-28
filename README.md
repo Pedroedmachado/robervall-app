@@ -9,6 +9,7 @@ App de orçamentos, vistorias e sinistros para oficina — Android, iPhone, Wind
 - **Mapa de avarias**: toque nas partes do carro (leve/média/pesada) e gere os itens do orçamento automaticamente.
 - **Fotos**: câmera/galeria, categorias (avaria, geral, documento, antes, depois), legenda, visualizador com zoom.
 - **Orçamento**: troca (T), reparo (R), pintura (P) e serviço (S); origem da peça, horas de MO por tipo, horas de pintura + material, desconto por item e geral, itens aprovados/não aprovados, franquia, divisão seguradora × cliente, **alerta de perda total** (% da FIPE).
+- **Financeiro**: fluxo de caixa por mês ou ano com saldo acumulado; gastos por categoria (fixos com repetição mensal, fornecedores, funcionários, materiais, impostos, outros) e receitas avulsas; orçamentos fechados entram sozinhos; resultado *orçamentos fechados − gastos = lucro*; custos vinculados a cada sinistro.
 - **PDF**: orçamento ou laudo de vistoria sem preços, com fotos — imprimir, compartilhar ou salvar.
 - **Catálogo** próprio de peças e serviços, **cadastros** (clientes, seguradoras, reguladores, fornecedores), **ajustes** (valor hora, numeração, dados da oficina, tema) e **backup .zip** para levar os dados do celular ao PC.
 
