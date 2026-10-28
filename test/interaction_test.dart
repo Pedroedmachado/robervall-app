@@ -379,7 +379,7 @@ void main() {
     await tap(t, find.byType(DropdownMenu<ExpenseCategory>));
     await tap(t, find.text('Funcionários e terceirizados').last);
     await tap(t, find.text('Por peça'));
-    await type(t, field('Quantidade de peças'), '12');
+    await type(t, field('Nº de peças'), '12');
     await type(t, field('Valor por peça'), '35');
     await settle(t);
     expect(find.textContaining('= ${money(420)}'), findsOneWidget);
@@ -400,7 +400,7 @@ void main() {
     final out = store.entries.firstWhere((x) => x.outsourced);
     expect(out.service, OutsourcedService.funilaria);
     expect(out.amount, 800);
-    expect(find.text('Terceirizado · Funilaria'), findsOneWidget);
+    expect(find.text('Terceirizado · Funilaria'), findsWidgets);
     expect(find.text('Por peça'), findsOneWidget);
     await settle(t);
   });

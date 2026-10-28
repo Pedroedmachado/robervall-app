@@ -647,7 +647,7 @@ Future<FinanceEntry?> editFinanceEntry(BuildContext context, FinanceEntry e,
             Row(children: [
               Expanded(
                 child: NumField(
-                  label: 'Quantidade de peças',
+                  label: 'Nº de peças',
                   value: e.pieces,
                   onChanged: (n) => setS(() {
                     e.pieces = n;
