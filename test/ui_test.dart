@@ -6,6 +6,7 @@ import 'package:robervall/main.dart';
 import 'package:robervall/models.dart';
 import 'package:robervall/pdf_report.dart';
 import 'package:robervall/store.dart';
+import 'package:robervall/ui/damage_tab.dart';
 
 /// Abre todas as telas em tamanho de celular e de desktop.
 /// Erros de layout (estouro, exceções de build) fazem o teste falhar.
@@ -105,7 +106,11 @@ void main() {
       // gera itens pelo mapa de avarias
       await tapTab(tester, 'Avarias');
       final gen = find.text('Gerar itens no orçamento');
-      await tester.ensureVisible(gen);
+      await tester.scrollUntilVisible(gen, 200,
+          scrollable: find
+              .descendant(
+                  of: find.byType(DamageTab), matching: find.byType(Scrollable))
+              .first);
       await tester.pumpAndSettle();
       await tester.tap(gen);
       await tester.pumpAndSettle();

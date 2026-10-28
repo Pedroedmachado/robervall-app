@@ -393,23 +393,30 @@ class EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 56, color: t.colorScheme.outline),
-            const SizedBox(height: 12),
-            Text(text,
-                textAlign: TextAlign.center,
-                style: t.textTheme.bodyLarge
-                    ?.copyWith(color: t.colorScheme.onSurfaceVariant)),
-            if (action != null) ...[const SizedBox(height: 16), action!],
-          ],
-        ),
-      ),
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 56, color: t.colorScheme.outline),
+        const SizedBox(height: 12),
+        Text(text,
+            textAlign: TextAlign.center,
+            style: t.textTheme.bodyLarge
+                ?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+        if (action != null) ...[const SizedBox(height: 16), action!],
+      ],
     );
+    return LayoutBuilder(builder: (context, cons) {
+      // dentro de listas (altura infinita) não pode rolar de novo
+      if (!cons.maxHeight.isFinite) {
+        return Padding(padding: const EdgeInsets.all(24), child: content);
+      }
+      return Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(32),
+          child: content,
+        ),
+      );
+    });
   }
 }
 

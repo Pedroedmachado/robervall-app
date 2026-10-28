@@ -124,7 +124,7 @@ class _ClaimDetailPageState extends State<ClaimDetailPage> {
             ),
           ],
           bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(72 + 44),
+            preferredSize: Size.fromHeight((wide ? 72 : 46) + 44),
             child: Column(
               children: [
                 SizedBox(
@@ -165,17 +165,14 @@ class _ClaimDetailPageState extends State<ClaimDetailPage> {
                   isScrollable: !wide,
                   tabAlignment: wide ? TabAlignment.fill : TabAlignment.start,
                   tabs: [
-                    const Tab(icon: Icon(Icons.description_outlined), text: 'Dados'),
-                    Tab(
-                        icon: const Icon(Icons.car_repair),
-                        text: 'Avarias (${c.damages.length})'),
-                    Tab(
-                        icon: const Icon(Icons.photo_library_outlined),
-                        text: 'Fotos (${c.photos.length})'),
-                    Tab(
-                        icon: const Icon(Icons.request_quote_outlined),
-                        text: 'Orçamento (${c.items.length})'),
-                    const Tab(icon: Icon(Icons.timeline), text: 'Histórico'),
+                    for (final (icon, label) in [
+                      (Icons.description_outlined, 'Dados'),
+                      (Icons.car_repair, 'Avarias (${c.damages.length})'),
+                      (Icons.photo_library_outlined, 'Fotos (${c.photos.length})'),
+                      (Icons.request_quote_outlined, 'Orçamento (${c.items.length})'),
+                      (Icons.timeline, 'Histórico'),
+                    ])
+                      wide ? Tab(icon: Icon(icon), text: label) : Tab(text: label),
                   ],
                 ),
               ],
