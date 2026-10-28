@@ -200,7 +200,7 @@ class BudgetItem {
   bool approved;
   String note;
 
-  /// Mão de obra na peça é remoção e instalação (R I), não reparo.
+  /// Mão de obra na peça é remoção e instalação (R&I), não reparo.
   bool removeInstall;
 
   BudgetItem({
@@ -680,7 +680,7 @@ class Settings {
 /// Siglas das operações (usadas no PDF e na pré-visualização).
 const opLegend = <(String, String)>[
   ('T', 'Troca da peça (peça nova)'),
-  ('R I', 'Remoção e instalação'),
+  ('R&I', 'Remoção e instalação'),
   ('R', 'Reparo / recuperação da peça'),
   ('P', 'Pintura'),
   ('S', 'Serviço'),
@@ -692,10 +692,10 @@ String opCode(ItemOp op, double laborHours, double paintHours,
   if (op == ItemOp.servico) return 'S';
   final parts = <String>[
     if (op == ItemOp.troca) 'T',
-    if (op != ItemOp.troca && laborHours > 0) removeInstall ? 'R I' : 'R',
+    if (op != ItemOp.troca && laborHours > 0) removeInstall ? 'R&I' : 'R',
     if (paintHours > 0) 'P',
   ];
-  if (parts.isEmpty) return op == ItemOp.troca ? 'T' : (removeInstall ? 'R I' : 'R');
+  if (parts.isEmpty) return op == ItemOp.troca ? 'T' : (removeInstall ? 'R&I' : 'R');
   return parts.join(' / ');
 }
 

@@ -523,7 +523,7 @@ class _ItemEditorState extends State<_ItemEditor> {
                   onSelected: (_) => setState(() => it.removeInstall = false),
                 ),
                 ChoiceChip(
-                  label: const Text('Remoção e instalação (R I)'),
+                  label: const Text('Remoção e instalação (R&I)'),
                   selected: it.removeInstall,
                   onSelected: (_) => setState(() => it.removeInstall = true),
                 ),
