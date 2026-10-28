@@ -65,7 +65,7 @@ class BudgetTab extends StatelessWidget {
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 24),
             child: Text(
-              'Nenhum item. Adicione peças, reparos, pintura e serviços — ou marque as avarias no carro e gere os itens automaticamente.',
+              'Nenhum item. Adicione as peças (troca, reparo, pintura) e os serviços — ou marque as avarias no carro e gere as peças automaticamente.',
               textAlign: TextAlign.center,
             ),
           )
@@ -103,18 +103,10 @@ class BudgetTab extends StatelessWidget {
                 onDelete: () {
                   c.items.removeAt(i);
                   store.touch(c);
-                  ScaffoldMessenger.of(context)
-                    ..hideCurrentSnackBar()
-                    ..showSnackBar(SnackBar(
-                      content: Text('Item "${it.description}" removido'),
-                      action: SnackBarAction(
-                        label: 'Desfazer',
-                        onPressed: () {
-                          c.items.insert(i.clamp(0, c.items.length), it);
-                          store.touch(c);
-                        },
-                      ),
-                    ));
+                  showUndo(context, '"${it.description}" removido', () {
+                    c.items.insert(i.clamp(0, c.items.length), it);
+                    store.touch(c);
+                  });
                 },
               );
             },
@@ -243,33 +235,20 @@ class _ItemRow extends StatelessWidget {
   final ValueChanged<bool> onToggle;
   final VoidCallback onDelete;
 
-  Color _opColor(ItemOp op) {
-    switch (op) {
-      case ItemOp.troca:
-        return const Color(0xFF1E88E5);
-      case ItemOp.reparo:
-        return const Color(0xFFFB8C00);
-      case ItemOp.pintura:
-        return const Color(0xFF8E24AA);
-      case ItemOp.servico:
-        return const Color(0xFF00897B);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final it = item;
-    final details = <String>[
+    final qty = it.qty <= 0 ? 1.0 : it.qty;
+    final extra = <String>[
       if (it.op == ItemOp.troca)
-        '${num2(it.qty)} × ${money(it.price)}${it.origin == PartOrigin.nenhuma ? '' : ' · ${it.origin.label}'}',
-      if (it.op == ItemOp.servico) money(it.price * (it.qty <= 0 ? 1 : it.qty)),
-      if (it.laborHours > 0) 'MO ${num2(it.laborHours)} h (${it.laborType.label})',
-      if (it.paintHours > 0) 'Pintura ${num2(it.paintHours)} h',
-      if (it.discountPct > 0) 'desc. ${num2(it.discountPct)}%',
+        '${qty == 1 ? '' : '${num2(qty)} × '}${money(it.price)}',
+      if (it.op == ItemOp.servico) money(it.price * qty),
+      if (it.op == ItemOp.troca && it.origin != PartOrigin.nenhuma)
+        it.origin.label,
+      if (it.discountPct > 0) 'desconto ${num2(it.discountPct)}%',
       if (it.supplier.isNotEmpty) it.supplier,
     ];
-    final color = _opColor(it.op);
     return Opacity(
       opacity: it.approved ? 1 : 0.5,
       child: Container(
@@ -282,7 +261,7 @@ class _ItemRow extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(4, 6, 4, 6),
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
             child: Row(
               children: [
                 ReorderableDragStartListener(
@@ -292,19 +271,7 @@ class _ItemRow extends StatelessWidget {
                     child: Icon(Icons.drag_indicator, size: 18),
                   ),
                 ),
-                Container(
-                  width: 28,
-                  height: 28,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(it.op.code,
-                      style: TextStyle(
-                          color: color, fontWeight: FontWeight.w900)),
-                ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 4),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -317,10 +284,22 @@ class _ItemRow extends StatelessWidget {
                               it.approved ? null : TextDecoration.lineThrough,
                         ),
                       ),
-                      if (details.isNotEmpty)
-                        Text(details.join(' · '),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: [
+                          for (final d in opDetails(
+                              it.op, it.laborHours, it.paintHours))
+                            OpChip(d),
+                        ],
+                      ),
+                      if (extra.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(extra.join(' · '),
                             style: t.textTheme.bodySmall?.copyWith(
                                 color: t.colorScheme.onSurfaceVariant)),
+                      ],
                     ],
                   ),
                 ),
@@ -366,6 +345,34 @@ class _ItemRow extends StatelessWidget {
   }
 }
 
+/// Etiqueta de operação escrita por extenso ("Troca", "Pintura 2 h").
+class OpChip extends StatelessWidget {
+  const OpChip(this.text, {super.key});
+  final String text;
+
+  Color get _color {
+    if (text.startsWith('Troca')) return const Color(0xFF1E88E5);
+    if (text.startsWith('Pintura')) return const Color(0xFF8E24AA);
+    if (text.startsWith('Serviço')) return const Color(0xFF00897B);
+    return const Color(0xFFEF6C00); // reparo / mão de obra
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = _color;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(text,
+          style: TextStyle(
+              color: c, fontSize: 12, fontWeight: FontWeight.w600)),
+    );
+  }
+}
+
 /// Abre o editor de item. Retorna uma cópia editada (ou novo item).
 Future<BudgetItem?> editBudgetItem(BuildContext context, BudgetItem? original) {
   final wide = isWide(context);
@@ -392,30 +399,46 @@ class _ItemEditor extends StatefulWidget {
 
 class _ItemEditorState extends State<_ItemEditor> {
   late final BudgetItem it = widget.original == null
-      ? BudgetItem()
+      ? BudgetItem(op: ItemOp.reparo)
       : (BudgetItem.fromJson(widget.original!.toJson()));
+  late bool _service = it.op == ItemOp.servico;
+  late bool _replace = it.op == ItemOp.troca;
   bool _saveToCatalog = false;
 
   void _fillFromCatalog(CatalogItem ci) {
     setState(() {
       it.description = ci.description;
       it.partNumber = ci.partNumber;
-      it.op = ci.op;
       it.laborType = ci.laborType;
       it.price = ci.price;
       it.laborHours = ci.laborHours;
       it.paintHours = ci.paintHours;
+      _service = ci.op == ItemOp.servico;
+      _replace = ci.op == ItemOp.troca;
       if (ci.region.isNotEmpty) it.region = ci.region;
     });
+  }
+
+  void _applyOp() {
+    if (_service) {
+      it.laborHours = 0;
+      it.paintHours = 0;
+    }
+    it.op = opFor(
+        service: _service,
+        replace: _replace,
+        laborHours: it.laborHours,
+        paintHours: it.paintHours);
   }
 
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
     final s = store.settings;
+    _applyOp();
     final v = itemValues(it, s);
     final isNew = widget.original == null;
-    final priceLabel = it.op == ItemOp.servico ? 'Valor do serviço' : 'Preço unitário da peça';
+    final showPrice = _service || _replace;
 
     return Scaffold(
       appBar: AppBar(
@@ -431,6 +454,7 @@ class _ItemEditorState extends State<_ItemEditor> {
                   toast(context, 'Informe a descrição do item.');
                   return;
                 }
+                _applyOp();
                 if (_saveToCatalog) {
                   store.upsertCatalog(CatalogItem(
                     description: it.description.trim(),
@@ -453,32 +477,80 @@ class _ItemEditorState extends State<_ItemEditor> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          SegmentedButton<ItemOp>(
-            segments: [
-              for (final op in ItemOp.values)
-                ButtonSegment(value: op, label: Text(op.label)),
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(
+                  value: false,
+                  label: Text('Peça'),
+                  icon: Icon(Icons.car_repair)),
+              ButtonSegment(
+                  value: true,
+                  label: Text('Serviço'),
+                  icon: Icon(Icons.handyman_outlined)),
             ],
-            selected: {it.op},
-            showSelectedIcon: false,
-            onSelectionChanged: (sel) => setState(() => it.op = sel.first),
+            selected: {_service},
+            onSelectionChanged: (sel) => setState(() => _service = sel.first),
           ),
           const SizedBox(height: 16),
           _CatalogAutocomplete(
             initial: it.description,
             catalog: store.catalog,
+            label: _service ? 'Serviço' : 'Peça',
             onText: (t) => it.description = t,
             onPick: _fillFromCatalog,
           ),
-          const SizedBox(height: 12),
+          if (!_service) ...[
+            const SizedBox(height: 4),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Trocar a peça'),
+              subtitle: Text(_replace
+                  ? 'Peça nova: informe o preço'
+                  : 'Desligado: só reparo e/ou pintura da peça atual'),
+              value: _replace,
+              onChanged: (b) => setState(() => _replace = b),
+            ),
+          ],
+          const SizedBox(height: 8),
           FieldGrid(maxColumns: 2, children: [
-            if (it.op == ItemOp.troca)
-              BoundField(
-                label: 'Código da peça',
-                value: it.partNumber,
-                capitalization: TextCapitalization.characters,
-                onChanged: (t) => it.partNumber = t,
+            if (showPrice)
+              NumField(
+                label: _service ? 'Valor do serviço' : 'Preço unitário da peça',
+                prefix: 'R\$',
+                value: it.price,
+                onChanged: (n) => setState(() => it.price = n),
               ),
-            if (it.op == ItemOp.troca)
+            if (showPrice)
+              NumField(
+                label: 'Quantidade',
+                value: it.qty,
+                onChanged: (n) => setState(() => it.qty = n <= 0 ? 1 : n),
+              ),
+            if (!_service)
+              NumField(
+                label: _replace
+                    ? 'Horas de mão de obra (tirar e colocar)'
+                    : 'Horas de reparo',
+                suffix: 'h',
+                value: it.laborHours,
+                onChanged: (n) => setState(() => it.laborHours = n),
+              ),
+            if (!_service)
+              NumField(
+                label: 'Horas de pintura',
+                suffix: 'h',
+                value: it.paintHours,
+                onChanged: (n) => setState(() => it.paintHours = n),
+              ),
+            if (!_service)
+              Picker<LaborType>(
+                label: 'Tipo de mão de obra',
+                value: it.laborType,
+                values: LaborType.values,
+                labelOf: (e) => '${e.label} (${money(s.rateFor(e))}/h)',
+                onChanged: (e) => setState(() => it.laborType = e),
+              ),
+            if (_replace && !_service)
               Picker<PartOrigin>(
                 label: 'Origem da peça',
                 value: it.origin,
@@ -486,49 +558,14 @@ class _ItemEditorState extends State<_ItemEditor> {
                 labelOf: (e) => e.label,
                 onChanged: (e) => setState(() => it.origin = e),
               ),
-            if (it.op == ItemOp.troca || it.op == ItemOp.servico)
-              NumField(
-                label: 'Quantidade',
-                value: it.qty,
-                onChanged: (n) => setState(() => it.qty = n <= 0 ? 1 : n),
+            if (_replace && !_service)
+              BoundField(
+                label: 'Código da peça',
+                value: it.partNumber,
+                capitalization: TextCapitalization.characters,
+                onChanged: (t) => it.partNumber = t,
               ),
-            if (it.op == ItemOp.troca || it.op == ItemOp.servico)
-              NumField(
-                label: priceLabel,
-                prefix: 'R\$',
-                value: it.price,
-                onChanged: (n) => setState(() => it.price = n),
-              ),
-            Picker<LaborType>(
-              label: 'Tipo de mão de obra',
-              value: it.laborType,
-              values: LaborType.values,
-              labelOf: (e) => '${e.label} (${money(s.rateFor(e))}/h)',
-              onChanged: (e) => setState(() => it.laborType = e),
-            ),
-            NumField(
-              label: it.op == ItemOp.reparo
-                  ? 'Horas de reparo'
-                  : 'Horas de mão de obra (R&I)',
-              suffix: 'h',
-              value: it.laborHours,
-              onChanged: (n) => setState(() => it.laborHours = n),
-            ),
-            NumField(
-              label: 'Horas de pintura',
-              suffix: 'h',
-              value: it.paintHours,
-              onChanged: (n) => setState(() => it.paintHours = n),
-            ),
-            if (it.op == ItemOp.troca || it.op == ItemOp.servico)
-              NumField(
-                label: 'Desconto no item',
-                suffix: '%',
-                value: it.discountPct,
-                onChanged: (n) =>
-                    setState(() => it.discountPct = n.clamp(0, 100).toDouble()),
-              ),
-            if (it.op == ItemOp.troca)
+            if (_replace && !_service)
               BoundField(
                 label: 'Fornecedor',
                 value: it.supplier,
@@ -537,6 +574,14 @@ class _ItemEditorState extends State<_ItemEditor> {
                   for (final c in store.contactsOf(ContactKind.fornecedor)) c.name
                 ],
                 onChanged: (t) => it.supplier = t,
+              ),
+            if (showPrice)
+              NumField(
+                label: 'Desconto no item',
+                suffix: '%',
+                value: it.discountPct,
+                onChanged: (n) =>
+                    setState(() => it.discountPct = n.clamp(0, 100).toDouble()),
               ),
           ]),
           const SizedBox(height: 12),
@@ -562,7 +607,12 @@ class _ItemEditorState extends State<_ItemEditor> {
             onChanged: (b) => setState(() => _saveToCatalog = b ?? false),
           ),
           const Divider(height: 24),
-          if (v.parts > 0) KeyValue('Peças', money(v.parts)),
+          Wrap(spacing: 4, runSpacing: 4, children: [
+            for (final d in opDetails(it.op, it.laborHours, it.paintHours))
+              OpChip(d),
+          ]),
+          const SizedBox(height: 8),
+          if (v.parts > 0) KeyValue('Peça', money(v.parts)),
           if (v.services > 0) KeyValue('Serviço', money(v.services)),
           if (v.labor > 0) KeyValue('Mão de obra', money(v.labor)),
           if (v.paintLabor > 0) KeyValue('Pintura', money(v.paintLabor)),
@@ -581,8 +631,10 @@ class _CatalogAutocomplete extends StatelessWidget {
     required this.catalog,
     required this.onText,
     required this.onPick,
+    this.label = 'Peça',
   });
   final String initial;
+  final String label;
   final List<CatalogItem> catalog;
   final ValueChanged<String> onText;
   final ValueChanged<CatalogItem> onPick;
@@ -608,10 +660,10 @@ class _CatalogAutocomplete extends StatelessWidget {
         focusNode: focus,
         autofocus: initial.isEmpty,
         textCapitalization: TextCapitalization.sentences,
-        decoration: const InputDecoration(
-          labelText: 'Descrição (peça ou serviço)',
-          hintText: 'Digite para buscar no catálogo',
-          prefixIcon: Icon(Icons.search, size: 20),
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: 'Digite o nome ou busque no catálogo',
+          prefixIcon: const Icon(Icons.search, size: 20),
         ),
         onChanged: onText,
       ),
@@ -629,13 +681,10 @@ class _CatalogAutocomplete extends StatelessWidget {
                 for (final o in options)
                   ListTile(
                     dense: true,
-                    leading: Text(o.op.code,
-                        style: const TextStyle(fontWeight: FontWeight.w900)),
                     title: Text(o.description),
                     subtitle: Text([
+                      ...opDetails(o.op, o.laborHours, o.paintHours),
                       if (o.price > 0) money(o.price),
-                      if (o.laborHours > 0) 'MO ${num2(o.laborHours)} h',
-                      if (o.paintHours > 0) 'pint. ${num2(o.paintHours)} h',
                     ].join(' · ')),
                     onTap: () => onSelected(o),
                   ),
@@ -690,11 +739,8 @@ Future<List<CatalogItem>> pickFromCatalog(
                                 b == true ? selected.add(e) : selected.remove(e)),
                             title: Text(e.description),
                             subtitle: Text([
-                              e.op.label,
+                              ...opDetails(e.op, e.laborHours, e.paintHours),
                               if (e.price > 0) money(e.price),
-                              if (e.laborHours > 0) 'MO ${num2(e.laborHours)} h',
-                              if (e.paintHours > 0)
-                                'pintura ${num2(e.paintHours)} h',
                             ].join(' · ')),
                           );
                         },

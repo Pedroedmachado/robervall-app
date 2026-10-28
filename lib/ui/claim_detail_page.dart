@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 import '../calc.dart';
 import '../format.dart';
 import '../models.dart';
-import '../pdf_report.dart';
 import '../store.dart';
 import '../theme.dart';
 import 'budget_tab.dart';
 import 'claim_form_tab.dart';
 import 'damage_tab.dart';
 import 'photos_tab.dart';
+import 'quote_preview_page.dart';
 import 'timeline_tab.dart';
 import 'widgets.dart';
 
@@ -87,9 +87,10 @@ class _ClaimDetailPageState extends State<ClaimDetailPage> {
           ),
           actions: [
             IconButton(
-              tooltip: 'PDF do orçamento',
-              icon: const Icon(Icons.picture_as_pdf_outlined),
-              onPressed: () => showReportOptions(context, store, c),
+              tooltip: 'Ver orçamento',
+              icon: const Icon(Icons.receipt_long_outlined),
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => QuotePreviewPage(claimId: c.id))),
             ),
             PopupMenuButton<String>(
               onSelected: (v) async {

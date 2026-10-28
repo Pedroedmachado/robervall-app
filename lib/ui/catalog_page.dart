@@ -86,18 +86,15 @@ class _CatalogPageState extends State<CatalogPage> {
                       final value = itemValues(e.toBudgetItem(), s).total;
                       return ListTile(
                         leading: CircleAvatar(
-                          child: Text(e.op.code,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w900)),
+                          child: Icon(e.op == ItemOp.servico
+                              ? Icons.handyman_outlined
+                              : Icons.car_repair),
                         ),
                         title: Text(e.description),
                         subtitle: Text([
-                          e.op.label,
+                          ...opDetails(e.op, e.laborHours, e.paintHours),
                           if (e.partNumber.isNotEmpty) e.partNumber,
                           if (e.price > 0) money(e.price),
-                          if (e.laborHours > 0)
-                            'MO ${num2(e.laborHours)} h ${e.laborType.label}',
-                          if (e.paintHours > 0) 'pintura ${num2(e.paintHours)} h',
                         ].join(' · ')),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -147,26 +144,41 @@ Future<CatalogItem?> _editCatalog(BuildContext context, CatalogItem it) {
         return null;
       }
       it.description = it.description.trim();
+      if (it.op != ItemOp.servico && it.op != ItemOp.troca) {
+        it.op = opFor(
+            service: false,
+            replace: false,
+            laborHours: it.laborHours,
+            paintHours: it.paintHours);
+      }
       return it;
     },
     body: (ctx, setS) => Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SegmentedButton<ItemOp>(
-          segments: [
-            for (final op in ItemOp.values)
-              ButtonSegment(value: op, label: Text(op.code), tooltip: op.label),
+        SegmentedButton<bool>(
+          segments: const [
+            ButtonSegment(value: false, label: Text('Peça'), icon: Icon(Icons.car_repair)),
+            ButtonSegment(value: true, label: Text('Serviço'), icon: Icon(Icons.handyman_outlined)),
           ],
-          selected: {it.op},
-          showSelectedIcon: false,
-          onSelectionChanged: (s) => setS(() => it.op = s.first),
+          selected: {it.op == ItemOp.servico},
+          onSelectionChanged: (sel) => setS(() {
+            it.op = sel.first ? ItemOp.servico : ItemOp.reparo;
+          }),
         ),
-        const SizedBox(height: 4),
-        Text(it.op.label, textAlign: TextAlign.center),
+        if (it.op != ItemOp.servico)
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Trocar a peça'),
+            value: it.op == ItemOp.troca,
+            onChanged: (b) => setS(() {
+              it.op = b ? ItemOp.troca : ItemOp.reparo;
+            }),
+          ),
         const SizedBox(height: 12),
         BoundField(
-            label: 'Descrição',
+            label: it.op == ItemOp.servico ? 'Serviço' : 'Peça',
             value: it.description,
             onChanged: (t) => it.description = t),
         const SizedBox(height: 12),
@@ -192,12 +204,14 @@ Future<CatalogItem?> _editCatalog(BuildContext context, CatalogItem it) {
               onChanged: (n) => it.price = n),
           const SizedBox(height: 12),
         ],
+        if (it.op != ItemOp.servico)
         NumField(
-            label: 'Horas de mão de obra',
+            label: it.op == ItemOp.troca ? 'Horas de mão de obra (tirar e colocar)' : 'Horas de reparo',
             suffix: 'h',
             value: it.laborHours,
             onChanged: (n) => it.laborHours = n),
         const SizedBox(height: 12),
+        if (it.op != ItemOp.servico)
         NumField(
             label: 'Horas de pintura',
             suffix: 'h',

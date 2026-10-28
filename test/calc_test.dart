@@ -117,4 +117,27 @@ void main() {
     expect(plateMask('abc1d23'), 'ABC-1D23');
     expect(date(DateTime(2026, 3, 4)), '04/03/2026');
   });
+
+  test('peças da mesma descrição viram uma linha só', () {
+    final merged = mergePartLines([
+      BudgetItem(description: 'Capô', op: ItemOp.reparo, laborHours: 3),
+      BudgetItem(description: 'capô ', op: ItemOp.pintura, paintHours: 2),
+      BudgetItem(description: 'Farol', op: ItemOp.troca, price: 400),
+      BudgetItem(description: 'Farol', op: ItemOp.pintura, paintHours: 1),
+      BudgetItem(description: 'Alinhamento', op: ItemOp.servico, price: 120),
+    ]);
+    expect(merged.length, 3);
+    expect(merged[0].op, ItemOp.reparo);
+    expect(merged[0].laborHours, 3);
+    expect(merged[0].paintHours, 2);
+    expect(merged[1].op, ItemOp.troca);
+    expect(merged[1].price, 400);
+    expect(merged[1].paintHours, 1);
+    expect(opNames(merged[1].op, merged[1].laborHours, merged[1].paintHours),
+        'Troca + pintura');
+    expect(opDetails(ItemOp.reparo, 3, 2), ['Reparo 3 h', 'Pintura 2 h']);
+    expect(opDetails(ItemOp.troca, 1.5, 0), ['Troca', 'Mão de obra 1,5 h']);
+    expect(opFor(service: false, replace: false, laborHours: 0, paintHours: 2),
+        ItemOp.pintura);
+  });
 }

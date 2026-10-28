@@ -140,12 +140,12 @@ void main() {
       expect(claim.status, ClaimStatus.emReparo);
 
       // opções do PDF
-      await tester.tap(find.byIcon(Icons.picture_as_pdf_outlined));
+      await tester.tap(find.byTooltip('Ver orçamento'));
       await tester.pumpAndSettle();
-      expect(find.text('Gerar PDF'), findsOneWidget);
+      expect(find.text('ORÇAMENTO'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
-      await tester.pump(const Duration(seconds: 3));
+      await tester.pump(const Duration(seconds: 7));
     });
   }
 

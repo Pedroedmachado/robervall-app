@@ -84,6 +84,10 @@ class AppStore extends ChangeNotifier {
     claims
       ..clear()
       ..addAll(list(j['claims']).map(Claim.fromJson));
+    // versões anteriores criavam uma linha por operação da mesma peça
+    for (final c in claims) {
+      c.items = mergePartLines(c.items);
+    }
     contacts
       ..clear()
       ..addAll(list(j['contacts']).map(Contact.fromJson));

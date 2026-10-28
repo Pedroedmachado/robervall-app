@@ -12,7 +12,7 @@ import 'format.dart';
 import 'models.dart';
 import 'seed.dart';
 import 'store.dart';
-import 'ui/widgets.dart' show shareOrigin;
+import 'ui/widgets.dart' show shareOrigin, toast;
 
 /// Remove caracteres fora do Latin-1 (fonte padrão do PDF).
 String _t(String s) {
@@ -239,14 +239,14 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
         else
           pw.TableHelper.fromTextArray(
             headers: withPrices
-                ? ['Op', 'Descrição', 'Origem', 'Qtd', 'Peça/serv.', 'MO h', 'Pint. h', 'Total']
-                : ['Op', 'Descrição', 'Origem', 'Qtd', 'MO h', 'Pint. h'],
+                ? ['Operação', 'Peça / serviço', 'Origem', 'Qtd', 'Peça/serv.', 'MO h', 'Pint. h', 'Total']
+                : ['Operação', 'Peça / serviço', 'Origem', 'Qtd', 'MO h', 'Pint. h'],
             data: [
               for (final it in items)
                 () {
                   final v = itemValues(it, s);
                   final row = <String>[
-                    it.op.code,
+                    _t(opNames(it.op, it.laborHours, it.paintHours)),
                     _t(it.description +
                         (it.partNumber.isEmpty ? '' : ' (${it.partNumber})')),
                     _t(it.op == ItemOp.troca && it.origin != PartOrigin.nenhuma
@@ -282,7 +282,7 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
                   },
             columnWidths: withPrices
                 ? {
-                    0: const pw.FixedColumnWidth(22),
+                    0: const pw.FixedColumnWidth(70),
                     1: const pw.FlexColumnWidth(4),
                     2: const pw.FlexColumnWidth(2),
                     3: const pw.FixedColumnWidth(26),
@@ -397,76 +397,28 @@ String _fileName(Claim c, bool prices) =>
     '${prices ? 'orcamento' : 'vistoria'}-${c.number}${c.vehicle.plate.isEmpty ? '' : '-${c.vehicle.plate}'}.pdf'
         .replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
 
-Future<void> showReportOptions(
-    BuildContext context, AppStore store, Claim c) async {
-  var withPhotos = c.photos.isNotEmpty;
-  var withPrices = true;
-  final action = await showModalBottomSheet<String>(
-    context: context,
-    showDragHandle: true,
-    isScrollControlled: true,
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setS) => SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text('Gerar PDF',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Mostrar valores (orçamento)'),
-                subtitle: const Text('Desligado gera um laudo de vistoria sem preços'),
-                value: withPrices,
-                onChanged: (v) => setS(() => withPrices = v),
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text('Incluir fotos (${c.photos.length})'),
-                value: withPhotos,
-                onChanged: c.photos.isEmpty ? null : (v) => setS(() => withPhotos = v),
-              ),
-              const SizedBox(height: 8),
-              FilledButton.icon(
-                onPressed: () => Navigator.pop(ctx, 'print'),
-                icon: const Icon(Icons.print_outlined),
-                label: const Text('Visualizar / imprimir'),
-              ),
-              if (Platform.isAndroid || Platform.isIOS) ...[
-                const SizedBox(height: 8),
-                FilledButton.tonalIcon(
-                  onPressed: () => Navigator.pop(ctx, 'share'),
-                  icon: const Icon(Icons.share_outlined),
-                  label: const Text('Compartilhar (WhatsApp, e-mail…)'),
-                ),
-              ] else ...[
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: () => Navigator.pop(ctx, 'save'),
-                  icon: const Icon(Icons.save_alt),
-                  label: const Text('Salvar arquivo PDF'),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    ),
-  );
-  if (action == null || !context.mounted) return;
+enum PdfAction { print, share, save }
+
+/// Gera o PDF só no momento de imprimir, compartilhar ou salvar.
+Future<void> exportClaimPdf(
+  BuildContext context,
+  AppStore store,
+  Claim c,
+  PdfAction action, {
+  bool withPhotos = true,
+  bool withPrices = true,
+}) async {
   final origin = shareOrigin(context);
   final name = _fileName(c, withPrices);
   try {
-    final bytes =
-        await buildClaimPdf(store, c, withPhotos: withPhotos, withPrices: withPrices);
+    final bytes = await buildClaimPdf(store, c,
+        withPhotos: withPhotos, withPrices: withPrices);
     switch (action) {
-      case 'print':
+      case PdfAction.print:
         await Printing.layoutPdf(onLayout: (_) async => bytes, name: name);
-      case 'share':
+      case PdfAction.share:
         await Printing.sharePdf(bytes: bytes, filename: name, bounds: origin);
-      case 'save':
+      case PdfAction.save:
         final loc = await getSaveLocation(
           suggestedName: name,
           acceptedTypeGroups: const [
@@ -475,18 +427,12 @@ Future<void> showReportOptions(
         );
         if (loc == null) return;
         await File(loc.path).writeAsBytes(bytes, flush: true);
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('PDF salvo em ${loc.path}')));
-        }
+        if (context.mounted) toast(context, 'PDF salvo em ${loc.path}');
     }
     c.timeline.add(TimelineEvent(
         text: 'PDF ${withPrices ? 'do orçamento' : 'de vistoria'} gerado'));
     store.touch(c);
   } catch (e) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Falha ao gerar PDF: $e')));
-    }
+    if (context.mounted) toast(context, 'Falha ao gerar PDF: $e');
   }
 }

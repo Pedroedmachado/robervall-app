@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -448,7 +450,31 @@ Future<bool> confirm(BuildContext context, String title, String message,
 void toast(BuildContext context, String msg) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating));
+    ..showSnackBar(SnackBar(
+      content: Text(msg),
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 3),
+      showCloseIcon: true,
+    ));
+}
+
+/// Aviso com "Desfazer" que some sozinho em 5 s e tem X para fechar.
+/// (Com ação, o Flutter manteria o aviso aberto até alguém tocar nele.)
+void showUndo(BuildContext context, String msg, VoidCallback onUndo) {
+  final messenger = ScaffoldMessenger.of(context);
+  messenger.hideCurrentSnackBar();
+  var open = true;
+  final ctl = messenger.showSnackBar(SnackBar(
+    content: Text(msg),
+    behavior: SnackBarBehavior.floating,
+    duration: const Duration(seconds: 5),
+    showCloseIcon: true,
+    action: SnackBarAction(label: 'Desfazer', onPressed: onUndo),
+  ));
+  ctl.closed.whenComplete(() => open = false);
+  Timer(const Duration(seconds: 5), () {
+    if (open) messenger.hideCurrentSnackBar();
+  });
 }
 
 class KeyValue extends StatelessWidget {

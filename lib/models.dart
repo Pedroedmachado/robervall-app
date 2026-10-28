@@ -661,3 +661,93 @@ class Settings {
     return s;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Peça unificada: uma linha por peça, com as operações por extenso.
+
+/// Nome das operações sem horas, ex.: "Troca + pintura".
+String opNames(ItemOp op, double laborHours, double paintHours) {
+  if (op == ItemOp.servico) return 'Serviço';
+  final parts = <String>[
+    if (op == ItemOp.troca) 'Troca',
+    if (op != ItemOp.troca && laborHours > 0) 'Reparo',
+    if (paintHours > 0) 'Pintura',
+  ];
+  if (parts.isEmpty) return op == ItemOp.troca ? 'Troca' : 'Reparo';
+  return [parts.first, ...parts.skip(1).map((e) => e.toLowerCase())].join(' + ');
+}
+
+String _h(double v) {
+  var s = v.toStringAsFixed(2).replaceAll(RegExp(r'0+$'), '');
+  if (s.endsWith('.')) s = s.substring(0, s.length - 1);
+  return '${s.replaceAll('.', ',')} h';
+}
+
+/// Operações com horas, ex.: ["Troca", "Mão de obra 1 h", "Pintura 2 h"].
+List<String> opDetails(ItemOp op, double laborHours, double paintHours) {
+  if (op == ItemOp.servico) return ['Serviço'];
+  return [
+    if (op == ItemOp.troca) 'Troca',
+    if (laborHours > 0)
+      op == ItemOp.troca ? 'Mão de obra ${_h(laborHours)}' : 'Reparo ${_h(laborHours)}',
+    if (paintHours > 0) 'Pintura ${_h(paintHours)}',
+    if (op != ItemOp.troca && laborHours <= 0 && paintHours <= 0) 'Reparo',
+  ];
+}
+
+/// Define a operação a partir do que a pessoa escolheu no editor.
+ItemOp opFor({required bool service, required bool replace, required double laborHours, required double paintHours}) {
+  if (service) return ItemOp.servico;
+  if (replace) return ItemOp.troca;
+  if (laborHours <= 0 && paintHours > 0) return ItemOp.pintura;
+  return ItemOp.reparo;
+}
+
+/// Junta linhas da mesma peça (ex.: "Capô" reparo + "Capô" pintura) numa só.
+/// Duas trocas da mesma peça não são juntadas (podem ser quantidades).
+List<BudgetItem> mergePartLines(List<BudgetItem> items) {
+  final out = <BudgetItem>[];
+  for (final it in items) {
+    if (it.op == ItemOp.servico) {
+      out.add(it);
+      continue;
+    }
+    final key = it.description.trim().toLowerCase();
+    BudgetItem? same;
+    for (final o in out) {
+      if (o.op != ItemOp.servico &&
+          o.approved == it.approved &&
+          o.description.trim().toLowerCase() == key &&
+          !(o.op == ItemOp.troca && it.op == ItemOp.troca)) {
+        same = o;
+        break;
+      }
+    }
+    if (same == null || key.isEmpty) {
+      out.add(it);
+      continue;
+    }
+    if (it.op == ItemOp.troca) {
+      same.op = ItemOp.troca;
+      same.price = it.price;
+      same.qty = it.qty;
+      same.origin = it.origin;
+      same.partNumber = it.partNumber.isEmpty ? same.partNumber : it.partNumber;
+      same.supplier = it.supplier.isEmpty ? same.supplier : it.supplier;
+      same.discountPct = it.discountPct;
+    }
+    same.laborHours += it.laborHours;
+    same.paintHours += it.paintHours;
+    if (same.op != ItemOp.troca) {
+      same.op = opFor(
+          service: false,
+          replace: false,
+          laborHours: same.laborHours,
+          paintHours: same.paintHours);
+    }
+    if (it.note.isNotEmpty) {
+      same.note = same.note.isEmpty ? it.note : '${same.note}; ${it.note}';
+    }
+  }
+  return out;
+}

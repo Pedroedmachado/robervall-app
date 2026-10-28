@@ -48,7 +48,7 @@ void main() {
     testWidgets(name, (t) async {
       await body(t);
       await t.pumpWidget(const SizedBox());
-      await t.pump(const Duration(seconds: 3));
+      await t.pump(const Duration(seconds: 7));
     });
   }
 
@@ -156,19 +156,23 @@ void main() {
     await tab(t, 'Orçamento');
 
     await tap(t, find.text('Novo item'));
-    await type(t, find.widgetWithText(TextField, 'Descrição (peça ou serviço)'),
-        'Farol esquerdo');
+    await type(t, find.widgetWithText(TextField, 'Peça'), 'Farol esquerdo');
+    expect(field('Preço unitário da peça'), findsNothing); // só com troca
+    await tap(t, find.text('Trocar a peça'));
     await type(t, field('Preço unitário da peça'), '450,50');
-    await t.pump();
+    await type(t, field('Horas de pintura'), '2');
     await tap(t, find.text('Salvar'));
     expect(c.items.length, 1);
+    expect(c.items.first.op, ItemOp.troca);
     expect(c.items.first.price, closeTo(450.5, 0.001));
     expect(find.text('Farol esquerdo'), findsOneWidget);
+    // uma linha só, com as operações por extenso
+    expect(find.text('Troca'), findsOneWidget);
+    expect(find.text('Pintura 2 h'), findsOneWidget);
 
     // editar tocando no item
     await tap(t, find.text('Farol esquerdo'));
-    await type(t, find.widgetWithText(TextField, 'Descrição (peça ou serviço)'),
-        'Farol direito');
+    await type(t, find.widgetWithText(TextField, 'Peça'), 'Farol direito');
     await t.pump();
     await tap(t, find.text('Salvar'));
     expect(c.items.first.description, 'Farol direito');
@@ -184,6 +188,20 @@ void main() {
     expect(c.items, isEmpty);
     await tap(t, find.text('Desfazer'));
     expect(c.items.length, 1);
+
+    // o aviso de desfazer fecha sozinho e tem X para fechar
+    await tap(t, find.byTooltip('Remover'));
+    expect(find.text('Desfazer'), findsOneWidget);
+    await t.pump(const Duration(seconds: 6));
+    await t.pumpAndSettle();
+    expect(find.text('Desfazer'), findsNothing);
+    c.items.add(BudgetItem(description: 'Retrovisor', op: ItemOp.troca));
+    store.changed();
+    await settle(t);
+    await tap(t, find.byTooltip('Remover'));
+    expect(find.text('Desfazer'), findsOneWidget);
+    await tap(t, find.byIcon(Icons.close).last);
+    expect(find.text('Desfazer'), findsNothing);
     await settle(t);
   });
 
@@ -223,7 +241,14 @@ void main() {
                 of: find.byType(DamageTab), matching: find.byType(Scrollable))
             .first);
     await tap(t, gen);
-    expect(c.items.length, 2); // reparo + pintura do capô
+    // uma linha só para o capô, com reparo e pintura
+    expect(c.items.length, 1);
+    expect(c.items.single.description, 'Capô');
+    expect(c.items.single.laborHours, greaterThan(0));
+    expect(c.items.single.paintHours, greaterThan(0));
+    await tab(t, 'Orçamento');
+    expect(find.textContaining('Reparo'), findsWidgets);
+    expect(find.textContaining('Pintura'), findsWidgets);
     await settle(t);
   });
 
@@ -286,13 +311,21 @@ void main() {
     await openFirstClaim(t);
     await tab(t, 'Orçamento');
     await tap(t, find.text('Novo item'));
-    await type(t, find.widgetWithText(TextField, 'Descrição (peça ou serviço)'),
-        'Grade');
-    await t.pump();
+    await type(t, find.widgetWithText(TextField, 'Peça'), 'Grade');
+    await type(t, field('Horas de reparo'), '1,5');
     await tap(t, find.text('Salvar'));
     expect(c.items.single.description, 'Grade');
-    await tap(t, find.byTooltip('PDF do orçamento'));
-    expect(find.text('Salvar arquivo PDF'), findsOneWidget);
+    expect(c.items.single.op, ItemOp.reparo);
+
+    // pré-visualização dentro do app, sem gerar PDF
+    final before = c.timeline.length;
+    await tap(t, find.byTooltip('Ver orçamento'));
+    expect(find.text('ORÇAMENTO'), findsOneWidget);
+    expect(find.text('Grade'), findsOneWidget);
+    expect(find.text('Salvar PDF'), findsOneWidget);
+    await tap(t, find.text('Sem valores'));
+    expect(find.text('LAUDO DE VISTORIA'), findsOneWidget);
+    expect(c.timeline.length, before); // nada de PDF gerado só por olhar
     await settle(t);
   });
 }

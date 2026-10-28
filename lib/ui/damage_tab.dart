@@ -31,41 +31,50 @@ class DamageTab extends StatelessWidget {
       c.damages.forEach((id, sev) {
         final r = regionById(id);
         if (r == null) return;
+        // uma linha por peça, juntando as operações sugeridas
+        final byPart = <String, Set<ItemOp>>{};
         for (final (desc, op) in r.suggestions) {
-          final exists = c.items.any((it) =>
-              it.op == op &&
-              it.description.trim().toLowerCase() == desc.toLowerCase());
-          if (exists) continue;
-          // troca só é sugerida para avaria pesada em peças de lataria
-          if (op == ItemOp.reparo && sev == 3) {
-            c.items.add(BudgetItem(
-              description: desc,
-              op: ItemOp.troca,
-              region: id,
-              laborHours: suggestedLaborHours(ItemOp.troca, sev),
-            ));
-          } else {
-            c.items.add(BudgetItem(
-              description: desc,
-              op: op,
-              region: id,
-              laborHours: suggestedLaborHours(op, sev),
-              paintHours: suggestedPaintHours(op, sev),
-            ));
-          }
-          added++;
+          byPart.putIfAbsent(desc, () => {}).add(op);
         }
+        byPart.forEach((desc, ops) {
+          final exists = c.items.any((it) =>
+              it.description.trim().toLowerCase() == desc.toLowerCase());
+          if (exists) return;
+          // avaria pesada em lataria vira troca da peça
+          final replace = ops.contains(ItemOp.troca) ||
+              (ops.contains(ItemOp.reparo) && sev == 3);
+          final labor = replace
+              ? suggestedLaborHours(ItemOp.troca, sev)
+              : (ops.contains(ItemOp.reparo)
+                  ? suggestedLaborHours(ItemOp.reparo, sev)
+                  : 0.0);
+          final paint = ops.contains(ItemOp.pintura)
+              ? suggestedPaintHours(ItemOp.pintura, sev)
+              : 0.0;
+          c.items.add(BudgetItem(
+            description: desc,
+            region: id,
+            op: opFor(
+                service: false,
+                replace: replace,
+                laborHours: labor,
+                paintHours: paint),
+            laborHours: labor,
+            paintHours: paint,
+          ));
+          added++;
+        });
       });
       if (added > 0) {
         c.timeline.add(TimelineEvent(
-            text: '$added itens gerados a partir do mapa de avarias'));
+            text: '$added peças geradas a partir do mapa de avarias'));
       }
       store.touch(c);
       toast(
           context,
           added == 0
               ? 'Os itens dessas avarias já estão no orçamento.'
-              : '$added itens adicionados ao orçamento. Confira preços e horas na aba Orçamento.');
+              : '$added ${added == 1 ? 'peça adicionada' : 'peças adicionadas'} ao orçamento. Confira preços e horas na aba Orçamento.');
     }
 
     final diagram = AspectRatio(
