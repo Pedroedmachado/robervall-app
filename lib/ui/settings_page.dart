@@ -127,7 +127,7 @@ class SettingsPage extends StatelessWidget {
                             value: s.numberPrefix,
                             capitalization: TextCapitalization.characters,
                             onChanged: (t) {
-                              s.numberPrefix = t.trim().isEmpty ? 'RB' : t.trim();
+                              s.numberPrefix = t.trim().isEmpty ? 'FN' : t.trim();
                               q();
                             }),
                         NumField(
@@ -201,7 +201,7 @@ class SettingsPage extends StatelessWidget {
                     icon: Icons.info_outline,
                     children: [
                       const Text(
-                          'Robervall 1.0 — orçamentos, vistorias e sinistros para oficinas. Funciona sem internet; os dados ficam neste aparelho (a consulta à Tabela FIPE usa a internet).'),
+                          'Funilar 1.0 — orçamentos, vistorias e sinistros para oficinas. Funciona sem internet; os dados ficam neste aparelho (a consulta à Tabela FIPE usa a internet).'),
                       const SizedBox(height: 8),
                       SelectableText('Pasta dos dados: ${store.baseDir.path}',
                           style: Theme.of(context).textTheme.bodySmall),
@@ -236,13 +236,13 @@ class _BackupCardState extends State<_BackupCard> {
       final bytes = await store.exportBackup();
       final now = DateTime.now();
       final name =
-          'robervall-backup-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}.zip';
+          'funilar-backup-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}.zip';
       if (_mobile) {
         final dir = await getTemporaryDirectory();
         final f = File('${dir.path}/$name');
         await f.writeAsBytes(bytes, flush: true);
         await Share.shareXFiles([XFile(f.path, mimeType: 'application/zip')],
-            subject: 'Backup Robervall');
+            subject: 'Backup Funilar');
       } else {
         final loc = await getSaveLocation(
           suggestedName: name,

@@ -2,11 +2,11 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:robervall/main.dart';
-import 'package:robervall/models.dart';
-import 'package:robervall/pdf_report.dart';
-import 'package:robervall/store.dart';
-import 'package:robervall/ui/damage_tab.dart';
+import 'package:funilar/main.dart';
+import 'package:funilar/models.dart';
+import 'package:funilar/pdf_report.dart';
+import 'package:funilar/store.dart';
+import 'package:funilar/ui/damage_tab.dart';
 
 /// Abre todas as telas em tamanho de celular e de desktop.
 /// Erros de layout (estouro, exceções de build) fazem o teste falhar.
@@ -15,7 +15,7 @@ void main() {
   late Claim claim;
 
   setUpAll(() async {
-    final dir = await Directory.systemTemp.createTemp('robervall_test');
+    final dir = await Directory.systemTemp.createTemp('funilar_test');
     store = await AppStore.open(dir: dir);
     claim = store.newClaim()
       ..type = ClaimType.seguradora
@@ -61,7 +61,7 @@ void main() {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(RobervallApp(store: store));
+    await tester.pumpWidget(FunilarApp(store: store));
     await tester.pumpAndSettle();
   }
 
@@ -158,7 +158,7 @@ void main() {
 
   test('backup ida e volta', () async {
     final zip = await store.exportBackup();
-    final dir = await Directory.systemTemp.createTemp('robervall_restore');
+    final dir = await Directory.systemTemp.createTemp('funilar_restore');
     final other = await AppStore.open(dir: dir);
     await other.importBackup(zip);
     expect(other.claims.length, store.claims.length);

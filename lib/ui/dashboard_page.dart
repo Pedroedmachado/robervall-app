@@ -67,7 +67,7 @@ class DashboardPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(s.shopName.isEmpty ? 'Robervall' : s.shopName,
+        title: Text(s.shopName.isEmpty ? 'Funilar' : s.shopName,
             style: const TextStyle(fontWeight: FontWeight.w800)),
         actions: [
           Padding(

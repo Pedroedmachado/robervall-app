@@ -25,13 +25,30 @@ class AppStore extends ChangeNotifier {
   Directory get photosDir => Directory('${baseDir.path}/fotos');
   File get _dataFile => File('${baseDir.path}/dados.json');
 
-  /// Abre os dados. [dir] (ou a variável ROBERVALL_DATA_DIR) troca a pasta,
+  /// Abre os dados. [dir] (ou a variável FUNILAR_DATA_DIR) troca a pasta,
   /// útil para testes.
   static Future<AppStore> open({Directory? dir}) async {
-    final env = Platform.environment['ROBERVALL_DATA_DIR'];
+    final env = Platform.environment['FUNILAR_DATA_DIR'];
     if (dir == null && env != null && env.isNotEmpty) dir = Directory(env);
-    dir ??= Directory(
-        '${(await getApplicationSupportDirectory()).path}/robervall');
+    if (dir == null) {
+      final support = (await getApplicationSupportDirectory()).path;
+      dir = Directory('$support/funilar');
+      // migra os dados da versão com o nome antigo, se existirem
+      // (o ID antigo era br.com.robervall, então a pasta-mãe também mudou)
+      if (!await dir.exists()) {
+        for (final old in [
+          Directory('$support/robervall'),
+          Directory('${support.replaceAll('funilar', 'robervall')}/robervall'),
+        ]) {
+          if (await old.exists()) {
+            try {
+              await old.rename(dir.path);
+            } catch (_) {}
+            break;
+          }
+        }
+      }
+    }
     await dir.create(recursive: true);
     final store = AppStore._(dir);
     await store.photosDir.create(recursive: true);
@@ -76,7 +93,7 @@ class AppStore extends ChangeNotifier {
   }
 
   Map<String, dynamic> toJson() => {
-        'app': 'robervall',
+        'app': 'funilar',
         'version': 1,
         'savedAt': DateTime.now().toIso8601String(),
         'settings': settings.toJson(),
@@ -313,8 +330,10 @@ class AppStore extends ChangeNotifier {
         if (j is Map) data = Map<String, dynamic>.from(j);
       }
     }
-    if (data == null || data['app'] != 'robervall') {
-      throw const FormatException('Arquivo não é um backup do Robervall.');
+    // aceita também backups do nome antigo do app (Robervall)
+    if (data == null ||
+        (data['app'] != 'funilar' && data['app'] != 'robervall')) {
+      throw const FormatException('Arquivo não é um backup do Funilar.');
     }
     for (final f in archive.files) {
       if (!f.isFile || !f.name.startsWith('fotos/')) continue;

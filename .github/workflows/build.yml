@@ -46,10 +46,10 @@ jobs:
           flutter build linux --release 2>&1 | tee ci/linux.log || status=$((status+2))
           echo "$status" > ci/android-linux.status
           if [ -f build/app/outputs/flutter-apk/app-release.apk ]; then
-            mkdir -p out && cp build/app/outputs/flutter-apk/app-release.apk out/Robervall-android.apk
+            mkdir -p out && cp build/app/outputs/flutter-apk/app-release.apk out/Funilar-android.apk
           fi
           if [ -d build/linux/x64/release/bundle ]; then
-            mkdir -p out && tar -C build/linux/x64/release -czf out/Robervall-linux-x64.tar.gz bundle
+            mkdir -p out && tar -C build/linux/x64/release -czf out/Funilar-linux-x64.tar.gz bundle
           fi
           exit $status
       - uses: actions/upload-artifact@v4
@@ -83,7 +83,7 @@ jobs:
           echo "$status" > ci/windows.status
           if [ -d build/windows/x64/runner/Release ]; then
             mkdir -p out
-            powershell -Command "Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath out/Robervall-windows-x64.zip"
+            powershell -Command "Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath out/Funilar-windows-x64.zip"
           fi
           exit $status
       - uses: actions/upload-artifact@v4
@@ -120,8 +120,8 @@ jobs:
           gh release create "$tag" dl/out-*/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Robervall $tag" \
-            --notes "Android: instale o Robervall-android.apk. Windows: extraia o .zip e abra robervall.exe. Linux: extraia o .tar.gz e rode bundle/robervall." \
+            --title "Funilar $tag" \
+            --notes "Android: instale o Funilar-android.apk. Windows: extraia o .zip e abra funilar.exe. Linux: extraia o .tar.gz e rode bundle/funilar." \
             >> /tmp/logs/release.log 2>&1 && echo RELEASE_OK >> /tmp/logs/release.log || echo RELEASE_FAILED >> /tmp/logs/release.log
       - name: Publicar logs no branch ci-logs
         shell: bash

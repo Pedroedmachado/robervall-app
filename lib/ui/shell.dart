@@ -106,7 +106,7 @@ class _Logo extends StatelessWidget {
       ),
       alignment: Alignment.center,
       child: const Text(
-        'R',
+        'F',
         style: TextStyle(
             color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900),
       ),

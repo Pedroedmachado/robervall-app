@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:robervall/calc.dart';
-import 'package:robervall/format.dart';
-import 'package:robervall/models.dart';
+import 'package:funilar/calc.dart';
+import 'package:funilar/format.dart';
+import 'package:funilar/models.dart';
 
 void main() {
   final s = Settings(
@@ -90,7 +90,7 @@ void main() {
 
   test('json ida e volta preserva o sinistro', () {
     final c = Claim(
-      number: 'RB-0007',
+      number: 'FN-0007',
       type: ClaimType.terceiro,
       status: ClaimStatus.emReparo,
       customerName: 'João',

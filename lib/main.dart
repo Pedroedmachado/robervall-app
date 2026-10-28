@@ -8,18 +8,18 @@ import 'ui/shell.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final store = await AppStore.open();
-  runApp(RobervallApp(store: store));
+  runApp(FunilarApp(store: store));
 }
 
-class RobervallApp extends StatefulWidget {
-  const RobervallApp({super.key, required this.store});
+class FunilarApp extends StatefulWidget {
+  const FunilarApp({super.key, required this.store});
   final AppStore store;
 
   @override
-  State<RobervallApp> createState() => _RobervallAppState();
+  State<FunilarApp> createState() => _FunilarAppState();
 }
 
-class _RobervallAppState extends State<RobervallApp>
+class _FunilarAppState extends State<FunilarApp>
     with WidgetsBindingObserver {
   @override
   void initState() {
@@ -55,7 +55,7 @@ class _RobervallAppState extends State<RobervallApp>
             _ => ThemeMode.system,
           };
           return MaterialApp(
-            title: 'Robervall',
+            title: 'Funilar',
             debugShowCheckedModeBanner: false,
             theme: buildTheme(Brightness.light),
             darkTheme: buildTheme(Brightness.dark),

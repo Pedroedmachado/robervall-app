@@ -1,4 +1,4 @@
-# Robervall
+# Funilar
 
 App de orçamentos, vistorias e sinistros para oficina — Android, Windows e Linux (Flutter). Funciona offline; os dados ficam no aparelho.
 
@@ -13,7 +13,7 @@ App de orçamentos, vistorias e sinistros para oficina — Android, Windows e Li
 - **Catálogo** próprio de peças e serviços, **cadastros** (clientes, seguradoras, reguladores, fornecedores), **ajustes** (valor hora, numeração, dados da oficina, tema) e **backup .zip** para levar os dados do celular ao PC.
 
 ## Baixar
-Cada push na `main` compila no GitHub Actions e publica em **Releases**: `Robervall-android.apk`, `Robervall-windows-x64.zip`, `Robervall-linux-x64.tar.gz`.
+Cada push na `main` compila no GitHub Actions e publica em **Releases**: `Funilar-android.apk`, `Funilar-windows-x64.zip`, `Funilar-linux-x64.tar.gz`.
 
 ## Compilar na sua máquina
 ```bash

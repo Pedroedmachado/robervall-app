@@ -1,4 +1,4 @@
-// Modelos de dados do Robervall. Tudo é serializado em JSON e salvo localmente.
+// Modelos de dados do Funilar. Tudo é serializado em JSON e salvo localmente.
 
 String newId() {
   final now = DateTime.now().microsecondsSinceEpoch;
@@ -311,7 +311,7 @@ class TimelineEvent {
 
 class Claim {
   String id;
-  String number; // número interno (ex.: RB-0001)
+  String number; // número interno (ex.: FN-0001)
   String claimNumber; // número do sinistro na seguradora
   ClaimType type;
   ClaimStatus status;
@@ -592,7 +592,7 @@ class Settings {
   double totalLossPct; // % do valor FIPE para indicar possível perda total
 
   Settings({
-    this.shopName = 'Robervall',
+    this.shopName = 'Funilar',
     this.shopDoc = '',
     this.shopAddress = '',
     this.shopPhone = '',
@@ -601,7 +601,7 @@ class Settings {
         'Orçamento sujeito a alteração após desmontagem do veículo.',
     this.budgetValidityDays = 15,
     this.nextNumber = 1,
-    this.numberPrefix = 'RB',
+    this.numberPrefix = 'FN',
     this.themeMode = 'system',
     Map<String, double>? laborRates,
     this.paintRate = 90,
@@ -636,8 +636,10 @@ class Settings {
       };
 
   factory Settings.fromJson(Map<String, dynamic> j) {
+    var shop = _s(j['shopName'], 'Funilar');
+    if (shop == 'Robervall') shop = 'Funilar'; // nome antigo do app
     final s = Settings(
-      shopName: _s(j['shopName'], 'Robervall'),
+      shopName: shop,
       shopDoc: _s(j['shopDoc']),
       shopAddress: _s(j['shopAddress']),
       shopPhone: _s(j['shopPhone']),
@@ -646,7 +648,7 @@ class Settings {
           'Orçamento sujeito a alteração após desmontagem do veículo.'),
       budgetValidityDays: _i(j['budgetValidityDays'], 15),
       nextNumber: _i(j['nextNumber'], 1),
-      numberPrefix: _s(j['numberPrefix'], 'RB'),
+      numberPrefix: _s(j['numberPrefix'], 'FN'),
       themeMode: _s(j['themeMode'], 'system'),
       paintRate: _d(j['paintRate'], 90),
       paintMaterialRate: _d(j['paintMaterialRate'], 70),
