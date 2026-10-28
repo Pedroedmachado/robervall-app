@@ -111,6 +111,51 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
 
   final items = c.items.where((e) => e.approved).toList();
 
+  final legendBox = pw.Container(
+            padding: const pw.EdgeInsets.all(8),
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.grey300, width: 0.6),
+              borderRadius: pw.BorderRadius.circular(4),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text('Legenda',
+                    style: pw.TextStyle(
+                        fontSize: 8.5,
+                        fontWeight: pw.FontWeight.bold,
+                        color: primary)),
+                pw.SizedBox(height: 3),
+                pw.Wrap(
+                  spacing: 14,
+                  runSpacing: 3,
+                  children: [
+                    for (final (code, meaning) in [
+                      ...legendFor(items),
+                      ('M.O.', 'horas de mão de obra'),
+                      ('Pint.', 'horas de pintura'),
+                      if (withPrices)
+                        ('Peça/serv.', 'valor da peça nova ou do serviço'),
+                    ])
+                      pw.RichText(
+                        text: pw.TextSpan(children: [
+                          pw.TextSpan(
+                              text: '$code  ',
+                              style: pw.TextStyle(
+                                  fontSize: 8,
+                                  fontWeight: pw.FontWeight.bold,
+                                  color: primary)),
+                          pw.TextSpan(
+                              text: _t(meaning),
+                              style: const pw.TextStyle(fontSize: 8)),
+                        ]),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          );
+
   doc.addPage(
     pw.MultiPage(
       pageFormat: PdfPageFormat.a4,
@@ -189,7 +234,7 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
                 kv('Chassi', c.vehicle.chassis),
                 kv('Km', c.vehicle.km),
                 if (c.vehicle.fipeValue > 0)
-                  kv('FIPE', '${money(c.vehicle.fipeValue)} (${c.vehicle.fipeCode})'),
+                  kv('FIPE', '${money(c.vehicle.fipeValue)}${c.vehicle.fipeCode.isEmpty ? '' : ' (${c.vehicle.fipeCode})'}'),
               ]),
             ),
           ],
@@ -302,8 +347,8 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
               1: const pw.FlexColumnWidth(4),
               2: const pw.FixedColumnWidth(50),
               3: const pw.FixedColumnWidth(24),
-              4: const pw.FixedColumnWidth(36),
-              5: const pw.FixedColumnWidth(36),
+              4: const pw.FixedColumnWidth(44),
+              5: const pw.FixedColumnWidth(44),
               if (withPrices) 6: const pw.FixedColumnWidth(62),
               if (withPrices) 7: const pw.FixedColumnWidth(66),
             },
@@ -326,6 +371,10 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
                     pw.Text(
                         _t('Validade do orçamento: ${s.budgetValidityDays} dias'),
                         style: normal),
+                    if (items.isNotEmpty) ...[
+                      pw.SizedBox(height: 8),
+                      legendBox,
+                    ],
                   ],
                 ),
               ),
@@ -359,52 +408,9 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
             ],
           ),
         ],
-        if (items.isNotEmpty) ...[
+        if (!withPrices && items.isNotEmpty) ...[
           pw.SizedBox(height: 10),
-          pw.Container(
-            padding: const pw.EdgeInsets.all(8),
-            decoration: pw.BoxDecoration(
-              border: pw.Border.all(color: PdfColors.grey300, width: 0.6),
-              borderRadius: pw.BorderRadius.circular(4),
-            ),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Text('Legenda',
-                    style: pw.TextStyle(
-                        fontSize: 8.5,
-                        fontWeight: pw.FontWeight.bold,
-                        color: primary)),
-                pw.SizedBox(height: 3),
-                pw.Wrap(
-                  spacing: 14,
-                  runSpacing: 3,
-                  children: [
-                    for (final (code, meaning) in [
-                      ...legendFor(items),
-                      ('M.O.', 'horas de mão de obra'),
-                      ('Pint.', 'horas de pintura'),
-                      if (withPrices)
-                        ('Peça/serv.', 'valor da peça nova ou do serviço'),
-                    ])
-                      pw.RichText(
-                        text: pw.TextSpan(children: [
-                          pw.TextSpan(
-                              text: '$code  ',
-                              style: pw.TextStyle(
-                                  fontSize: 8,
-                                  fontWeight: pw.FontWeight.bold,
-                                  color: primary)),
-                          pw.TextSpan(
-                              text: _t(meaning),
-                              style: const pw.TextStyle(fontSize: 8)),
-                        ]),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+          legendBox,
         ],
         if (images.isNotEmpty) ...[
           pw.SizedBox(height: 14),

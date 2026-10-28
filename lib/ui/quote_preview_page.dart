@@ -225,7 +225,7 @@ class _Paper extends StatelessWidget {
       color: Colors.white,
       elevation: 2,
       borderRadius: BorderRadius.circular(4),
-      child: DefaultTextStyle(
+      child: DefaultTextStyle.merge(
         style: const TextStyle(fontSize: 13, color: Colors.black87, height: 1.3),
         child: Padding(
           padding: const EdgeInsets.all(20),
@@ -560,7 +560,7 @@ class _ItemsTable extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(width: 58, child: Align(
+                  SizedBox(width: 64, child: Align(
                       alignment: Alignment.centerLeft, child: _code(it))),
                   Expanded(
                     child: Column(
