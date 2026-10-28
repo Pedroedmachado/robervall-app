@@ -132,13 +132,27 @@ class _FinancePageState extends State<FinancePage> {
           const Text('Nenhum gasto lançado neste período.')
         else
           for (final c in ExpenseCategory.values)
-            if (sum.expensesByCategory[c]! > 0)
+            if (sum.expensesByCategory[c]! > 0) ...[
               _CatBar(
                 label: c.label,
                 value: sum.expensesByCategory[c]!,
                 total: sum.expenses,
                 color: _catColor(c),
               ),
+              if (c == ExpenseCategory.funcionario)
+                for (final w in sum.workerBreakdown.entries)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 16, bottom: 2),
+                    child: Row(children: [
+                      Icon(Icons.subdirectory_arrow_right,
+                          size: 14, color: t.colorScheme.outline),
+                      const SizedBox(width: 4),
+                      Expanded(
+                          child: Text(w.key, style: t.textTheme.bodySmall)),
+                      Text(money(w.value), style: t.textTheme.bodySmall),
+                    ]),
+                  ),
+            ],
         const SizedBox(height: 8),
         Wrap(spacing: 8, runSpacing: 8, children: [
           FilledButton.tonalIcon(
@@ -513,12 +527,18 @@ Future<FinanceEntry?> editFinanceEntry(BuildContext context, FinanceEntry e,
         ? (e.isIncome ? 'Nova receita' : 'Novo gasto')
         : 'Editar lançamento',
     onSave: () {
+      e.syncPieceAmount();
       if (e.amount <= 0) {
         toast(context, 'Informe o valor.');
         return null;
       }
       e.description = e.description.trim();
-      if (e.description.isEmpty) e.description = e.categoryLabel;
+      if (e.description.isEmpty) {
+        e.description = e.isWorker
+            ? [e.workerLabel, if (e.contact.trim().isNotEmpty) e.contact.trim()]
+                .join(' · ')
+            : e.categoryLabel;
+      }
       return e;
     },
     body: (ctx, setS) {
@@ -555,8 +575,61 @@ Future<FinanceEntry?> editFinanceEntry(BuildContext context, FinanceEntry e,
               onChanged: (c) => setS(() {
                 e.category = c;
                 if (c == ExpenseCategory.fixo) e.recurring = true;
+                if (c == ExpenseCategory.funcionario) {
+                  e.recurring = !e.outsourced && e.payType == PayType.salario;
+                }
               }),
             ),
+            const SizedBox(height: 12),
+          ],
+          if (e.isWorker) ...[
+            SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(
+                    value: false,
+                    label: Text('Funcionário'),
+                    icon: Icon(Icons.badge_outlined)),
+                ButtonSegment(
+                    value: true,
+                    label: Text('Terceirizado'),
+                    icon: Icon(Icons.handshake_outlined)),
+              ],
+              selected: {e.outsourced},
+              onSelectionChanged: (sel) => setS(() {
+                e.outsourced = sel.first;
+                if (e.outsourced && e.payType == PayType.salario) {
+                  e.payType = PayType.empreita;
+                }
+                e.recurring = !e.outsourced && e.payType == PayType.salario;
+              }),
+            ),
+            const SizedBox(height: 12),
+            if (e.outsourced) ...[
+              Picker<OutsourcedService>(
+                label: 'Serviço terceirizado',
+                value: e.service,
+                values: OutsourcedService.values,
+                labelOf: (v) => v.label,
+                onChanged: (v) => setS(() => e.service = v),
+              ),
+              const SizedBox(height: 12),
+            ],
+            Text('Forma de pagamento',
+                style: Theme.of(ctx).textTheme.labelLarge),
+            const SizedBox(height: 4),
+            Wrap(spacing: 8, runSpacing: 4, children: [
+              for (final pt in PayType.values)
+                if (!(e.outsourced && pt == PayType.salario))
+                  ChoiceChip(
+                    label: Text(pt.label),
+                    selected: e.payType == pt,
+                    onSelected: (_) => setS(() {
+                      e.payType = pt;
+                      e.recurring = !e.outsourced && pt == PayType.salario;
+                      e.syncPieceAmount();
+                    }),
+                  ),
+            ]),
             const SizedBox(height: 12),
           ],
           BoundField(
@@ -564,16 +637,53 @@ Future<FinanceEntry?> editFinanceEntry(BuildContext context, FinanceEntry e,
             value: e.description,
             hint: e.isIncome
                 ? 'Ex.: venda de sucata'
-                : 'Ex.: aluguel, salário, tinta, peças',
+                : (e.isWorker
+                    ? 'Ex.: pintura do Gol, salário de outubro'
+                    : 'Ex.: aluguel, tinta, peças'),
             onChanged: (t) => e.description = t,
           ),
           const SizedBox(height: 12),
-          NumField(
-            label: 'Valor',
-            prefix: 'R\$',
-            value: e.amount,
-            onChanged: (n) => e.amount = n,
-          ),
+          if (e.paidByPiece) ...[
+            Row(children: [
+              Expanded(
+                child: NumField(
+                  label: 'Quantidade de peças',
+                  value: e.pieces,
+                  onChanged: (n) => setS(() {
+                    e.pieces = n;
+                    e.syncPieceAmount();
+                  }),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: NumField(
+                  label: 'Valor por peça',
+                  prefix: 'R\$',
+                  value: e.pieceValue,
+                  onChanged: (n) => setS(() {
+                    e.pieceValue = n;
+                    e.syncPieceAmount();
+                  }),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 6),
+            Text(
+              '${num2(e.pieces)} ${e.pieces == 1 ? 'peça' : 'peças'} × ${money(e.pieceValue)} = ${money(e.amount)}',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ] else
+            NumField(
+              label: e.isWorker && e.payType == PayType.empreita
+                  ? 'Valor da empreita'
+                  : (e.isWorker && e.payType == PayType.salario
+                      ? 'Salário'
+                      : 'Valor'),
+              prefix: 'R\$',
+              value: e.amount,
+              onChanged: (n) => e.amount = n,
+            ),
           const SizedBox(height: 12),
           DateField(
             label: e.recurring ? 'Primeiro mês (dia do vencimento)' : 'Data',
@@ -585,7 +695,7 @@ Future<FinanceEntry?> editFinanceEntry(BuildContext context, FinanceEntry e,
             label: e.isIncome
                 ? 'De quem (opcional)'
                 : (e.category == ExpenseCategory.funcionario
-                    ? 'Funcionário'
+                    ? (e.outsourced ? 'Prestador / terceirizado' : 'Funcionário')
                     : 'Fornecedor / funcionário (opcional)'),
             value: e.contact,
             capitalization: TextCapitalization.words,

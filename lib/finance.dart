@@ -96,6 +96,10 @@ class FinanceSummary {
   final int closedCount;
   final double otherIncome;
   final Map<ExpenseCategory, double> expensesByCategory;
+
+  /// Detalhe de "Funcionários e terceirizados": Salário, Empreita,
+  /// Por peça, Terceirizado · Funilaria...
+  final Map<String, double> workerBreakdown;
   final List<CashItem> items; // ordenado por data
 
   const FinanceSummary({
@@ -103,6 +107,7 @@ class FinanceSummary {
     required this.closedCount,
     required this.otherIncome,
     required this.expensesByCategory,
+    required this.workerBreakdown,
     required this.items,
   });
 
@@ -120,6 +125,7 @@ FinanceSummary summarize(
   double closed = 0, other = 0;
   var closedCount = 0;
   final byCat = {for (final c in ExpenseCategory.values) c: 0.0};
+  final workers = <String, double>{};
 
   for (final c in claims) {
     if (!isClosedStatus(c.status)) continue;
@@ -148,12 +154,17 @@ FinanceSummary summarize(
         other += e.amount;
       } else {
         byCat[e.category] = byCat[e.category]! + e.amount;
+        if (e.isWorker) {
+          workers[e.workerLabel] = (workers[e.workerLabel] ?? 0) + e.amount;
+        }
       }
       items.add(CashItem(
         date: d,
         title: e.description.isEmpty ? e.categoryLabel : e.description,
         subtitle: [
-          e.categoryLabel,
+          e.isWorker ? e.workerLabel : e.categoryLabel,
+          if (e.paidByPiece)
+            '${_n(e.pieces)} ${e.pieces == 1 ? 'peça' : 'peças'}',
           if (e.contact.isNotEmpty) e.contact,
           if (e.recurring) 'mensal',
         ].join(' · '),
@@ -170,6 +181,7 @@ FinanceSummary summarize(
     closedCount: closedCount,
     otherIncome: other,
     expensesByCategory: byCat,
+    workerBreakdown: workers,
     items: items,
   );
 }
@@ -178,3 +190,9 @@ FinanceSummary summarize(
 double linkedCosts(Claim c, List<FinanceEntry> entries) => entries
     .where((e) => !e.isIncome && e.claimId == c.id)
     .fold(0.0, (a, e) => a + e.amount);
+
+String _n(double v) {
+  var s = v.toStringAsFixed(2).replaceAll(RegExp(r'0+$'), '');
+  if (s.endsWith('.')) s = s.substring(0, s.length - 1);
+  return s.replaceAll('.', ',');
+}

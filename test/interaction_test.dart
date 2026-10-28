@@ -370,4 +370,38 @@ void main() {
     expect(find.text(money(-1500)), findsWidgets);
     await settle(t);
   });
+
+  itest('financeiro: funcionário pago por peça e terceirizado', (t) async {
+    await start(t);
+    await tap(t, nav('Financeiro'));
+
+    await tap(t, find.text('Lançar gasto'));
+    await tap(t, find.byType(DropdownMenu<ExpenseCategory>));
+    await tap(t, find.text('Funcionários e terceirizados').last);
+    await tap(t, find.text('Por peça'));
+    await type(t, field('Quantidade de peças'), '12');
+    await type(t, field('Valor por peça'), '35');
+    await settle(t);
+    expect(find.textContaining('= ${money(420)}'), findsOneWidget);
+    await type(t, field('Funcionário'), 'João pintor');
+    await tap(t, find.text('Salvar'));
+    final e = store.entries.single;
+    expect(e.amount, 420);
+    expect(e.payType, PayType.porPeca);
+    expect(e.recurring, isFalse);
+
+    await tap(t, find.text('Lançar gasto'));
+    await tap(t, find.byType(DropdownMenu<ExpenseCategory>));
+    await tap(t, find.text('Funcionários e terceirizados').last);
+    await tap(t, find.text('Terceirizado'));
+    expect(find.text('Salário'), findsNothing); // terceirizado não tem salário
+    await type(t, field('Valor da empreita'), '800');
+    await tap(t, find.text('Salvar'));
+    final out = store.entries.firstWhere((x) => x.outsourced);
+    expect(out.service, OutsourcedService.funilaria);
+    expect(out.amount, 800);
+    expect(find.text('Terceirizado · Funilaria'), findsOneWidget);
+    expect(find.text('Por peça'), findsOneWidget);
+    await settle(t);
+  });
 }

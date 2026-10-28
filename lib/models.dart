@@ -811,12 +811,36 @@ List<BudgetItem> mergePartLines(List<BudgetItem> items) {
 enum ExpenseCategory {
   fixo('Gastos fixos'),
   fornecedor('Fornecedores / peças'),
-  funcionario('Funcionários'),
+  funcionario('Funcionários e terceirizados'),
   materiais('Materiais'),
   impostos('Impostos e taxas'),
   outros('Outros');
 
   const ExpenseCategory(this.label);
+  final String label;
+}
+
+/// Forma de pagamento de funcionário ou terceirizado.
+enum PayType {
+  salario('Salário'),
+  empreita('Empreita'),
+  porPeca('Por peça');
+
+  const PayType(this.label);
+  final String label;
+}
+
+/// Serviço feito por terceirizado.
+enum OutsourcedService {
+  funilaria('Funilaria'),
+  pintura('Pintura'),
+  mecanica('Mecânica'),
+  eletrica('Elétrica'),
+  tapecaria('Tapeçaria'),
+  vidracaria('Vidraçaria'),
+  outros('Outros');
+
+  const OutsourcedService(this.label);
   final String label;
 }
 
@@ -834,6 +858,13 @@ class FinanceEntry {
   DateTime? recurringUntil;
   String notes;
 
+  // Funcionários e terceirizados
+  bool outsourced; // terceirizado (prestador de fora)
+  OutsourcedService service;
+  PayType payType;
+  double pieces; // quantidade de peças (pagamento por peça)
+  double pieceValue; // valor de cada peça
+
   FinanceEntry({
     String? id,
     this.isIncome = false,
@@ -846,10 +877,32 @@ class FinanceEntry {
     this.recurring = false,
     this.recurringUntil,
     this.notes = '',
+    this.outsourced = false,
+    this.service = OutsourcedService.funilaria,
+    this.payType = PayType.salario,
+    this.pieces = 0,
+    this.pieceValue = 0,
   })  : id = id ?? newId(),
         date = date ?? DateTime.now();
 
   String get categoryLabel => isIncome ? 'Outras receitas' : category.label;
+
+  bool get isWorker => !isIncome && category == ExpenseCategory.funcionario;
+
+  /// Ex.: "Terceirizado · Funilaria" ou "Por peça".
+  String get workerLabel => !isWorker
+      ? ''
+      : outsourced
+          ? 'Terceirizado · ${service.label}'
+          : payType.label;
+
+  /// Pagamento por peça (valor = peças × valor da peça).
+  bool get paidByPiece => isWorker && payType == PayType.porPeca;
+
+  /// Recalcula o valor quando o pagamento é por peça.
+  void syncPieceAmount() {
+    if (paidByPiece) amount = pieces * pieceValue;
+  }
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -863,6 +916,11 @@ class FinanceEntry {
         'recurring': recurring,
         'recurringUntil': recurringUntil?.toIso8601String(),
         'notes': notes,
+        'outsourced': outsourced,
+        'service': service.name,
+        'payType': payType.name,
+        'pieces': pieces,
+        'pieceValue': pieceValue,
       };
 
   factory FinanceEntry.fromJson(Map<String, dynamic> j) => FinanceEntry(
@@ -878,5 +936,11 @@ class FinanceEntry {
         recurring: j['recurring'] == true,
         recurringUntil: _dt(j['recurringUntil']),
         notes: _s(j['notes']),
+        outsourced: j['outsourced'] == true,
+        service: _enum(OutsourcedService.values, j['service'],
+            OutsourcedService.funilaria),
+        payType: _enum(PayType.values, j['payType'], PayType.salario),
+        pieces: _d(j['pieces']),
+        pieceValue: _d(j['pieceValue']),
       );
 }
