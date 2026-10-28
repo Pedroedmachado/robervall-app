@@ -43,6 +43,15 @@ void main() {
               of: find.byType(TabBar), matching: find.textContaining(label))
           .first);
 
+  /// Roda o teste e fecha o app no fim, para nenhum salvamento ficar pendente.
+  void itest(String name, Future<void> Function(WidgetTester) body) {
+    testWidgets(name, (t) async {
+      await body(t);
+      await t.pumpWidget(const SizedBox());
+      await t.pump(const Duration(seconds: 3));
+    });
+  }
+
   Finder field(String label) => find.widgetWithText(TextField, label);
 
   Future<void> type(WidgetTester tester, Finder f, String text) async {
@@ -67,7 +76,7 @@ void main() {
     await tap(tester, find.textContaining('Argo').first);
   }
 
-  testWidgets('novo sinistro: digitar placa atualiza título e lista', (t) async {
+  itest('novo sinistro: digitar placa atualiza título e lista', (t) async {
     await start(t);
     await tap(t, find.text('Sinistros').last);
     await tap(t, find.text('Novo'));
@@ -77,7 +86,7 @@ void main() {
     await settle(t);
     expect(store.claims.first.vehicle.plate, 'ABC-1D23');
     expect(find.textContaining('ABC-1D23'), findsWidgets); // título
-    await t.pageBack();
+    await tap(t, find.byTooltip('Voltar'));
     await settle(t);
     expect(find.text('ABC-1D23'), findsOneWidget); // cartão da lista
     expect(find.textContaining('José da Silva'), findsOneWidget);
@@ -85,19 +94,19 @@ void main() {
     await settle(t);
   });
 
-  testWidgets('novo sinistro vazio é descartado ao voltar', (t) async {
+  itest('novo sinistro vazio é descartado ao voltar', (t) async {
     await start(t);
     await tap(t, find.text('Sinistros').last);
     await tap(t, find.text('Novo'));
     expect(store.claims.length, 1);
-    await t.pageBack();
+    await tap(t, find.byTooltip('Voltar'));
     await settle(t);
     expect(store.claims, isEmpty);
     expect(store.settings.nextNumber, 1);
     await settle(t);
   });
 
-  testWidgets('tipo de atendimento mostra seção da seguradora', (t) async {
+  itest('tipo de atendimento mostra seção da seguradora', (t) async {
     await start(t);
     final c = seed();
     await openFirstClaim(t);
@@ -109,7 +118,7 @@ void main() {
     await settle(t);
   });
 
-  testWidgets('status: aprovar pede nome e registra', (t) async {
+  itest('status: aprovar pede nome e registra', (t) async {
     await start(t);
     final c = seed();
     await openFirstClaim(t);
@@ -123,7 +132,7 @@ void main() {
     await settle(t);
   });
 
-  testWidgets('duplicar e excluir', (t) async {
+  itest('duplicar e excluir', (t) async {
     await start(t);
     seed();
     await openFirstClaim(t);
@@ -140,7 +149,7 @@ void main() {
     await settle(t);
   });
 
-  testWidgets('orçamento: novo item, editar, aprovar, excluir e desfazer', (t) async {
+  itest('orçamento: novo item, editar, aprovar, excluir e desfazer', (t) async {
     await start(t);
     final c = seed();
     await openFirstClaim(t);
@@ -178,7 +187,7 @@ void main() {
     await settle(t);
   });
 
-  testWidgets('orçamento: itens do catálogo, outros custos e desconto', (t) async {
+  itest('orçamento: itens do catálogo, outros custos e desconto', (t) async {
     await start(t);
     final c = seed();
     await openFirstClaim(t);
@@ -198,7 +207,7 @@ void main() {
     await settle(t);
   });
 
-  testWidgets('avarias: marcar no carro e gerar itens', (t) async {
+  itest('avarias: marcar no carro e gerar itens', (t) async {
     await start(t);
     final c = seed();
     await openFirstClaim(t);
@@ -218,7 +227,7 @@ void main() {
     await settle(t);
   });
 
-  testWidgets('histórico: anotar acompanhamento', (t) async {
+  itest('histórico: anotar acompanhamento', (t) async {
     await start(t);
     final c = seed();
     await openFirstClaim(t);
@@ -230,7 +239,7 @@ void main() {
     await settle(t);
   });
 
-  testWidgets('total no rodapé leva à aba Orçamento', (t) async {
+  itest('total no rodapé leva à aba Orçamento', (t) async {
     await start(t);
     seed();
     await openFirstClaim(t);
@@ -239,7 +248,7 @@ void main() {
     await settle(t);
   });
 
-  testWidgets('lista: busca, filtro de status e ordenação', (t) async {
+  itest('lista: busca, filtro de status e ordenação', (t) async {
     await start(t);
     seed(customer: 'Ana', plate: 'AAA-1A11');
     final b = seed(customer: 'Bruno', plate: 'BBB-2B22');
@@ -255,7 +264,14 @@ void main() {
     await type(t, find.byType(TextField).first, '');
     await settle(t);
 
-    await tap(t, find.widgetWithText(FilterChip, ClaimStatus.emReparo.label));
+    final chip = find.widgetWithText(FilterChip, ClaimStatus.emReparo.label);
+    await t.scrollUntilVisible(chip, 150,
+        scrollable: find
+            .descendant(
+                of: find.byKey(const Key('filtros')),
+                matching: find.byType(Scrollable))
+            .first);
+    await tap(t, chip);
     expect(find.text('AAA-1A11'), findsNothing);
     expect(find.text('BBB-2B22'), findsOneWidget);
 
@@ -264,7 +280,7 @@ void main() {
     await settle(t);
   });
 
-  testWidgets('desktop: novo item em diálogo e PDF', (t) async {
+  itest('desktop: novo item em diálogo e PDF', (t) async {
     await start(t, size: const Size(1366, 768));
     final c = seed();
     await openFirstClaim(t);

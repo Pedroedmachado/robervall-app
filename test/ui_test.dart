@@ -144,7 +144,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Gerar PDF'), findsOneWidget);
 
-      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 3));
     });
   }
 

@@ -123,6 +123,7 @@ class _ClaimsPageState extends State<ClaimsPage> {
           SizedBox(
             height: 48,
             child: ListView(
+              key: const Key('filtros'),
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12),
               children: [
