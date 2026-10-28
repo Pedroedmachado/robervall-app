@@ -532,13 +532,14 @@ Future<T?> showFormDialog<T>({
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 12, 16, 16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                child: OverflowBar(
+                  alignment: MainAxisAlignment.end,
+                  spacing: 8,
+                  overflowAlignment: OverflowBarAlignment.end,
                   children: [
                     TextButton(
                         onPressed: () => Navigator.pop(ctx),
                         child: const Text('Cancelar')),
-                    const SizedBox(width: 8),
                     FilledButton(
                       onPressed: () {
                         final r = onSave();

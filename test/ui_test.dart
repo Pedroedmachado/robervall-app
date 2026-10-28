@@ -66,7 +66,10 @@ void main() {
   }
 
   Future<void> tapText(WidgetTester tester, String text) async {
-    await tester.tap(find.text(text).last);
+    // no celular a barra de abas pode esconder o nome: toca no destino inteiro
+    final dest = find.ancestor(
+        of: find.text(text), matching: find.byType(NavigationDestination));
+    await tester.tap(dest.evaluate().isNotEmpty ? dest.last : find.text(text).last);
     await tester.pumpAndSettle();
   }
 

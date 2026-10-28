@@ -55,6 +55,13 @@ void main() {
 
   Finder field(String label) => find.widgetWithText(TextField, label);
 
+  /// Aba do menu principal (no celular o nome pode estar escondido).
+  Finder nav(String label) {
+    final dest = find.ancestor(
+        of: find.text(label), matching: find.byType(NavigationDestination));
+    return dest.evaluate().isNotEmpty ? dest.last : find.text(label).last;
+  }
+
   Future<void> type(WidgetTester tester, Finder f, String text) async {
     await tester.ensureVisible(f);
     await tester.pumpAndSettle();
@@ -79,7 +86,7 @@ void main() {
 
   itest('novo sinistro: digitar placa atualiza título e lista', (t) async {
     await start(t);
-    await tap(t, find.text('Sinistros').last);
+    await tap(t, nav('Sinistros'));
     await tap(t, find.text('Novo'));
     expect(store.claims.length, 1);
     await type(t, field('Placa'), 'abc1d23');
@@ -97,7 +104,7 @@ void main() {
 
   itest('novo sinistro vazio é descartado ao voltar', (t) async {
     await start(t);
-    await tap(t, find.text('Sinistros').last);
+    await tap(t, nav('Sinistros'));
     await tap(t, find.text('Novo'));
     expect(store.claims.length, 1);
     await tap(t, find.byTooltip('Voltar'));
@@ -279,7 +286,7 @@ void main() {
     seed(customer: 'Ana', plate: 'AAA-1A11');
     final b = seed(customer: 'Bruno', plate: 'BBB-2B22');
     store.setStatus(b, ClaimStatus.emReparo);
-    await tap(t, find.text('Sinistros').last);
+    await tap(t, nav('Sinistros'));
     expect(find.text('AAA-1A11'), findsOneWidget);
     expect(find.text('BBB-2B22'), findsOneWidget);
 
@@ -337,7 +344,7 @@ void main() {
     store.setStatus(c, ClaimStatus.aprovado);
     await settle(t);
 
-    await tap(t, find.text('Financeiro').last);
+    await tap(t, nav('Financeiro'));
     expect(find.text('Orçamentos fechados (1)'), findsOneWidget);
     expect(find.text(money(5000)), findsWidgets);
 
