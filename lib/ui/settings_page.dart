@@ -231,6 +231,7 @@ class _BackupCardState extends State<_BackupCard> {
 
   Future<void> _export() async {
     final store = StoreScope.read(context);
+    final origin = shareOrigin(context);
     setState(() => _busy = true);
     try {
       final bytes = await store.exportBackup();
@@ -242,7 +243,7 @@ class _BackupCardState extends State<_BackupCard> {
         final f = File('${dir.path}/$name');
         await f.writeAsBytes(bytes, flush: true);
         await Share.shareXFiles([XFile(f.path, mimeType: 'application/zip')],
-            subject: 'Backup Funilar');
+            subject: 'Backup Funilar', sharePositionOrigin: origin);
       } else {
         final loc = await getSaveLocation(
           suggestedName: name,

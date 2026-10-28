@@ -98,8 +98,48 @@ jobs:
           path: out/
           if-no-files-found: ignore
 
+  ios:
+    # Mac no GitHub gasta 10x mais minutos em repositório privado:
+    # roda só quando pedido (botão "Run workflow" ou "[ios]" na mensagem do commit).
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[ios]')
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Build
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p ci out
+          status=0
+          { bash tool/prepare_platforms.sh && flutter pub get; } 2>&1 | tee ci/ios-prep.log || status=1
+          flutter build ios --release --no-codesign 2>&1 | tee ci/ios.log || status=1
+          if [ -d build/ios/iphoneos/Runner.app ]; then
+            mkdir -p ipa/Payload
+            cp -R build/ios/iphoneos/Runner.app ipa/Payload/
+            (cd ipa && zip -qry ../out/Funilar-ios-sem-assinatura.ipa Payload)
+          else
+            status=1
+          fi
+          echo "$status" > ci/ios.status
+          exit $status
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: logs-ios
+          path: ci/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: out-ios
+          path: out/
+          if-no-files-found: ignore
+
   report:
-    needs: [android-linux, windows]
+    needs: [android-linux, windows, ios]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -121,7 +161,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "Funilar $tag" \
-            --notes "Android: instale o Funilar-android.apk. Windows: extraia o .zip e abra funilar.exe. Linux: extraia o .tar.gz e rode bundle/funilar." \
+            --notes "Android: instale o Funilar-android.apk. Windows: extraia o .zip e abra funilar.exe. Linux: extraia o .tar.gz e rode bundle/funilar. iPhone (quando presente): instale o .ipa com Sideloadly ou AltStore usando seu Apple ID." \
             >> /tmp/logs/release.log 2>&1 && echo RELEASE_OK >> /tmp/logs/release.log || echo RELEASE_FAILED >> /tmp/logs/release.log
       - name: Publicar logs no branch ci-logs
         shell: bash
@@ -133,6 +173,7 @@ jobs:
             echo "run: ${GITHUB_RUN_NUMBER}"
             echo "android-linux: ${{ needs.android-linux.result }}"
             echo "windows: ${{ needs.windows.result }}"
+            echo "ios: ${{ needs.ios.result }}"
           } > /tmp/logs/SUMMARY.txt
           git config user.name "ci"
           git config user.email "ci@users.noreply.github.com"

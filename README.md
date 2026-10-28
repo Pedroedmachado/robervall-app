@@ -1,6 +1,6 @@
 # Funilar
 
-App de orçamentos, vistorias e sinistros para oficina — Android, Windows e Linux (Flutter). Funciona offline; os dados ficam no aparelho.
+App de orçamentos, vistorias e sinistros para oficina — Android, iPhone, Windows e Linux (Flutter). Funciona offline; os dados ficam no aparelho.
 
 ## O que tem
 - **Painel**: abertos, aguardando aprovação, em reparo, atrasados, valor em aberto, a receber de seguradoras, fechado no mês, próximas entregas.
@@ -14,6 +14,9 @@ App de orçamentos, vistorias e sinistros para oficina — Android, Windows e Li
 
 ## Baixar
 Cada push na `main` compila no GitHub Actions e publica em **Releases**: `Funilar-android.apk`, `Funilar-windows-x64.zip`, `Funilar-linux-x64.tar.gz`.
+
+## iPhone
+O build de iPhone roda num Mac do GitHub Actions e gasta 10x mais minutos em repositório privado, por isso só roda quando pedido: botão **Run workflow** na aba Actions, ou `[ios]` na mensagem do commit. Sai um `Funilar-ios-sem-assinatura.ipa`; instale com **Sideloadly** ou **AltStore** usando seu Apple ID (com conta grátis, reinstale a cada 7 dias; com a conta paga de desenvolvedor da Apple dura 1 ano e dá para usar TestFlight).
 
 ## Compilar na sua máquina
 ```bash

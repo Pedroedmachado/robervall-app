@@ -12,6 +12,7 @@ import 'format.dart';
 import 'models.dart';
 import 'seed.dart';
 import 'store.dart';
+import 'ui/widgets.dart' show shareOrigin;
 
 /// Remove caracteres fora do Latin-1 (fonte padrão do PDF).
 String _t(String s) {
@@ -454,7 +455,8 @@ Future<void> showReportOptions(
       ),
     ),
   );
-  if (action == null) return;
+  if (action == null || !context.mounted) return;
+  final origin = shareOrigin(context);
   final name = _fileName(c, withPrices);
   try {
     final bytes =
@@ -463,7 +465,7 @@ Future<void> showReportOptions(
       case 'print':
         await Printing.layoutPdf(onLayout: (_) async => bytes, name: name);
       case 'share':
-        await Printing.sharePdf(bytes: bytes, filename: name);
+        await Printing.sharePdf(bytes: bytes, filename: name, bounds: origin);
       case 'save':
         final loc = await getSaveLocation(
           suggestedName: name,

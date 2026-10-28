@@ -530,3 +530,10 @@ Future<T?> showFormDialog<T>({
     ),
   );
 }
+
+/// Ponto de origem do menu de compartilhar (obrigatório no iPad).
+Rect shareOrigin(BuildContext context) {
+  final size = MediaQuery.sizeOf(context);
+  return Rect.fromCenter(
+      center: Offset(size.width / 2, size.height / 3), width: 2, height: 2);
+}
