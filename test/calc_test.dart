@@ -1,0 +1,120 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:robervall/calc.dart';
+import 'package:robervall/format.dart';
+import 'package:robervall/models.dart';
+
+void main() {
+  final s = Settings(
+    laborRates: {
+      LaborType.funilaria.name: 100,
+      LaborType.mecanica.name: 120,
+      LaborType.eletrica.name: 120,
+      LaborType.tapecaria.name: 80,
+      LaborType.vidracaria.name: 80,
+    },
+    paintRate: 90,
+    paintMaterialRate: 50,
+    totalLossPct: 75,
+  );
+
+  test('valores de um item de troca com MO e pintura', () {
+    final it = BudgetItem(
+      op: ItemOp.troca,
+      qty: 2,
+      price: 300,
+      discountPct: 10,
+      laborHours: 1.5,
+      paintHours: 2,
+    );
+    final v = itemValues(it, s);
+    expect(v.parts, closeTo(540, 0.001)); // 2*300 - 10%
+    expect(v.labor, closeTo(150, 0.001));
+    expect(v.paintLabor, closeTo(180, 0.001));
+    expect(v.paintMaterial, closeTo(100, 0.001));
+    expect(v.total, closeTo(970, 0.001));
+  });
+
+  test('reparo não cobra preço de peça', () {
+    final it = BudgetItem(op: ItemOp.reparo, price: 999, laborHours: 3);
+    final v = itemValues(it, s);
+    expect(v.parts, 0);
+    expect(v.total, closeTo(300, 0.001));
+  });
+
+  test('totais com franquia, desconto, itens não aprovados e FIPE', () {
+    final c = Claim(
+      type: ClaimType.seguradora,
+      deductible: 1500,
+      discountPct: 10,
+      extraCosts: 200,
+      vehicle: Vehicle(fipeValue: 10000),
+      items: [
+        BudgetItem(op: ItemOp.troca, price: 5000, laborHours: 2),
+        BudgetItem(op: ItemOp.servico, price: 300),
+        BudgetItem(op: ItemOp.troca, price: 9999, approved: false),
+      ],
+    );
+    final t = computeTotals(c, s);
+    // 5000 + 200 (MO) + 300 + 200 extra = 5700; -10% = 5130
+    expect(t.subtotal, closeTo(5700, 0.001));
+    expect(t.total, closeTo(5130, 0.001));
+    expect(t.deductible, 1500);
+    expect(t.insurerPays, closeTo(3630, 0.001));
+    expect(t.customerPays, 1500);
+    expect(t.rejectedCount, 1);
+    expect(t.fipePct, closeTo(51.3, 0.001));
+    expect(t.possibleTotalLoss, isFalse);
+  });
+
+  test('franquia maior que o total fica limitada', () {
+    final c = Claim(
+      type: ClaimType.seguradora,
+      deductible: 5000,
+      items: [BudgetItem(op: ItemOp.servico, price: 1000)],
+    );
+    final t = computeTotals(c, s);
+    expect(t.deductible, 1000);
+    expect(t.insurerPays, 0);
+    expect(t.customerPays, 1000);
+  });
+
+  test('alerta de perda total', () {
+    final c = Claim(
+      vehicle: Vehicle(fipeValue: 10000),
+      items: [BudgetItem(op: ItemOp.troca, price: 8000)],
+    );
+    final t = computeTotals(c, s);
+    expect(t.possibleTotalLoss, isTrue);
+    expect(t.customerPays, 8000);
+  });
+
+  test('json ida e volta preserva o sinistro', () {
+    final c = Claim(
+      number: 'RB-0007',
+      type: ClaimType.terceiro,
+      status: ClaimStatus.emReparo,
+      customerName: 'João',
+      dueDate: DateTime(2026, 11, 5),
+      vehicle: Vehicle(plate: 'ABC-1D23', fipeValue: 45000.5),
+      items: [BudgetItem(description: 'Capô', op: ItemOp.pintura, paintHours: 3)],
+      damages: {'capo': 2},
+      photos: [ClaimPhoto(fileName: 'a.jpg', caption: 'frente')],
+      timeline: [TimelineEvent(text: 'ok', isStatus: true)],
+    );
+    final back = Claim.fromJson(c.toJson());
+    expect(back.toJson(), c.toJson());
+  });
+
+  test('formatação brasileira', () {
+    expect(money(1234567.891), 'R\$ 1.234.567,89');
+    expect(money(-5), '-R\$ 5,00');
+    expect(money(0.5), 'R\$ 0,50');
+    expect(parseNum('1.234,56'), closeTo(1234.56, 0.0001));
+    expect(parseNum('R\$ 10.000,00'), 10000);
+    expect(parseNum('2.5'), 2.5);
+    expect(num2(1.50), '1,5');
+    expect(num2(3), '3');
+    expect(plateMask('abc1d23'), 'ABC-1D23');
+    expect(date(DateTime(2026, 3, 4)), '04/03/2026');
+  });
+}

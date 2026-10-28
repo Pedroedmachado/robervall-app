@@ -1,0 +1,279 @@
+import 'package:flutter/material.dart';
+
+import '../calc.dart';
+import '../format.dart';
+import '../models.dart';
+import '../pdf_report.dart';
+import '../store.dart';
+import '../theme.dart';
+import 'budget_tab.dart';
+import 'claim_form_tab.dart';
+import 'claims_page.dart';
+import 'damage_tab.dart';
+import 'photos_tab.dart';
+import 'timeline_tab.dart';
+import 'widgets.dart';
+
+class ClaimDetailPage extends StatefulWidget {
+  const ClaimDetailPage({super.key, required this.claimId});
+  final String claimId;
+
+  @override
+  State<ClaimDetailPage> createState() => _ClaimDetailPageState();
+}
+
+class _ClaimDetailPageState extends State<ClaimDetailPage> {
+  Claim? _claim;
+
+  @override
+  void dispose() {
+    final c = _claim;
+    if (c != null) {
+      // registra cliente/seguradora/regulador nos cadastros ao sair
+      final store = _store;
+      if (store != null && store.claims.contains(c)) {
+        Future.microtask(() => store.rememberContactsFrom(c));
+        store.flush();
+      }
+    }
+    super.dispose();
+  }
+
+  AppStore? _store;
+
+  @override
+  Widget build(BuildContext context) {
+    final store = StoreScope.of(context);
+    _store = store;
+    final c = store.claimById(widget.claimId);
+    _claim = c;
+    if (c == null) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: const EmptyState(
+            icon: Icons.delete_outline, text: 'Registro não encontrado.'),
+      );
+    }
+    final totals = computeTotals(c, store.settings);
+    final wide = isWide(context);
+
+    return DefaultTabController(
+      length: 5,
+      child: Scaffold(
+        appBar: AppBar(
+          titleSpacing: 0,
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${c.number}${c.vehicle.plate.isEmpty ? '' : ' · ${c.vehicle.plate}'}',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              Text(
+                c.vehicle.title,
+                style: Theme.of(context).textTheme.bodySmall,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: () => _changeStatus(context, c),
+                child: StatusChip(c.status),
+              ),
+            ),
+            IconButton(
+              tooltip: 'PDF do orçamento',
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              onPressed: () => showReportOptions(context, store, c),
+            ),
+            PopupMenuButton<String>(
+              onSelected: (v) async {
+                switch (v) {
+                  case 'dup':
+                    final copy = store.duplicate(c);
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                      openClaim(context, copy);
+                    }
+                  case 'del':
+                    final ok = await confirm(
+                      context,
+                      'Excluir ${c.number}?',
+                      'O registro, o orçamento e as fotos serão apagados deste aparelho. Isso não pode ser desfeito.',
+                      ok: 'Excluir',
+                      danger: true,
+                    );
+                    if (ok && context.mounted) {
+                      _claim = null;
+                      Navigator.pop(context);
+                      await store.deleteClaim(c);
+                    }
+                }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                    value: 'dup',
+                    child: ListTile(
+                        leading: Icon(Icons.copy),
+                        title: Text('Duplicar orçamento'))),
+                PopupMenuItem(
+                    value: 'del',
+                    child: ListTile(
+                        leading: Icon(Icons.delete_outline, color: Colors.red),
+                        title: Text('Excluir'))),
+              ],
+            ),
+          ],
+          bottom: TabBar(
+            isScrollable: !wide,
+            tabAlignment: wide ? TabAlignment.fill : TabAlignment.start,
+            tabs: [
+              const Tab(icon: Icon(Icons.description_outlined), text: 'Dados'),
+              Tab(
+                  icon: const Icon(Icons.car_repair),
+                  text: 'Avarias (${c.damages.length})'),
+              Tab(
+                  icon: const Icon(Icons.photo_library_outlined),
+                  text: 'Fotos (${c.photos.length})'),
+              Tab(
+                  icon: const Icon(Icons.request_quote_outlined),
+                  text: 'Orçamento (${c.items.length})'),
+              const Tab(icon: Icon(Icons.timeline), text: 'Histórico'),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            ClaimFormTab(claim: c),
+            DamageTab(claim: c),
+            PhotosTab(claim: c),
+            BudgetTab(claim: c),
+            TimelineTab(claim: c),
+          ],
+        ),
+        bottomNavigationBar: _TotalBar(claim: c, totals: totals),
+      ),
+    );
+  }
+
+  Future<void> _changeStatus(BuildContext context, Claim c) async {
+    final store = StoreScope.read(context);
+    final picked = await showModalBottomSheet<ClaimStatus>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text('Alterar status',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            ),
+            for (final s in ClaimStatus.values)
+              ListTile(
+                leading: Icon(Icons.circle, color: statusColor(s), size: 16),
+                title: Text(s.label),
+                trailing: s == c.status ? const Icon(Icons.check) : null,
+                onTap: () => Navigator.pop(ctx, s),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null || picked == c.status || !context.mounted) return;
+    String? note;
+    if (picked == ClaimStatus.aprovado) {
+      final name = await _askText(context, 'Aprovado por',
+          'Nome de quem aprovou (seguradora, regulador ou cliente)',
+          initial: c.regulatorName.isNotEmpty
+              ? c.regulatorName
+              : (c.insurerName.isNotEmpty ? c.insurerName : c.customerName));
+      if (name == null) return;
+      c.approvedBy = name;
+      c.approvedAt = DateTime.now();
+      note = name.isEmpty ? null : 'por $name';
+    } else if (picked == ClaimStatus.cancelado) {
+      note = await _askText(context, 'Motivo', 'Motivo do cancelamento/recusa');
+      if (note == null) return;
+    }
+    store.setStatus(c, picked, note: note);
+  }
+}
+
+Future<String?> _askText(BuildContext context, String title, String hint,
+    {String initial = ''}) {
+  final ctl = TextEditingController(text: initial);
+  return showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(title),
+      content: TextField(
+        controller: ctl,
+        autofocus: true,
+        decoration: InputDecoration(hintText: hint),
+        onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+        FilledButton(
+            onPressed: () => Navigator.pop(ctx, ctl.text.trim()),
+            child: const Text('OK')),
+      ],
+    ),
+  );
+}
+
+class _TotalBar extends StatelessWidget {
+  const _TotalBar({required this.claim, required this.totals});
+  final Claim claim;
+  final BudgetTotals totals;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final hasInsurer = claim.type == ClaimType.seguradora ||
+        claim.type == ClaimType.terceiro;
+    return Material(
+      color: t.colorScheme.surfaceContainer,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              if (totals.possibleTotalLoss)
+                Tooltip(
+                  message:
+                      'Orçamento em ${pct(totals.fipePct)} do valor FIPE — possível perda total',
+                  child: const Padding(
+                    padding: EdgeInsets.only(right: 8),
+                    child: Icon(Icons.report, color: Colors.red),
+                  ),
+                ),
+              Expanded(
+                child: Text(
+                  hasInsurer
+                      ? 'Seguradora ${money(totals.insurerPays)} · Cliente ${money(totals.customerPays)}'
+                      : '${totals.itemCount} itens · ${num2(totals.laborHours + totals.paintHours)} h',
+                  style: t.textTheme.bodySmall,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Text('Total ', style: t.textTheme.bodyMedium),
+              Text(money(totals.total),
+                  style: t.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: t.colorScheme.primary)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

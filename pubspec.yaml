@@ -1,0 +1,28 @@
+name: robervall
+description: Robervall - orçamentos, vistorias e sinistros para oficinas (Android, Windows e Linux).
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.5.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  path_provider: ^2.1.4
+  image_picker: ^1.1.2
+  file_selector: ^1.0.3
+  pdf: ^3.11.1
+  printing: ^5.13.4
+  http: ^1.2.2
+  share_plus: ^10.1.4
+  archive: any
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

@@ -1,0 +1,140 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Dependências do Linux
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev
+      - name: Build
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p ci
+          status=0
+          {
+            echo "== flutter --version"; flutter --version
+            echo "== prepare"; bash tool/prepare_platforms.sh
+            echo "== pub get"; flutter pub get
+            echo "== analyze"; flutter analyze --no-fatal-infos --no-fatal-warnings || echo "ANALYZE_FAILED"
+            echo "== test"; flutter test || echo "TEST_FAILED"
+          } 2>&1 | tee ci/checks.log
+          flutter build apk --release 2>&1 | tee ci/android.log || status=1
+          flutter build linux --release 2>&1 | tee ci/linux.log || status=$((status+2))
+          echo "$status" > ci/android-linux.status
+          if [ -f build/app/outputs/flutter-apk/app-release.apk ]; then
+            mkdir -p out && cp build/app/outputs/flutter-apk/app-release.apk out/Robervall-android.apk
+          fi
+          if [ -d build/linux/x64/release/bundle ]; then
+            mkdir -p out && tar -C build/linux/x64/release -czf out/Robervall-linux-x64.tar.gz bundle
+          fi
+          exit $status
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: logs-android-linux
+          path: ci/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: out-android-linux
+          path: out/
+          if-no-files-found: ignore
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Build
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p ci
+          status=0
+          { bash tool/prepare_platforms.sh && flutter pub get; } 2>&1 | tee ci/windows-prep.log || status=1
+          flutter build windows --release 2>&1 | tee ci/windows.log || status=1
+          echo "$status" > ci/windows.status
+          if [ -d build/windows/x64/runner/Release ]; then
+            mkdir -p out
+            powershell -Command "Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath out/Robervall-windows-x64.zip"
+          fi
+          exit $status
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: logs-windows
+          path: ci/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: out-windows
+          path: out/
+          if-no-files-found: ignore
+
+  report:
+    needs: [android-linux, windows]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dl
+      - name: Publicar logs no branch ci-logs
+        shell: bash
+        run: |
+          mkdir -p /tmp/logs
+          cp -r dl/logs-* /tmp/logs/ 2>/dev/null || true
+          {
+            echo "commit: ${GITHUB_SHA}"
+            echo "run: ${GITHUB_RUN_NUMBER}"
+            echo "android-linux: ${{ needs.android-linux.result }}"
+            echo "windows: ${{ needs.windows.result }}"
+          } > /tmp/logs/SUMMARY.txt
+          git config user.name "ci"
+          git config user.email "ci@users.noreply.github.com"
+          git checkout --orphan ci-logs
+          git rm -rf . >/dev/null
+          rm -rf ./* .github 2>/dev/null || true
+          cp -r /tmp/logs/* .
+          git add -A
+          git commit -m "logs ${GITHUB_RUN_NUMBER} ${GITHUB_SHA}" >/dev/null
+          git push -f origin ci-logs
+      - name: Criar release
+        if: needs.android-linux.result == 'success' && needs.windows.result == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          tag="v1.0.${GITHUB_RUN_NUMBER}"
+          gh release create "$tag" dl/out-*/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Robervall $tag" \
+            --notes "Android: instale o Robervall-android.apk. Windows: extraia o .zip e abra robervall.exe. Linux: extraia o .tar.gz e rode bundle/robervall."
