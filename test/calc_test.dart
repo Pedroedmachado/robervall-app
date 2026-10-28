@@ -153,7 +153,7 @@ void main() {
       BudgetItem(op: ItemOp.troca, paintHours: 2),
       BudgetItem(op: ItemOp.reparo, laborHours: 1, removeInstall: true),
     ]);
-    expect(legend.map((e) => e.\$1), ['T', 'R I', 'P']);
+    expect(legend.map((e) => e.$1), ['T', 'R I', 'P']);
     final it = BudgetItem(op: ItemOp.reparo, laborHours: 1, removeInstall: true);
     expect(BudgetItem.fromJson(it.toJson()).removeInstall, isTrue);
   });
