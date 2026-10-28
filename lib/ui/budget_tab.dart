@@ -67,6 +67,7 @@ class BudgetTab extends StatelessWidget {
             physics: const NeverScrollableScrollPhysics(),
             buildDefaultDragHandles: false,
             itemCount: c.items.length,
+            // ignore: deprecated_member_use
             onReorder: (a, b) {
               if (b > a) b--;
               final it = c.items.removeAt(a);

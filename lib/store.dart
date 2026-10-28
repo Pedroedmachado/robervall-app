@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
@@ -26,9 +25,13 @@ class AppStore extends ChangeNotifier {
   Directory get photosDir => Directory('${baseDir.path}/fotos');
   File get _dataFile => File('${baseDir.path}/dados.json');
 
-  static Future<AppStore> open() async {
-    final support = await getApplicationSupportDirectory();
-    final dir = Directory('${support.path}/robervall');
+  /// Abre os dados. [dir] (ou a variável ROBERVALL_DATA_DIR) troca a pasta,
+  /// útil para testes.
+  static Future<AppStore> open({Directory? dir}) async {
+    final env = Platform.environment['ROBERVALL_DATA_DIR'];
+    if (dir == null && env != null && env.isNotEmpty) dir = Directory(env);
+    dir ??= Directory(
+        '${(await getApplicationSupportDirectory()).path}/robervall');
     await dir.create(recursive: true);
     final store = AppStore._(dir);
     await store.photosDir.create(recursive: true);
