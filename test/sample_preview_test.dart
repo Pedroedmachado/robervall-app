@@ -9,6 +9,7 @@ import 'package:funilar/models.dart';
 import 'package:funilar/pdf_report.dart';
 import 'package:funilar/store.dart';
 import 'package:funilar/theme.dart';
+import 'package:funilar/ui/finance_page.dart';
 import 'package:funilar/ui/quote_preview_page.dart';
 
 void main() {
@@ -102,7 +103,129 @@ void main() {
             op: ItemOp.servico,
             price: 120),
       ];
+    claim.approvedAt = DateTime.now();
+    final now = DateTime.now();
+    DateTime day(int d) => DateTime(now.year, now.month, d);
+    store.entries.addAll([
+      FinanceEntry(
+          description: 'Aluguel do galpão',
+          category: ExpenseCategory.fixo,
+          amount: 3500,
+          recurring: true,
+          date: day(5)),
+      FinanceEntry(
+          category: ExpenseCategory.funcionario,
+          payType: PayType.salario,
+          contact: 'Marcos',
+          description: 'Salário · Marcos',
+          amount: 2400,
+          recurring: true,
+          date: day(5)),
+      FinanceEntry(
+          category: ExpenseCategory.funcionario,
+          payType: PayType.porPeca,
+          pieces: 12,
+          pieceValue: 35,
+          amount: 420,
+          contact: 'João pintor',
+          description: 'Pintura de peças',
+          date: day(10)),
+      FinanceEntry(
+          category: ExpenseCategory.funcionario,
+          outsourced: true,
+          service: OutsourcedService.funilaria,
+          payType: PayType.empreita,
+          amount: 800,
+          contact: 'Funilaria do Zé',
+          description: 'Funilaria lateral do Gol',
+          claimId: claim.id,
+          date: day(12)),
+      FinanceEntry(
+          description: 'Tinta e verniz',
+          category: ExpenseCategory.materiais,
+          amount: 650,
+          date: day(8)),
+      FinanceEntry(
+          description: 'Peças do Gol',
+          category: ExpenseCategory.fornecedor,
+          amount: 1600,
+          contact: 'Autopeças Central',
+          claimId: claim.id,
+          date: day(9)),
+    ]);
   });
+
+  final shotKey = GlobalKey();
+  Widget app(Widget home) => RepaintBoundary(
+        key: shotKey,
+        child: StoreScope(
+          store: store,
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: buildTheme(Brightness.light),
+            home: home,
+          ),
+        ),
+      );
+
+  Future<void> shot(WidgetTester tester, String name) async {
+    await expectLater(
+        find.byKey(shotKey), matchesGoldenFile('goldens/$name.png'));
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 7));
+  }
+
+  void size(WidgetTester tester, Size s) {
+    tester.view.physicalSize = s;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+  }
+
+  testWidgets('captura financeiro', (tester) async {
+    size(tester, const Size(420, 2000));
+    await tester.pumpWidget(app(const FinancePage()));
+    await tester.pumpAndSettle();
+    await shot(tester, 'financeiro_celular');
+  }, skip: skip != null);
+
+  for (final (name, entry) in [
+    (
+      'lancamento_por_peca',
+      () => FinanceEntry(
+          category: ExpenseCategory.funcionario,
+          payType: PayType.porPeca,
+          pieces: 12,
+          pieceValue: 35,
+          contact: 'João pintor')
+        ..syncPieceAmount()
+    ),
+    (
+      'lancamento_terceirizado',
+      () => FinanceEntry(
+          category: ExpenseCategory.funcionario,
+          outsourced: true,
+          payType: PayType.empreita,
+          amount: 800,
+          contact: 'Funilaria do Zé')
+    ),
+  ]) {
+    testWidgets('captura $name', (tester) async {
+      size(tester, const Size(420, 1100));
+      await tester.pumpWidget(app(Builder(
+        builder: (context) => Scaffold(
+          body: Center(
+            child: FilledButton(
+              onPressed: () => editFinanceEntry(context, entry()),
+              child: const Text('abrir'),
+            ),
+          ),
+        ),
+      )));
+      await tester.tap(find.text('abrir'));
+      await tester.pumpAndSettle();
+      await shot(tester, name);
+    }, skip: skip != null);
+  }
 
   test('gera PDFs de exemplo', () async {
     final dir = Directory(out!)..createSync(recursive: true);
