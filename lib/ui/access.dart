@@ -30,11 +30,15 @@ Future<bool> authorize(BuildContext context, Perm p, {String reason = ''}) async
           Text(reason.isEmpty ? 'Precisa de alguém com permissão: ${p.label}.' : reason),
           const SizedBox(height: 12),
           DropdownButtonFormField<AppUser>(
+            isExpanded: true,
             initialValue: who,
             decoration: const InputDecoration(labelText: 'Quem autoriza'),
             items: [
               for (final u in allowed)
-                DropdownMenuItem(value: u, child: Text('${u.name} · ${u.role.label}')),
+                DropdownMenuItem(
+                    value: u,
+                    child: Text('${u.name} · ${u.role.label}',
+                        maxLines: 1, overflow: TextOverflow.ellipsis)),
             ],
             onChanged: (u) => setS(() => who = u ?? who),
           ),

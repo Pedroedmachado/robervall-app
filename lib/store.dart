@@ -816,10 +816,11 @@ class AppStore extends ChangeNotifier {
     if (impact.blocks.isNotEmpty) throw AccessDenied(impact.blocks.join(' '));
     on ? activation.enabled.add(m) : activation.enabled.remove(m);
     activation.log.add(_logEntry(on ? 'ligou' : 'desligou', m, 'Master'));
-    await activation.save(_activationFile, deviceId);
+    // vale na hora; o arquivo é gravado em seguida
     _applyAccess();
     if (on) _reconcileAll();
     changed();
+    await activation.save(_activationFile, deviceId);
   }
 
   /// Reativação: acerta o que ficou congelado (custos e estoque).
