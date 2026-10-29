@@ -378,7 +378,7 @@ class AppStore extends ChangeNotifier {
 
   /// Dá saída de um insumo do estoque para a O.S. (só o gestor libera).
   SupplyUse issueSupply(Claim c, StockItem s, double qty,
-      {String itemId = '', String note = ''}) {
+      {String itemId = '', String note = '', Contact? worker}) {
     gate.require(Mod.producao);
     gate.require(Mod.estoque);
     gate.requireWrite();
@@ -389,12 +389,14 @@ class AppStore extends ChangeNotifier {
       unit: s.unit,
       unitCost: s.cost,
       itemId: itemId,
+      workerId: worker?.id ?? '',
+      workerName: worker?.name ?? '',
       note: note,
     );
     s.qty -= qty;
     c.supplies.add(u);
     c.timeline.add(TimelineEvent(
-        text: 'Insumo liberado: ${s.name} (${qtyText(qty, s.unit)})'));
+        text: 'Insumo liberado: ${s.name} (${qtyText(qty, s.unit)})${worker == null ? '' : ' para ${worker.name}'}'));
     touch(c);
     return u;
   }

@@ -355,6 +355,9 @@ void main() {
   itest('O.S.: marcar tarefa e liberar insumo', (t) async {
     await start(t);
     final c = seed();
+    store.upsertContact(Contact(kind: ContactKind.funcionario, name: 'Luan', payType: PayType.porPeca, rate: 50));
+    store.upsertContact(Contact(kind: ContactKind.funcionario, name: 'Baiano', outsourced: true, service: OutsourcedService.funilaria));
+    c.crew = [CrewMember(role: OutsourcedService.pintura, contactId: store.contacts.firstWhere((e) => e.name == 'Luan').id)];
     c.items.add(BudgetItem(description: 'Porta', op: ItemOp.reparo, laborHours: 2));
     store.upsertStock(StockItem(
         kind: StockKind.material, name: 'Lixa P320', qty: 20, unit: 'folha', cost: 2));
@@ -370,12 +373,16 @@ void main() {
     await t.pumpAndSettle();
     expect(find.text('Sai do estoque: 1 e 1/4 folha'), findsOneWidget);
     await tap(t, find.widgetWithText(ChoiceChip, '2/4 no taco'));
+    // quem recebe: a equipe do carro aparece primeiro
+    await tap(t, find.byKey(const ValueKey('recebe-Luan')));
     expect(find.text('Sai do estoque: 2 e 1/2 folhas'), findsOneWidget);
     await tap(t, find.text('Salvar'));
     expect(c.supplies.single.qty, 2.5);
     expect(store.stock.single.qty, 17.5);
     expect(find.textContaining('Lixa P320 · 2 e 1/2 folhas'), findsOneWidget);
     expect(find.text('Total de insumos (1 saída)'), findsOneWidget);
+    expect(c.supplies.single.workerName, 'Luan');
+    expect(find.textContaining('para Luan'), findsOneWidget);
     expect(find.byKey(const ValueKey('total-insumos')), findsOneWidget);
     expect(t.widget<Text>(find.byKey(const ValueKey('total-insumos'))).data, money(5));
     expect(find.text('Custo real da O.S.'), findsOneWidget);

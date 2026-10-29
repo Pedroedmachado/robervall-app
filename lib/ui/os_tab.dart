@@ -147,6 +147,7 @@ class OsTab extends StatelessWidget {
                   date(u.date),
                   if (u.itemId.isNotEmpty && itemName(u.itemId).isNotEmpty)
                     'na peça ${itemName(u.itemId)}',
+                  if (u.workerName.isNotEmpty) 'para ${u.workerName}',
                   if (u.note.isNotEmpty) u.note,
                 ].join(' · ')),
                 trailing: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -177,6 +178,24 @@ class OsTab extends StatelessWidget {
                   style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
               const SizedBox(width: 40),
             ]),
+            if (c.supplies.any((u) => u.workerName.isNotEmpty))
+              for (final e in () {
+                final m = <String, double>{};
+                for (final u in c.supplies) {
+                  final k = u.workerName.isEmpty ? 'Sem funcionário' : u.workerName;
+                  m[k] = (m[k] ?? 0) + u.total;
+                }
+                return m.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+              }())
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, right: 40),
+                  child: Row(children: [
+                    const Icon(Icons.person_outline, size: 16),
+                    const SizedBox(width: 6),
+                    Expanded(child: Text(e.key)),
+                    Text(money(e.value)),
+                  ]),
+                ),
           ],
         ],
       ),
@@ -235,6 +254,21 @@ class OsTab extends StatelessWidget {
     var pieces = 1.0;
     var itemId = '';
     var note = '';
+    // quem vai usar: a equipe do carro primeiro, depois os outros funcionários
+    final crewIds = [for (final m in c.crew) m.contactId];
+    final workers = [
+      for (final id in crewIds)
+        if (store.contactById(id) != null) store.contactById(id)!,
+      for (final w in store.contactsOf(ContactKind.funcionario))
+        if (!crewIds.contains(w.id)) w,
+    ];
+    String roleOf(Contact w) {
+      for (final m in c.crew) {
+        if (m.contactId == w.id) return m.role.worker;
+      }
+      return w.outsourced ? w.service.label : 'Funcionário';
+    }
+    var workerId = workers.length == 1 ? workers.first.id : '';
     final ok = await showFormDialog<bool>(
       context: context,
       title: 'Liberar insumo',
@@ -314,7 +348,12 @@ class OsTab extends StatelessWidget {
               child: Text(
                 [
                   if (s.hasPack)
-                    '= ${num2(qty / s.packSize)} ${s.packName} de ${qtyText(s.packSize, s.unit)}',
+                    () {
+                      final f = qty / s.packSize;
+                      return f >= 0.1 || f == 0
+                          ? '= ${num2(f)} ${s.packName} de ${qtyText(s.packSize, s.unit)}'
+                          : '= ${num2(f * 100, decimals: 1)}% de 1 ${s.packName} de ${qtyText(s.packSize, s.unit)}';
+                    }(),
                   if (gate.can(Perm.valoresVer) && s.cost > 0)
                     'custo ${money(s.cost * qty)} (${unitMoney(s.cost)}/${s.unit})',
                 ].join(' · '),
@@ -339,8 +378,28 @@ class OsTab extends StatelessWidget {
               onChanged: (id) => setS(() => itemId = id),
             ),
             const SizedBox(height: 12),
+            Text('Quem vai usar', style: Theme.of(ctx).textTheme.labelLarge),
+            const SizedBox(height: 4),
+            if (workers.isEmpty)
+              Text('Cadastre os funcionários em Cadastros para escolher aqui.',
+                  style: Theme.of(ctx).textTheme.bodySmall)
+            else
+              Wrap(spacing: 6, runSpacing: 4, children: [
+                for (final w in workers)
+                  ChoiceChip(
+                    key: ValueKey('recebe-${w.name}'),
+                    avatar: Icon(
+                        crewIds.contains(w.id) ? Icons.engineering : Icons.person_outline,
+                        size: 18),
+                    label: Text('${w.name} · ${roleOf(w)}'),
+                    selected: workerId == w.id,
+                    onSelected: (_) =>
+                        setS(() => workerId = workerId == w.id ? '' : w.id),
+                  ),
+              ]),
+            const SizedBox(height: 12),
             BoundField(
-              label: 'Para quem / observação',
+              label: 'Observação (opcional)',
               value: note,
               onChanged: (v) => note = v,
             ),
@@ -355,7 +414,10 @@ class OsTab extends StatelessWidget {
     if (ok != true) return;
     final s = store.stockById(stockId);
     if (s == null) return;
-    store.issueSupply(c, s, qty, itemId: itemId, note: note.trim());
+    store.issueSupply(c, s, qty,
+        itemId: itemId,
+        note: note.trim(),
+        worker: store.contactById(workerId));
   }
 }
 

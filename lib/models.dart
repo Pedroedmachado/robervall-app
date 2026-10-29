@@ -1125,6 +1125,8 @@ class SupplyUse {
   String unit;
   double unitCost;
   String itemId; // peça do orçamento em que foi usado (opcional)
+  String workerId; // funcionário que recebeu (cadastro)
+  String workerName; // nome no momento da saída
   DateTime date;
   String note;
 
@@ -1136,6 +1138,8 @@ class SupplyUse {
     this.unit = 'un',
     this.unitCost = 0,
     this.itemId = '',
+    this.workerId = '',
+    this.workerName = '',
     DateTime? date,
     this.note = '',
   })  : id = id ?? newId(),
@@ -1151,6 +1155,8 @@ class SupplyUse {
         'unit': unit,
         'cost': unitCost,
         'item': itemId,
+        if (workerId.isNotEmpty) 'worker': workerId,
+        if (workerName.isNotEmpty) 'workerName': workerName,
         'date': date.toIso8601String(),
         'note': note,
       };
@@ -1163,6 +1169,8 @@ class SupplyUse {
         unit: _s(j['unit'], 'un'),
         unitCost: _d(j['cost']),
         itemId: _s(j['item']),
+        workerId: _s(j['worker']),
+        workerName: _s(j['workerName']),
         date: _dt(j['date']),
         note: _s(j['note']),
       );
