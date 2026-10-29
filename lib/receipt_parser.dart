@@ -229,7 +229,8 @@ ReceiptData parseReceipt(List<String> rawLines) {
     if (same == null) continue;
     final qty = double.tryParse(same[2]!.replaceAll(',', '.')) ?? 1;
     if ((qty * unit - total).abs() > 0.05 * (total.abs() + 1)) continue;
-    final desc = lines[i].substring(0, same.start(2).clamp(0, lines[i].length));
+    // o grupo 1 começa no início da linha: a descrição tem o mesmo tamanho
+    final desc = lines[i].substring(0, same[1]!.length.clamp(0, lines[i].length));
     items.add(ReceiptItem(
         _cleanDesc(desc), qty, (same[3] ?? '').trim(), unit, total));
   }
