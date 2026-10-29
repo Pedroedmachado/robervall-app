@@ -19,6 +19,15 @@ if [ -f "$manifest" ]; then
   echo "AndroidManifest:"; grep -E 'uses-permission|android:label' "$manifest"
 fi
 
+# Android: o leitor de notas (ML Kit) cita idiomas que não usamos
+if [ -d android/app ]; then
+  rules=android/app/proguard-rules.pro
+  touch "$rules"
+  for lang in chinese devanagari japanese korean; do
+    grep -q "mlkit.vision.text.$lang" "$rules" || echo "-dontwarn com.google.mlkit.vision.text.$lang.**" >> "$rules"
+  done
+fi
+
 # Linux: título da janela
 if [ -f linux/runner/my_application.cc ]; then
   sed -i.bak 's#"funilar"#"Funilar"#g' linux/runner/my_application.cc && rm -f linux/runner/my_application.cc.bak
