@@ -622,14 +622,70 @@ class _SupplyUnits extends StatelessWidget {
     final packs = {..._packs, if (s.packName.isNotEmpty) s.packName}.toList();
     final perUnit = s.hasPack ? s.packCost / s.packSize : s.cost;
     final value = perUnit * (s.qty < 0 ? 0 : s.qty);
-    final suspicious = !s.hasPack && s.cost >= 5 && (s.unit == 'ml' || s.unit == 'g');
+    final small = s.unit == 'ml' || s.unit == 'g';
+    final tinyPack = s.hasPack && small && s.packSize < 20;
+    final suspicious = (!s.hasPack && s.cost >= 5 && small) || tinyPack;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Text('1. Como você compra', style: t.textTheme.labelLarge),
+        const SizedBox(height: 4),
+        SegmentedButton<bool>(
+          segments: const [
+            ButtonSegment(value: true, label: Text('Em embalagem')),
+            ButtonSegment(value: false, label: Text('Avulso')),
+          ],
+          selected: {s.hasPack},
+          onSelectionChanged: (sel) => setS(() {
+            if (sel.first) {
+              final fromName = packFromName(s.name);
+              if (fromName != null && fromName.$2 == s.unit) {
+                s.packSize = fromName.$1;
+              } else if (fromName != null && s.unit == 'ml' && fromName.$2 == 'litro') {
+                s.packSize = fromName.$1 * 1000;
+              } else {
+                s.packSize = s.packSize > 0 ? s.packSize : 1;
+              }
+              if (s.packCost == 0 && s.cost > 0) s.packCost = s.cost;
+              // estoque estava em embalagens: converte
+              if (s.qty > 0 && s.qty < s.packSize) s.qty = s.qty * s.packSize;
+            } else {
+              s.syncPackCost();
+              s.packSize = 0;
+            }
+          }),
+        ),
+        const SizedBox(height: 4),
+        Text(
+            s.hasPack
+                ? 'Vem em lata, frasco, galão, caixa… Informe o preço da embalagem.'
+                : 'Compra solto, na mesma unidade em que usa (ex.: por folha, por metro).',
+            style: t.textTheme.bodySmall),
+        const SizedBox(height: 8),
+        if (s.hasPack) ...[
+          Wrap(spacing: 6, runSpacing: 4, children: [
+            for (final p in packs)
+              ChoiceChip(
+                label: Text(p),
+                selected: s.packName == p,
+                onSelected: (_) => setS(() => s.packName = p),
+              ),
+          ]),
+          const SizedBox(height: 12),
+          NumField(
+            label: 'Preço da ${s.packName}',
+            prefix: 'R\$',
+            value: s.packCost,
+            onChanged: (n) => setS(() => s.packCost = n),
+          ),
+        ],
+        const SizedBox(height: 16),
+        Text('2. Como ele sai para o carro', style: t.textTheme.labelLarge),
+        Text('A unidade usada na O.S. ao liberar o insumo.',
+            style: t.textTheme.bodySmall),
+        const SizedBox(height: 6),
         if (s.isSandpaper) ...[
-          Text('Formato da lixa', style: t.textTheme.labelLarge),
-          const SizedBox(height: 6),
           Wrap(spacing: 6, runSpacing: 4, children: [
             ChoiceChip(
               avatar: const Icon(Icons.crop_square, size: 18),
@@ -659,10 +715,7 @@ class _SupplyUnits extends StatelessWidget {
           ),
           const SizedBox(height: 12),
         ],
-        Text('1. Como ele sai para o carro', style: t.textTheme.labelLarge),
-        Text('A unidade usada na O.S. ao liberar o insumo.',
-            style: t.textTheme.bodySmall),
-        const SizedBox(height: 6),
+        if (!s.isSandpaper)
         Wrap(spacing: 6, runSpacing: 4, children: [
           for (final u in units)
             ChoiceChip(
@@ -672,68 +725,23 @@ class _SupplyUnits extends StatelessWidget {
             ),
         ]),
         const SizedBox(height: 12),
-        Text('2. Como você compra', style: t.textTheme.labelLarge),
-        const SizedBox(height: 4),
-        SegmentedButton<bool>(
-          segments: [
-            const ButtonSegment(value: true, label: Text('Em embalagem')),
-            ButtonSegment(value: false, label: Text('Por ${s.unit}')),
-          ],
-          selected: {s.hasPack},
-          onSelectionChanged: (sel) => setS(() {
-            if (sel.first) {
-              final fromName = packFromName(s.name);
-              if (fromName != null && fromName.$2 == s.unit) {
-                s.packSize = fromName.$1;
-              } else if (fromName != null && s.unit == 'ml' && fromName.$2 == 'litro') {
-                s.packSize = fromName.$1 * 1000;
-              } else {
-                s.packSize = s.packSize > 0 ? s.packSize : 1;
-              }
-              if (s.packCost == 0 && s.cost > 0) s.packCost = s.cost;
-              // estoque estava em embalagens: converte
-              if (s.qty > 0 && s.qty < s.packSize) s.qty = s.qty * s.packSize;
-            } else {
-              s.syncPackCost();
-              s.packSize = 0;
-            }
-          }),
-        ),
-        const SizedBox(height: 12),
         if (s.hasPack) ...[
-          Wrap(spacing: 6, runSpacing: 4, children: [
-            for (final p in packs)
-              ChoiceChip(
-                label: Text(p),
-                selected: s.packName == p,
-                onSelected: (_) => setS(() => s.packName = p),
-              ),
-          ]),
-          const SizedBox(height: 12),
-          Row(children: [
-            Expanded(
-              child: NumField(
-                label: 'Cada ${s.packName} tem',
-                suffix: s.unit,
-                value: s.packSize,
-                onChanged: (n) => setS(() {
-                  final packs = s.packs;
-                  s.packSize = n <= 0 ? 0.0001 : n;
-                  s.qty = packs * s.packSize;
-                }),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: NumField(
-                label: 'Preço da ${s.packName}',
-                prefix: 'R\$',
-                value: s.packCost,
-                onChanged: (n) => setS(() => s.packCost = n),
-              ),
-            ),
-          ]),
-          const SizedBox(height: 12),
+          NumField(
+            label: 'Cada ${s.packName} tem',
+            suffix: s.unit,
+            value: s.packSize,
+            onChanged: (n) => setS(() {
+              final packs = s.packs;
+              s.packSize = n <= 0 ? 0.0001 : n;
+              s.qty = packs * s.packSize;
+            }),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text('Ex.: lata de 900 ml, galão de 3,6 litro, caixa com 100 discos.',
+                style: t.textTheme.bodySmall),
+          ),
+          const SizedBox(height: 16),
           Text('3. Quanto tem no estoque', style: t.textTheme.labelLarge),
           const SizedBox(height: 6),
           NumField(
@@ -742,25 +750,21 @@ class _SupplyUnits extends StatelessWidget {
             onChanged: (n) => setS(() => s.qty = n * s.packSize),
           ),
         ] else ...[
-          Row(children: [
-            Expanded(
-              child: NumField(
-                label: 'Em estoque',
-                suffix: s.unit,
-                value: s.qty,
-                onChanged: (n) => setS(() => s.qty = n),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: NumField(
-                label: 'Custo de 1 ${s.unit}',
-                prefix: 'R\$',
-                value: s.cost,
-                onChanged: (n) => setS(() => s.cost = n),
-              ),
-            ),
-          ]),
+          NumField(
+            label: 'Custo de 1 ${s.unit}',
+            prefix: 'R\$',
+            value: s.cost,
+            onChanged: (n) => setS(() => s.cost = n),
+          ),
+          const SizedBox(height: 16),
+          Text('3. Quanto tem no estoque', style: t.textTheme.labelLarge),
+          const SizedBox(height: 6),
+          NumField(
+            label: 'Em estoque',
+            suffix: s.unit,
+            value: s.qty,
+            onChanged: (n) => setS(() => s.qty = n),
+          ),
         ],
         const SizedBox(height: 10),
         Container(
@@ -779,11 +783,13 @@ class _SupplyUnits extends StatelessWidget {
             Text('Em estoque: ${s.qtyLabel}'),
             Text('Valor parado no estoque: ${money(value)}'),
             if (suspicious)
-              const Padding(
-                padding: EdgeInsets.only(top: 4),
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
                 child: Text(
-                    'Confira: esse custo é de cada unidade. Se o preço é da lata/frasco, escolha "Em embalagem".',
-                    style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w600)),
+                    tinyPack
+                        ? 'Confira: 1 ${s.packName} com só ${num2(s.packSize)} ${s.unit}? Se for 1 litro, escolha "litro" ou digite 1000 ml.'
+                        : 'Confira: esse custo é de cada unidade. Se o preço é da lata/frasco, escolha "Em embalagem".',
+                    style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.w600)),
               ),
           ]),
         ),
