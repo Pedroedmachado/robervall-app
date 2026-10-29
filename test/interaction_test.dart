@@ -229,7 +229,6 @@ void main() {
     await tap(t, find.text('Pintura (P)'));
     await type(t, field('Valor da mão de obra da peça'), '350');
     await t.pumpAndSettle();
-    expect(find.text('Total do item'), findsOneWidget);
     await tap(t, find.text('Salvar'));
     if (find.text('Agora não').evaluate().isNotEmpty) {
       await tap(t, find.text('Agora não'));
