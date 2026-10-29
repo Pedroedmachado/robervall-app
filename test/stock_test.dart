@@ -20,7 +20,7 @@ void main() {
     expect(stockFor(stock, BudgetItem(description: 'Farol direito', op: ItemOp.troca)),
         [farolD]);
     // reparo não procura estoque
-    expect(stockFor(stock, BudgetItem(description: 'Farol esquerdo')), isEmpty);
+    expect(stockFor(stock, BudgetItem(description: 'Farol esquerdo', op: ItemOp.reparo)), isEmpty);
     expect(
         stockFor(stock,
             BudgetItem(description: 'Qualquer', partNumber: '5U0941005', op: ItemOp.troca)),

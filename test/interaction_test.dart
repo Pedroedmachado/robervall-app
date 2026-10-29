@@ -81,7 +81,7 @@ void main() {
   }
 
   Future<void> openFirstClaim(WidgetTester tester) async {
-    await tap(tester, find.text('Sinistros').last);
+    await tap(tester, nav('Sinistros'));
     await tap(tester, find.textContaining('Argo').first);
   }
 
