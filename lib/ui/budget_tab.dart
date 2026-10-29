@@ -146,6 +146,8 @@ class BudgetTab extends StatelessWidget {
         KeyValue('Pintura (${num2(totals.paintHours)} h)', money(totals.paintLabor)),
         KeyValue('Material de pintura', money(totals.paintMaterial)),
         KeyValue('Serviços', money(totals.services)),
+        if (totals.pieceLabor > 0)
+          KeyValue('Mão de obra por peça', money(totals.pieceLabor)),
         const SizedBox(height: 8),
         Row(children: [
           Expanded(
@@ -337,8 +339,9 @@ class _ItemRow extends StatelessWidget {
                         runSpacing: 4,
                         children: [
                           for (final d in opDetails(
-                              it.op, it.laborHours, it.paintHours,
-                              removeInstall: it.removeInstall))
+                              it.op, it.labFlag, it.paintFlag,
+                              removeInstall: it.removeInstall,
+                              perPiece: it.perPiece))
                             OpChip(d),
                         ],
                       ),
@@ -458,7 +461,9 @@ class _ItemEditor extends StatefulWidget {
 
 class _ItemEditorState extends State<_ItemEditor> {
   late final BudgetItem it = widget.original == null
-      ? BudgetItem(op: ItemOp.reparo)
+      ? BudgetItem(
+          op: ItemOp.reparo,
+          perPiece: StoreScope.read(context).settings.perPieceDefault)
       : (BudgetItem.fromJson(widget.original!.toJson()));
   late bool _service = it.op == ItemOp.servico;
   late bool _replace = it.op == ItemOp.troca;
@@ -475,6 +480,14 @@ class _ItemEditorState extends State<_ItemEditor> {
       _service = ci.op == ItemOp.servico;
       _replace = ci.op == ItemOp.troca;
       it.removeInstall = ci.removeInstall;
+      if (ci.perPiece) {
+        it.perPiece = true;
+        it.piecePrice = ci.piecePrice;
+        it.doRepair = ci.doRepair;
+        it.doPaint = ci.doPaint;
+      } else if (ci.laborHours > 0 || ci.paintHours > 0) {
+        it.perPiece = false;
+      }
       if (ci.region.isNotEmpty) it.region = ci.region;
     });
   }
@@ -488,8 +501,8 @@ class _ItemEditorState extends State<_ItemEditor> {
     it.op = opFor(
         service: _service,
         replace: _replace,
-        laborHours: it.laborHours,
-        paintHours: it.paintHours);
+        laborHours: it.labFlag,
+        paintHours: it.paintFlag);
   }
 
   @override
@@ -516,6 +529,13 @@ class _ItemEditorState extends State<_ItemEditor> {
                   return;
                 }
                 _applyOp();
+                if (it.perPiece) {
+                  // por peça: valor fechado, sem horas
+                  it.laborHours = 0;
+                  it.paintHours = 0;
+                } else {
+                  it.piecePrice = 0;
+                }
                 if (_saveToCatalog) {
                   store.upsertCatalog(CatalogItem(
                     description: it.description.trim(),
@@ -527,6 +547,10 @@ class _ItemEditorState extends State<_ItemEditor> {
                     paintHours: it.paintHours,
                     region: it.region,
                     removeInstall: it.removeInstall,
+                    perPiece: it.perPiece,
+                    piecePrice: it.piecePrice,
+                    doRepair: it.doRepair,
+                    doPaint: it.doPaint,
                   ));
                 }
                 Navigator.pop(context, it);
@@ -572,8 +596,26 @@ class _ItemEditorState extends State<_ItemEditor> {
               value: _replace,
               onChanged: (b) => setState(() => _replace = b),
             ),
-            if (!_replace) ...[
-              const SizedBox(height: 4),
+            const SizedBox(height: 4),
+            Text('Cobrar a mão de obra', style: Theme.of(context).textTheme.labelLarge),
+            const SizedBox(height: 6),
+            SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(
+                    value: false,
+                    label: Text('Por horas'),
+                    icon: Icon(Icons.schedule)),
+                ButtonSegment(
+                    value: true,
+                    label: Text('Por peça'),
+                    icon: Icon(Icons.sell_outlined)),
+              ],
+              selected: {it.perPiece},
+              onSelectionChanged: (sel) =>
+                  setState(() => it.perPiece = sel.first),
+            ),
+            const SizedBox(height: 10),
+            if (!it.perPiece && !_replace)
               Wrap(spacing: 8, runSpacing: 4, children: [
                 ChoiceChip(
                   label: const Text('Reparo (R)'),
@@ -584,6 +626,42 @@ class _ItemEditorState extends State<_ItemEditor> {
                   label: const Text('Remoção e instalação (R&I)'),
                   selected: it.removeInstall,
                   onSelected: (_) => setState(() => it.removeInstall = true),
+                ),
+              ]),
+            if (it.perPiece) ...[
+              Text('O que é feito na peça', style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 4),
+              Wrap(spacing: 8, runSpacing: 4, children: [
+                if (_replace)
+                  FilterChip(
+                    label: const Text('Tirar e colocar'),
+                    selected: it.doRepair,
+                    onSelected: (b) => setState(() => it.doRepair = b),
+                  )
+                else ...[
+                  ChoiceChip(
+                    label: const Text('Reparo (R)'),
+                    selected: it.doRepair && !it.removeInstall,
+                    onSelected: (_) => setState(() {
+                      final on = it.doRepair && !it.removeInstall;
+                      it.doRepair = !on;
+                      it.removeInstall = false;
+                    }),
+                  ),
+                  ChoiceChip(
+                    label: const Text('Remoção e instalação (R&I)'),
+                    selected: it.doRepair && it.removeInstall,
+                    onSelected: (_) => setState(() {
+                      final on = it.doRepair && it.removeInstall;
+                      it.doRepair = !on;
+                      it.removeInstall = !on;
+                    }),
+                  ),
+                ],
+                FilterChip(
+                  label: const Text('Pintura (P)'),
+                  selected: it.doPaint,
+                  onSelected: (b) => setState(() => it.doPaint = b),
                 ),
               ]),
             ],
@@ -603,7 +681,14 @@ class _ItemEditorState extends State<_ItemEditor> {
                 value: it.qty,
                 onChanged: (n) => setState(() => it.qty = n <= 0 ? 1 : n),
               ),
-            if (!_service)
+            if (!_service && it.perPiece)
+              NumField(
+                label: 'Valor da mão de obra da peça',
+                prefix: 'R\$',
+                value: it.piecePrice,
+                onChanged: (n) => setState(() => it.piecePrice = n),
+              ),
+            if (!_service && !it.perPiece)
               NumField(
                 label: _replace
                     ? 'Horas de mão de obra (tirar e colocar)'
@@ -614,7 +699,7 @@ class _ItemEditorState extends State<_ItemEditor> {
                 value: it.laborHours,
                 onChanged: (n) => setState(() => it.laborHours = n),
               ),
-            if (!_service)
+            if (!_service && !it.perPiece)
               NumField(
                 label: 'Horas de pintura',
                 suffix: 'h',
@@ -626,7 +711,9 @@ class _ItemEditorState extends State<_ItemEditor> {
                 label: 'Tipo de mão de obra',
                 value: it.laborType,
                 values: LaborType.values,
-                labelOf: (e) => '${e.label} (${money(s.rateFor(e))}/h)',
+                labelOf: (e) => it.perPiece
+                    ? e.label
+                    : '${e.label} (${money(s.rateFor(e))}/h)',
                 onChanged: (e) => setState(() => it.laborType = e),
               ),
             if (_replace && !_service)
@@ -654,7 +741,7 @@ class _ItemEditorState extends State<_ItemEditor> {
                 ],
                 onChanged: (t) => it.supplier = t,
               ),
-            if (showPrice)
+            if (showPrice || (it.perPiece && !_service))
               NumField(
                 label: 'Desconto no item',
                 suffix: '%',
@@ -687,7 +774,8 @@ class _ItemEditorState extends State<_ItemEditor> {
           ),
           const Divider(height: 24),
           Wrap(spacing: 4, runSpacing: 4, children: [
-            for (final d in opDetails(it.op, it.laborHours, it.paintHours, removeInstall: it.removeInstall))
+            for (final d in opDetails(it.op, it.labFlag, it.paintFlag,
+                removeInstall: it.removeInstall, perPiece: it.perPiece))
               OpChip(d),
           ]),
           const SizedBox(height: 8),
@@ -697,6 +785,8 @@ class _ItemEditorState extends State<_ItemEditor> {
           if (v.paintLabor > 0) KeyValue('Pintura', money(v.paintLabor)),
           if (v.paintMaterial > 0)
             KeyValue('Material de pintura', money(v.paintMaterial)),
+          if (v.pieceLabor > 0)
+            KeyValue('Mão de obra (por peça)', money(v.pieceLabor)),
           KeyValue('Total do item', money(v.total), bold: true),
         ],
       ),
@@ -762,7 +852,8 @@ class _CatalogAutocomplete extends StatelessWidget {
                     dense: true,
                     title: Text(o.description),
                     subtitle: Text([
-                      ...opDetails(o.op, o.laborHours, o.paintHours, removeInstall: o.removeInstall),
+                      ...opDetails(o.op, o.labFlag, o.paintFlag, removeInstall: o.removeInstall, perPiece: o.perPiece),
+                      if (o.perPiece && o.piecePrice > 0) 'M.O. ${money(o.piecePrice)}',
                       if (o.price > 0) money(o.price),
                     ].join(' · ')),
                     onTap: () => onSelected(o),
@@ -818,7 +909,8 @@ Future<List<CatalogItem>> pickFromCatalog(
                                 b == true ? selected.add(e) : selected.remove(e)),
                             title: Text(e.description),
                             subtitle: Text([
-                              ...opDetails(e.op, e.laborHours, e.paintHours, removeInstall: e.removeInstall),
+                              ...opDetails(e.op, e.labFlag, e.paintFlag, removeInstall: e.removeInstall, perPiece: e.perPiece),
+                      if (e.perPiece && e.piecePrice > 0) 'M.O. ${money(e.piecePrice)}',
                               if (e.price > 0) money(e.price),
                             ].join(' · ')),
                           );

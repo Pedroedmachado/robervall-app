@@ -217,7 +217,7 @@ class CrewCost {
 }
 
 int paintedPieces(Claim c) =>
-    c.items.where((i) => i.approved && i.paintHours > 0).length;
+    c.items.where((i) => i.approved && i.hasPaint).length;
 
 /// Peças do orçamento que contam para a função (null = não dá para contar
 /// sozinho; a pessoa informa).
@@ -225,7 +225,7 @@ int? autoPieces(Claim c, OutsourcedService role) {
   int count(LaborType t, {bool partsOnly = false}) => c.items
       .where((i) =>
           i.approved &&
-          i.laborHours > 0 &&
+          i.hasLabor &&
           i.laborType == t &&
           (!partsOnly || i.parentId.isEmpty))
       .length;

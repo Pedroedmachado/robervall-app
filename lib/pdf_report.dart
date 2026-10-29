@@ -36,6 +36,17 @@ String _t(String s) {
 Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
     {bool withPhotos = true, bool withPrices = true}) async {
   final s = store.settings;
+  final pdfWidths = <pw.TableColumnWidth>[
+    const pw.FixedColumnWidth(38),
+    const pw.FlexColumnWidth(4),
+    const pw.FixedColumnWidth(50),
+    const pw.FixedColumnWidth(24),
+    if (s.showHours) const pw.FixedColumnWidth(44),
+    if (s.showHours) const pw.FixedColumnWidth(44),
+    if (withPrices && !s.showHours) const pw.FixedColumnWidth(62),
+    if (withPrices) const pw.FixedColumnWidth(62),
+    if (withPrices) const pw.FixedColumnWidth(66),
+  ];
   final totals = computeTotals(c, s);
   final doc = pw.Document(
     title: _t('Orçamento ${c.number}'),
@@ -132,8 +143,11 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
                   children: [
                     for (final (code, meaning) in [
                       ...legendFor(items),
-                      ('M.O.', 'horas de mão de obra'),
-                      ('Pint.', 'horas de pintura'),
+                      if (s.showHours) ('M.O.', 'horas de mão de obra'),
+                      if (s.showHours) ('Pint.', 'horas de pintura'),
+                      if (withPrices && !s.showHours)
+                        ('M.O.',
+                            'mão de obra: reparo, remoção e instalação e pintura'),
                       if (withPrices)
                         ('Peça/serv.', 'valor da peça nova ou do serviço'),
                     ])
@@ -290,8 +304,9 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
               'Peça / serviço',
               'Origem',
               'Qtd',
-              'M.O. (h)',
-              'Pint. (h)',
+              if (s.showHours) 'M.O. (h)',
+              if (s.showHours) 'Pint. (h)',
+              if (withPrices && !s.showHours) 'M.O.',
               if (withPrices) 'Peça/serv.',
               if (withPrices) 'Total',
             ],
@@ -302,15 +317,25 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
                   final priced =
                       it.op == ItemOp.troca || it.op == ItemOp.servico;
                   return <String>[
-                    opCode(it.op, it.laborHours, it.paintHours,
+                    opCode(it.op, it.labFlag, it.paintFlag,
                         removeInstall: it.removeInstall),
                     _t((it.parentId.isEmpty ? '' : '      \u00b7 ') +
                         it.description +
                         (it.partNumber.isEmpty ? '' : '  (${it.partNumber})')),
                     _t(it.op == ItemOp.troca ? _originShort(it.origin) : ''),
                     priced ? num2(it.qty <= 0 ? 1 : it.qty) : '',
-                    it.laborHours > 0 ? num2(it.laborHours) : '',
-                    it.paintHours > 0 ? num2(it.paintHours) : '',
+                    if (s.showHours)
+                      it.laborHours > 0 ? num2(it.laborHours) : '',
+                    if (s.showHours)
+                      it.paintHours > 0 ? num2(it.paintHours) : '',
+                    if (withPrices && !s.showHours)
+                      () {
+                        final l = v.labor +
+                            v.paintLabor +
+                            v.paintMaterial +
+                            v.pieceLabor;
+                        return l > 0 ? _t(money(l)) : '';
+                      }(),
                     if (withPrices)
                       priced ? _t(money(v.parts + v.services)) : '',
                     if (withPrices) _t(money(v.total)),
@@ -334,24 +359,17 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
             oddRowDecoration: const pw.BoxDecoration(color: light),
             cellAlignment: pw.Alignment.centerLeft,
             headerAlignments: {
-              for (var i = 3; i < (withPrices ? 8 : 6); i++)
+              for (var i = 3; i < pdfWidths.length; i++)
                 i: pw.Alignment.centerRight,
               0: pw.Alignment.center,
             },
             cellAlignments: {
-              for (var i = 3; i < (withPrices ? 8 : 6); i++)
+              for (var i = 3; i < pdfWidths.length; i++)
                 i: pw.Alignment.centerRight,
               0: pw.Alignment.center,
             },
             columnWidths: {
-              0: const pw.FixedColumnWidth(38),
-              1: const pw.FlexColumnWidth(4),
-              2: const pw.FixedColumnWidth(50),
-              3: const pw.FixedColumnWidth(24),
-              4: const pw.FixedColumnWidth(44),
-              5: const pw.FixedColumnWidth(44),
-              if (withPrices) 6: const pw.FixedColumnWidth(62),
-              if (withPrices) 7: const pw.FixedColumnWidth(66),
+              for (final (i, w) in pdfWidths.indexed) i: w,
             },
           ),
         if (withPrices) ...[
@@ -389,10 +407,20 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
                 ),
                 child: pw.Column(children: [
                   totalRow('Peças', money(totals.parts)),
-                  totalRow('Mão de obra (${num2(totals.laborHours)} h)', money(totals.labor)),
-                  totalRow('Pintura (${num2(totals.paintHours)} h)', money(totals.paintLabor)),
+                  totalRow(
+                      s.showHours
+                          ? 'Mão de obra (${num2(totals.laborHours)} h)'
+                          : 'Mão de obra',
+                      money(totals.labor)),
+                  totalRow(
+                      s.showHours
+                          ? 'Pintura (${num2(totals.paintHours)} h)'
+                          : 'Pintura',
+                      money(totals.paintLabor)),
                   totalRow('Material de pintura', money(totals.paintMaterial)),
                   totalRow('Serviços', money(totals.services)),
+                  if (totals.pieceLabor > 0)
+                    totalRow('Mão de obra por peça', money(totals.pieceLabor)),
                   if (totals.extra > 0) totalRow('Outros custos', money(totals.extra)),
                   if (totals.discount > 0)
                     totalRow('Desconto (${num2(c.discountPct)}%)', '- ${money(totals.discount)}'),

@@ -92,7 +92,8 @@ class _CatalogPageState extends State<CatalogPage> {
                         ),
                         title: Text(e.description),
                         subtitle: Text([
-                          ...opDetails(e.op, e.laborHours, e.paintHours, removeInstall: e.removeInstall),
+                          ...opDetails(e.op, e.labFlag, e.paintFlag, removeInstall: e.removeInstall, perPiece: e.perPiece),
+                      if (e.perPiece && e.piecePrice > 0) 'M.O. ${money(e.piecePrice)}',
                           if (e.partNumber.isNotEmpty) e.partNumber,
                           if (e.price > 0) money(e.price),
                         ].join(' · ')),
@@ -148,8 +149,12 @@ Future<CatalogItem?> _editCatalog(BuildContext context, CatalogItem it) {
         it.op = opFor(
             service: false,
             replace: false,
-            laborHours: it.laborHours,
-            paintHours: it.paintHours);
+            laborHours: it.labFlag,
+            paintHours: it.paintFlag);
+      }
+      if (it.perPiece) {
+        it.laborHours = 0;
+        it.paintHours = 0;
       }
       return it;
     },
@@ -204,14 +209,54 @@ Future<CatalogItem?> _editCatalog(BuildContext context, CatalogItem it) {
               onChanged: (n) => it.price = n),
           const SizedBox(height: 12),
         ],
-        if (it.op != ItemOp.servico)
+        if (it.op != ItemOp.servico) ...[
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(
+                  value: false,
+                  label: Text('Por horas'),
+                  icon: Icon(Icons.schedule)),
+              ButtonSegment(
+                  value: true,
+                  label: Text('Por peça'),
+                  icon: Icon(Icons.sell_outlined)),
+            ],
+            selected: {it.perPiece},
+            onSelectionChanged: (sel) => setS(() => it.perPiece = sel.first),
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (it.op != ItemOp.servico && it.perPiece) ...[
+          Wrap(spacing: 8, runSpacing: 4, children: [
+            FilterChip(
+              label: Text(it.op == ItemOp.troca
+                  ? 'Tirar e colocar'
+                  : (it.removeInstall ? 'R&I' : 'Reparo (R)')),
+              selected: it.doRepair,
+              onSelected: (b) => setS(() => it.doRepair = b),
+            ),
+            FilterChip(
+              label: const Text('Pintura (P)'),
+              selected: it.doPaint,
+              onSelected: (b) => setS(() => it.doPaint = b),
+            ),
+          ]),
+          const SizedBox(height: 12),
+          NumField(
+              label: 'Valor da mão de obra da peça',
+              prefix: 'R\$',
+              value: it.piecePrice,
+              onChanged: (n) => it.piecePrice = n),
+          const SizedBox(height: 12),
+        ],
+        if (it.op != ItemOp.servico && !it.perPiece)
         NumField(
             label: it.op == ItemOp.troca ? 'Horas de mão de obra (tirar e colocar)' : 'Horas de reparo',
             suffix: 'h',
             value: it.laborHours,
             onChanged: (n) => it.laborHours = n),
         const SizedBox(height: 12),
-        if (it.op != ItemOp.servico)
+        if (it.op != ItemOp.servico && !it.perPiece)
         NumField(
             label: 'Horas de pintura',
             suffix: 'h',

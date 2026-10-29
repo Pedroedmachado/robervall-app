@@ -8,15 +8,20 @@ class ItemValues {
   final double paintMaterial;
   final double services;
 
+  /// Mão de obra cobrada por peça (reparo/pintura sem separar).
+  final double pieceLabor;
+
   const ItemValues({
     this.parts = 0,
     this.labor = 0,
     this.paintLabor = 0,
     this.paintMaterial = 0,
     this.services = 0,
+    this.pieceLabor = 0,
   });
 
-  double get total => parts + labor + paintLabor + paintMaterial + services;
+  double get total =>
+      parts + labor + paintLabor + paintMaterial + services + pieceLabor;
 }
 
 ItemValues itemValues(BudgetItem it, Settings s) {
@@ -24,6 +29,13 @@ ItemValues itemValues(BudgetItem it, Settings s) {
   final qty = it.qty <= 0 ? 1.0 : it.qty;
   final parts = it.op == ItemOp.troca ? it.price * qty * factor : 0.0;
   final services = it.op == ItemOp.servico ? it.price * qty * factor : 0.0;
+  if (it.perPiece && it.op != ItemOp.servico) {
+    return ItemValues(
+      parts: parts,
+      services: services,
+      pieceLabor: it.piecePrice * factor,
+    );
+  }
   final labor = it.laborHours * s.rateFor(it.laborType);
   final paintLabor = it.paintHours * s.paintRate;
   final paintMaterial = it.paintHours * s.paintMaterialRate;
@@ -43,6 +55,7 @@ class BudgetTotals {
   final double paintLabor;
   final double paintMaterial;
   final double services;
+  final double pieceLabor;
   final double extra;
   final double discount;
   final double total;
@@ -64,6 +77,7 @@ class BudgetTotals {
     required this.paintLabor,
     required this.paintMaterial,
     required this.services,
+    this.pieceLabor = 0,
     required this.extra,
     required this.discount,
     required this.total,
@@ -84,6 +98,7 @@ class BudgetTotals {
 
 BudgetTotals computeTotals(Claim c, Settings s, {bool onlyApproved = true}) {
   double parts = 0, labor = 0, paintLabor = 0, paintMat = 0, services = 0;
+  double pieceLabor = 0;
   double lh = 0, ph = 0;
   int count = 0, rejected = 0;
   for (final it in c.items) {
@@ -98,11 +113,15 @@ BudgetTotals computeTotals(Claim c, Settings s, {bool onlyApproved = true}) {
     paintLabor += v.paintLabor;
     paintMat += v.paintMaterial;
     services += v.services;
-    lh += it.laborHours;
-    ph += it.paintHours;
+    pieceLabor += v.pieceLabor;
+    if (!it.perPiece) {
+      lh += it.laborHours;
+      ph += it.paintHours;
+    }
   }
   final extra = c.extraCosts < 0 ? 0.0 : c.extraCosts;
-  final subtotal = parts + labor + paintLabor + paintMat + services + extra;
+  final subtotal =
+      parts + labor + paintLabor + paintMat + services + pieceLabor + extra;
   final discount = subtotal * (c.discountPct.clamp(0, 100) / 100);
   final total = _round(subtotal - discount);
 
@@ -124,6 +143,7 @@ BudgetTotals computeTotals(Claim c, Settings s, {bool onlyApproved = true}) {
     paintLabor: _round(paintLabor),
     paintMaterial: _round(paintMat),
     services: _round(services),
+    pieceLabor: _round(pieceLabor),
     extra: _round(extra),
     discount: _round(discount),
     total: total,

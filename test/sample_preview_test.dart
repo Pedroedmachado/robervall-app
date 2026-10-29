@@ -106,6 +106,12 @@ void main() {
             description: 'Alinhamento e balanceamento',
             op: ItemOp.servico,
             price: 120),
+        BudgetItem(
+            description: 'Para-lama traseiro direito',
+            op: ItemOp.reparo,
+            perPiece: true,
+            piecePrice: 380,
+            doPaint: true),
       ];
     final joao = Contact(
         kind: ContactKind.funcionario,

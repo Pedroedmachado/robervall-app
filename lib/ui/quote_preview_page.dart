@@ -347,13 +347,22 @@ class _Paper extends StatelessWidget {
                     child: Column(
                       children: [
                         KeyValue('Peças', money(totals.parts)),
-                        KeyValue('Mão de obra (${num2(totals.laborHours)} h)',
+                        KeyValue(
+                            s.showHours
+                                ? 'Mão de obra (${num2(totals.laborHours)} h)'
+                                : 'Mão de obra',
                             money(totals.labor)),
-                        KeyValue('Pintura (${num2(totals.paintHours)} h)',
+                        KeyValue(
+                            s.showHours
+                                ? 'Pintura (${num2(totals.paintHours)} h)'
+                                : 'Pintura',
                             money(totals.paintLabor)),
                         KeyValue('Material de pintura',
                             money(totals.paintMaterial)),
                         KeyValue('Serviços', money(totals.services)),
+                        if (totals.pieceLabor > 0)
+                          KeyValue('Mão de obra por peça',
+                              money(totals.pieceLabor)),
                         if (totals.extra > 0)
                           KeyValue('Outros custos', money(totals.extra)),
                         if (totals.discount > 0)
@@ -380,7 +389,10 @@ class _Paper extends StatelessWidget {
               ],
               if (items.isNotEmpty) ...[
                 const SizedBox(height: 12),
-                _Legend(items: items, withPrices: withPrices),
+                _Legend(
+                    items: items,
+                    withPrices: withPrices,
+                    hours: s.showHours),
               ],
               if (withPhotos) ...[
                 const SizedBox(height: 16),
@@ -465,7 +477,7 @@ class _ItemsTable extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
         ),
         child: Text(
-          opCode(it.op, it.laborHours, it.paintHours,
+          opCode(it.op, it.labFlag, it.paintFlag,
               removeInstall: it.removeInstall),
           softWrap: false,
           style: const TextStyle(
@@ -480,22 +492,29 @@ class _ItemsTable extends StatelessWidget {
               textAlign: right ? TextAlign.right : TextAlign.left,
               style: style ?? _num),
         );
+    final hours = settings.showHours;
+    final laborCol = withPrices && !hours;
     final headers = [
-      'Sigla', 'Peça / serviço', 'Origem', 'Qtd', 'M.O. (h)', 'Pint. (h)',
+      'Sigla', 'Peça / serviço', 'Origem', 'Qtd',
+      if (hours) 'M.O. (h)',
+      if (hours) 'Pint. (h)',
+      if (laborCol) 'M.O.',
       if (withPrices) 'Peça/serv.',
       if (withPrices) 'Total',
     ];
+    final widths = <TableColumnWidth>[
+      const FixedColumnWidth(78),
+      const FlexColumnWidth(),
+      const FixedColumnWidth(78),
+      const FixedColumnWidth(40),
+      if (hours) const FixedColumnWidth(64),
+      if (hours) const FixedColumnWidth(64),
+      if (laborCol) const FixedColumnWidth(96),
+      if (withPrices) const FixedColumnWidth(96),
+      if (withPrices) const FixedColumnWidth(104),
+    ];
     return Table(
-      columnWidths: {
-        0: const FixedColumnWidth(78),
-        1: const FlexColumnWidth(),
-        2: const FixedColumnWidth(78),
-        3: const FixedColumnWidth(40),
-        4: const FixedColumnWidth(64),
-        5: const FixedColumnWidth(64),
-        if (withPrices) 6: const FixedColumnWidth(96),
-        if (withPrices) 7: const FixedColumnWidth(104),
-      },
+      columnWidths: {for (final (i, w) in widths.indexed) i: w},
       defaultVerticalAlignment: TableCellVerticalAlignment.middle,
       border: TableBorder(
           horizontalInside: BorderSide(color: Colors.grey.shade300, width: 0.6)),
@@ -525,8 +544,14 @@ class _ItemsTable extends StatelessWidget {
                         : '${it.description}  (${it.partNumber})')),
                 cell(it.op == ItemOp.troca ? _originShort(it.origin) : ''),
                 cell(priced ? num2(it.qty <= 0 ? 1 : it.qty) : '', right: true),
-                cell(it.laborHours > 0 ? num2(it.laborHours) : '', right: true),
-                cell(it.paintHours > 0 ? num2(it.paintHours) : '', right: true),
+                if (hours)
+                  cell(it.laborHours > 0 ? num2(it.laborHours) : '',
+                      right: true),
+                if (hours)
+                  cell(it.paintHours > 0 ? num2(it.paintHours) : '',
+                      right: true),
+                if (laborCol)
+                  cell(_labor(v) > 0 ? money(_labor(v)) : '', right: true),
                 if (withPrices)
                   cell(priced ? money(v.parts + v.services) : '', right: true),
                 if (withPrices)
@@ -547,8 +572,12 @@ class _ItemsTable extends StatelessWidget {
           () {
             final v = itemValues(it, settings);
             final info = <String>[
-              if (it.laborHours > 0) 'M.O. ${num2(it.laborHours)} h',
-              if (it.paintHours > 0) 'Pint. ${num2(it.paintHours)} h',
+              if (settings.showHours && it.laborHours > 0)
+                'M.O. ${num2(it.laborHours)} h',
+              if (settings.showHours && it.paintHours > 0)
+                'Pint. ${num2(it.paintHours)} h',
+              if (withPrices && !settings.showHours && _labor(v) > 0)
+                'M.O. ${money(_labor(v))}',
               if (it.op == ItemOp.troca && it.origin != PartOrigin.nenhuma)
                 _originShort(it.origin),
               if (withPrices &&
@@ -598,16 +627,20 @@ class _ItemsTable extends StatelessWidget {
 }
 
 class _Legend extends StatelessWidget {
-  const _Legend({required this.items, required this.withPrices});
+  const _Legend(
+      {required this.items, required this.withPrices, required this.hours});
   final List<BudgetItem> items;
   final bool withPrices;
+  final bool hours;
 
   @override
   Widget build(BuildContext context) {
     final entries = [
       ...legendFor(items),
-      ('M.O.', 'horas de mão de obra'),
-      ('Pint.', 'horas de pintura'),
+      if (hours) ('M.O.', 'horas de mão de obra'),
+      if (hours) ('Pint.', 'horas de pintura'),
+      if (withPrices && !hours)
+        ('M.O.', 'mão de obra: reparo, remoção e instalação e pintura'),
       if (withPrices) ('Peça/serv.', 'valor da peça nova ou do serviço'),
     ];
     return Container(
@@ -655,3 +688,8 @@ class _Signature extends StatelessWidget {
             style: const TextStyle(fontSize: 12)),
       ]);
 }
+
+
+/// Mão de obra da linha em R\$ (reparo, R&I, pintura e material).
+double _labor(ItemValues v) =>
+    v.labor + v.paintLabor + v.paintMaterial + v.pieceLabor;

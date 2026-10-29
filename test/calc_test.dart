@@ -157,4 +157,42 @@ void main() {
     final it = BudgetItem(op: ItemOp.reparo, laborHours: 1, removeInstall: true);
     expect(BudgetItem.fromJson(it.toJson()).removeInstall, isTrue);
   });
+
+  test('mão de obra por peça: valor fechado, sem horas', () {
+    final it = BudgetItem(
+      description: 'Porta',
+      op: ItemOp.reparo,
+      perPiece: true,
+      piecePrice: 350,
+      doRepair: true,
+      doPaint: true,
+      laborHours: 5, // ignorado no modo por peça
+    );
+    final v = itemValues(it, s);
+    expect(v.pieceLabor, 350);
+    expect(v.labor, 0);
+    expect(v.paintLabor, 0);
+    expect(v.total, 350);
+    expect(opCode(it.op, it.labFlag, it.paintFlag), 'R / P');
+    expect(opDetails(it.op, it.labFlag, it.paintFlag, perPiece: true),
+        ['Reparo', 'Pintura', 'Por peça']);
+
+    final troca = BudgetItem(
+        op: ItemOp.troca, price: 500, perPiece: true, piecePrice: 200, doPaint: true);
+    expect(itemValues(troca, s).total, 700);
+    expect(opCode(troca.op, troca.labFlag, troca.paintFlag), 'T / P');
+
+    final c = Claim(items: [it, troca, BudgetItem(op: ItemOp.servico, price: 100)]);
+    final t = computeTotals(c, s);
+    expect(t.pieceLabor, 550);
+    expect(t.laborHours, 0);
+    expect(t.total, 1150);
+
+    // ida e volta no JSON
+    final back = BudgetItem.fromJson(it.toJson());
+    expect(back.perPiece, isTrue);
+    expect(back.piecePrice, 350);
+    expect(back.doPaint, isTrue);
+    expect(BudgetItem.fromJson(BudgetItem().toJson()).perPiece, isFalse);
+  });
 }

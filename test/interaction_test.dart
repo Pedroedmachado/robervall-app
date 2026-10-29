@@ -217,6 +217,33 @@ void main() {
     await settle(t);
   });
 
+  itest('orçamento: item cobrado por peça (sem horas)', (t) async {
+    await start(t);
+    final c = seed();
+    await openFirstClaim(t);
+    await tab(t, 'Orçamento');
+    await tap(t, find.text('Novo item'));
+    await type(t, find.widgetWithText(TextField, 'Peça'), 'Porta dianteira');
+    await tap(t, find.text('Por peça'));
+    expect(field('Horas de reparo'), findsNothing);
+    await tap(t, find.text('Pintura (P)'));
+    await type(t, field('Valor da mão de obra da peça'), '350');
+    await t.pumpAndSettle();
+    expect(find.text('Total do item'), findsOneWidget);
+    await tap(t, find.text('Salvar'));
+    if (find.text('Agora não').evaluate().isNotEmpty) {
+      await tap(t, find.text('Agora não'));
+    }
+    final it = c.items.first;
+    expect(it.description, 'Porta dianteira');
+    expect(it.perPiece, isTrue);
+    expect(it.piecePrice, 350);
+    expect(it.hasPaint, isTrue);
+    expect(it.op, ItemOp.reparo);
+    expect(find.text('Por peça'), findsWidgets);
+    await settle(t);
+  });
+
   itest('orçamento: itens do catálogo, outros custos e desconto', (t) async {
     await start(t);
     final c = seed();

@@ -166,6 +166,29 @@ class SettingsPage extends StatelessWidget {
                             s.budgetFooter = t;
                             q();
                           }),
+                      const SizedBox(height: 8),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Cobrar mão de obra por peça'),
+                        subtitle: const Text(
+                            'Itens novos já abrem com um valor por peça (reparo e pintura juntos), sem horas.'),
+                        value: s.perPieceDefault,
+                        onChanged: (b) {
+                          s.perPieceDefault = b;
+                          r();
+                        },
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Mostrar horas no orçamento'),
+                        subtitle: const Text(
+                            'Colunas de horas de M.O. e pintura no PDF, para seguradoras que pedem.'),
+                        value: s.showHours,
+                        onChanged: (b) {
+                          s.showHours = b;
+                          r();
+                        },
+                      ),
                     ],
                   ),
                   SectionCard(

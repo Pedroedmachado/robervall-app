@@ -206,6 +206,23 @@ class BudgetItem {
   /// Peça principal da qual este item é complemento (vazio = item normal).
   String parentId;
 
+  /// Mão de obra cobrada por peça (valor fechado, sem separar horas de
+  /// reparo e de pintura). [doRepair]/[doPaint] dizem o que é feito na peça.
+  bool perPiece;
+  double piecePrice;
+  bool doRepair;
+  bool doPaint;
+
+  /// Tem reparo/R&I/mão de obra na peça (por horas ou por peça).
+  bool get hasLabor => perPiece ? doRepair : laborHours > 0;
+
+  /// Tem pintura na peça (por horas ou por peça).
+  bool get hasPaint => perPiece ? doPaint : paintHours > 0;
+
+  /// Valores usados nas siglas (1 = tem, quando cobrado por peça).
+  double get labFlag => perPiece ? (doRepair ? 1 : 0) : laborHours;
+  double get paintFlag => perPiece ? (doPaint ? 1 : 0) : paintHours;
+
   BudgetItem({
     String? id,
     this.description = '',
@@ -224,6 +241,10 @@ class BudgetItem {
     this.note = '',
     this.removeInstall = false,
     this.parentId = '',
+    this.perPiece = false,
+    this.piecePrice = 0,
+    this.doRepair = true,
+    this.doPaint = false,
   }) : id = id ?? newId();
 
   BudgetItem copy() => BudgetItem.fromJson(toJson())..id = newId();
@@ -246,6 +267,12 @@ class BudgetItem {
         'note': note,
         'ri': removeInstall,
         'parent': parentId,
+        if (perPiece) ...{
+          'pp': true,
+          'ppv': piecePrice,
+          'pr': doRepair,
+          'pt': doPaint,
+        },
       };
 
   factory BudgetItem.fromJson(Map<String, dynamic> j) => BudgetItem(
@@ -267,6 +294,10 @@ class BudgetItem {
         note: _s(j['note']),
         removeInstall: j['ri'] == true,
         parentId: _s(j['parent']),
+        perPiece: j['pp'] == true,
+        piecePrice: _d(j['ppv']),
+        doRepair: j['pr'] != false,
+        doPaint: j['pt'] == true,
       );
 }
 
@@ -573,6 +604,13 @@ class CatalogItem {
   double paintHours;
   String region;
   bool removeInstall;
+  bool perPiece;
+  double piecePrice;
+  bool doRepair;
+  bool doPaint;
+
+  double get labFlag => perPiece ? (doRepair ? 1 : 0) : laborHours;
+  double get paintFlag => perPiece ? (doPaint ? 1 : 0) : paintHours;
 
   CatalogItem({
     String? id,
@@ -585,9 +623,17 @@ class CatalogItem {
     this.paintHours = 0,
     this.region = '',
     this.removeInstall = false,
+    this.perPiece = false,
+    this.piecePrice = 0,
+    this.doRepair = true,
+    this.doPaint = false,
   }) : id = id ?? newId();
 
   BudgetItem toBudgetItem() => BudgetItem(
+        perPiece: perPiece,
+        piecePrice: piecePrice,
+        doRepair: doRepair,
+        doPaint: doPaint,
         description: description,
         partNumber: partNumber,
         op: op,
@@ -610,6 +656,12 @@ class CatalogItem {
         'paintHours': paintHours,
         'region': region,
         'ri': removeInstall,
+        if (perPiece) ...{
+          'pp': true,
+          'ppv': piecePrice,
+          'pr': doRepair,
+          'pt': doPaint,
+        },
       };
 
   factory CatalogItem.fromJson(Map<String, dynamic> j) => CatalogItem(
@@ -624,6 +676,10 @@ class CatalogItem {
         paintHours: _d(j['paintHours']),
         region: _s(j['region']),
         removeInstall: j['ri'] == true,
+        perPiece: j['pp'] == true,
+        piecePrice: _d(j['ppv']),
+        doRepair: j['pr'] != false,
+        doPaint: j['pt'] == true,
       );
 }
 
@@ -644,6 +700,8 @@ class Settings {
   double paintRate; // hora de pintura (mão de obra)
   double paintMaterialRate; // material de pintura por hora pintada
   double totalLossPct; // % do valor FIPE para indicar possível perda total
+  bool perPieceDefault; // itens novos já cobram a mão de obra por peça
+  bool showHours; // mostra horas de M.O./pintura no orçamento (seguradora)
 
   Settings({
     this.shopName = 'Funilar',
@@ -661,6 +719,8 @@ class Settings {
     this.paintRate = 90,
     this.paintMaterialRate = 70,
     this.totalLossPct = 75,
+    this.perPieceDefault = false,
+    this.showHours = false,
   }) : laborRates = laborRates ??
             {
               LaborType.funilaria.name: 90,
@@ -687,6 +747,8 @@ class Settings {
         'paintRate': paintRate,
         'paintMaterialRate': paintMaterialRate,
         'totalLossPct': totalLossPct,
+        'perPiece': perPieceDefault,
+        'showHours': showHours,
       };
 
   factory Settings.fromJson(Map<String, dynamic> j) {
@@ -707,6 +769,8 @@ class Settings {
       paintRate: _d(j['paintRate'], 90),
       paintMaterialRate: _d(j['paintMaterialRate'], 70),
       totalLossPct: _d(j['totalLossPct'], 75),
+      perPieceDefault: j['perPiece'] == true,
+      showHours: j['showHours'] == true,
     );
     final r = j['laborRates'];
     if (r is Map) {
@@ -745,7 +809,7 @@ String opCode(ItemOp op, double laborHours, double paintHours,
 List<(String, String)> legendFor(Iterable<BudgetItem> items) {
   final used = <String>{};
   for (final it in items) {
-    used.addAll(opCode(it.op, it.laborHours, it.paintHours,
+    used.addAll(opCode(it.op, it.labFlag, it.paintFlag,
             removeInstall: it.removeInstall)
         .split(' / '));
   }
@@ -774,8 +838,12 @@ String _h(double v) {
 
 /// Operações com horas, ex.: ["Troca", "Mão de obra 1 h", "Pintura 2 h"].
 List<String> opDetails(ItemOp op, double laborHours, double paintHours,
-    {bool removeInstall = false}) {
+    {bool removeInstall = false, bool perPiece = false}) {
   if (op == ItemOp.servico) return ['Serviço'];
+  if (perPiece) {
+    final n = opNames(op, laborHours, paintHours, removeInstall: removeInstall);
+    return [...n.split(' + ').map((e) => e[0].toUpperCase() + e.substring(1)), 'Por peça'];
+  }
   return [
     if (op == ItemOp.troca) 'Troca',
     if (laborHours > 0)
@@ -802,7 +870,7 @@ ItemOp opFor({required bool service, required bool replace, required double labo
 List<BudgetItem> mergePartLines(List<BudgetItem> items) {
   final out = <BudgetItem>[];
   for (final it in items) {
-    if (it.op == ItemOp.servico || it.parentId.isNotEmpty) {
+    if (it.op == ItemOp.servico || it.parentId.isNotEmpty || it.perPiece) {
       out.add(it);
       continue;
     }
@@ -811,6 +879,7 @@ List<BudgetItem> mergePartLines(List<BudgetItem> items) {
     for (final o in out) {
       if (o.op != ItemOp.servico &&
           o.parentId.isEmpty &&
+          !o.perPiece &&
           o.approved == it.approved &&
           o.description.trim().toLowerCase() == key &&
           !(o.op == ItemOp.troca && it.op == ItemOp.troca)) {
