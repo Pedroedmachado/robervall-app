@@ -454,8 +454,7 @@ void main() {
     await settle(t);
     await openFirstClaim(t);
     await tab(t, 'Orçamento');
-    await tap(t, find.byType(DropdownMenu<String>).last);
-    await tap(t, find.textContaining('João pintor').last);
+    await tap(t, find.widgetWithText(ChoiceChip, 'João pintor · R\$ 35,00/peça'));
     expect(c.painterId, isNotEmpty);
     expect(find.text('Custo do pintor'), findsOneWidget);
     expect(find.text(money(70)), findsWidgets);

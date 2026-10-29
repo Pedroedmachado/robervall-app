@@ -1026,24 +1026,35 @@ class _PainterCard extends StatelessWidget {
             label: const Text('Cadastrar pintor'),
           )
         else ...[
-          Picker<String>(
-            label: 'Pintor',
-            value: painter == null ? '' : c.painterId,
-            values: ['', ...workers.map((w) => w.id)],
-            labelOf: (id) {
-              if (id.isEmpty) return 'Nenhum';
-              final w = store.contactById(id)!;
-              return '${w.name} · ${w.payType.label}${w.rate > 0 ? ' ${money(w.rate)}' : ''}';
-            },
-            onChanged: (id) {
-              c.painterId = id;
-              c.timeline.add(TimelineEvent(
-                  text: id.isEmpty
-                      ? 'Pintor removido'
-                      : 'Pintor: ${store.contactById(id)!.name}'));
-              store.touch(c);
-            },
-          ),
+          Text('Escolha o pintor:', style: t.textTheme.labelLarge),
+          const SizedBox(height: 6),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            ChoiceChip(
+              label: const Text('Nenhum'),
+              selected: painter == null,
+              onSelected: (_) {
+                if (painter == null) return;
+                c.painterId = '';
+                c.timeline.add(TimelineEvent(text: 'Pintor removido'));
+                store.touch(c);
+              },
+            ),
+            for (final w in workers)
+              ChoiceChip(
+                avatar: Icon(
+                    w.outsourced ? Icons.handshake_outlined : Icons.badge_outlined,
+                    size: 18),
+                label: Text(
+                    '${w.name}${w.rate > 0 ? ' · ${money(w.rate)}${w.payType == PayType.porPeca ? '/peça' : (w.payType == PayType.empreita ? '/carro' : '/mês')}' : ''}'),
+                selected: c.painterId == w.id,
+                onSelected: (_) {
+                  if (c.painterId == w.id) return;
+                  c.painterId = w.id;
+                  c.timeline.add(TimelineEvent(text: 'Pintor: ${w.name}'));
+                  store.touch(c);
+                },
+              ),
+          ]),
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
