@@ -122,7 +122,11 @@ jobs:
           set -o pipefail
           mkdir -p ci out
           status=0
-          { bash tool/prepare_platforms.sh && flutter pub get; } 2>&1 | tee ci/ios-prep.log || status=1
+          {
+            bash tool/prepare_platforms.sh && flutter pub get \
+              && flutter build ios --config-only --no-codesign \
+              && bash tool/prepare_platforms.sh && grep -n "platform :ios" ios/Podfile
+          } 2>&1 | tee ci/ios-prep.log || status=1
           flutter build ios --release --no-codesign 2>&1 | tee ci/ios.log || status=1
           if [ -d build/ios/iphoneos/Runner.app ]; then
             mkdir -p ipa/Payload

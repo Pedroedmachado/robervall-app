@@ -27,6 +27,19 @@ fi
 if [ -f windows/runner/main.cpp ]; then
   sed -i.bak 's#L"funilar"#L"Funilar"#g' windows/runner/main.cpp && rm -f windows/runner/main.cpp.bak
 fi
+# iOS: leitor de notas (ML Kit) exige iOS 15.5 ou mais novo
+if [ -f ios/Podfile ]; then
+  sed -i.bak -E "s/^#? *platform :ios, '[0-9.]+'/platform :ios, '15.5'/" ios/Podfile && rm -f ios/Podfile.bak
+  grep -q "^platform :ios, '15.5'" ios/Podfile || sed -i.bak "1s/^/platform :ios, '15.5'\n/" ios/Podfile
+  rm -f ios/Podfile.bak
+fi
+if [ -f ios/Runner.xcodeproj/project.pbxproj ]; then
+  sed -i.bak -E 's/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]+;/IPHONEOS_DEPLOYMENT_TARGET = 15.5;/g' ios/Runner.xcodeproj/project.pbxproj && rm -f ios/Runner.xcodeproj/project.pbxproj.bak
+fi
+if [ -f ios/Flutter/AppFrameworkInfo.plist ]; then
+  sed -i.bak -E 's#<string>1[0-9]\.[0-9]+</string>#<string>15.5</string>#' ios/Flutter/AppFrameworkInfo.plist && rm -f ios/Flutter/AppFrameworkInfo.plist.bak
+fi
+
 # iOS: nome do app, permissões de câmera/fotos e acesso aos arquivos
 plist=ios/Runner/Info.plist
 if [ -f "$plist" ] && [ -x /usr/libexec/PlistBuddy ]; then

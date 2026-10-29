@@ -904,6 +904,9 @@ class FinanceEntry {
   /// Lançamento gerado pelo app (ex.: 'pintor'); vazio = lançado à mão.
   String autoKey;
 
+  /// Foto da nota/recibo (arquivo na pasta de fotos).
+  String receiptFile;
+
   FinanceEntry({
     String? id,
     this.isIncome = false,
@@ -922,6 +925,7 @@ class FinanceEntry {
     this.pieces = 0,
     this.pieceValue = 0,
     this.autoKey = '',
+    this.receiptFile = '',
   })  : id = id ?? newId(),
         date = date ?? DateTime.now();
 
@@ -962,6 +966,7 @@ class FinanceEntry {
         'pieces': pieces,
         'pieceValue': pieceValue,
         'auto': autoKey,
+        'receipt': receiptFile,
       };
 
   factory FinanceEntry.fromJson(Map<String, dynamic> j) => FinanceEntry(
@@ -984,5 +989,6 @@ class FinanceEntry {
         pieces: _d(j['pieces']),
         pieceValue: _d(j['pieceValue']),
         autoKey: _s(j['auto']),
+        receiptFile: _s(j['receipt']),
       );
 }

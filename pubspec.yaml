@@ -19,6 +19,7 @@ dependencies:
   http: ^1.2.2
   share_plus: ^10.1.4
   archive: any
+  google_mlkit_text_recognition: any
 
 dev_dependencies:
   flutter_test:

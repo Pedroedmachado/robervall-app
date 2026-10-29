@@ -1,8 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../finance.dart';
 import '../format.dart';
 import '../models.dart';
+import '../receipt_ocr.dart';
+import '../receipt_parser.dart';
 import '../theme.dart';
 import 'claims_page.dart';
 import 'widgets.dart';
@@ -57,6 +62,92 @@ class _FinancePageState extends State<FinancePage> {
     final e = await editFinanceEntry(
         context, FinanceEntry(isIncome: income, date: inPeriod));
     if (e != null) store.upsertEntry(e);
+  }
+
+  /// Foto da nota → lê valor, data, loja e itens → abre para conferir.
+  Future<void> _readReceipt() async {
+    final store = StoreScope.read(context);
+    final mobile = Platform.isAndroid || Platform.isIOS;
+    ImageSource? source = ImageSource.gallery;
+    if (mobile) {
+      source = await showModalBottomSheet<ImageSource>(
+        context: context,
+        showDragHandle: true,
+        builder: (ctx) => SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Tirar foto da nota'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Escolher da galeria'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ]),
+        ),
+      );
+    }
+    if (source == null || !mounted) return;
+    final XFile? file;
+    try {
+      file = await ImagePicker()
+          .pickImage(source: source, maxWidth: 2400, imageQuality: 90);
+    } catch (e) {
+      if (mounted) toast(context, 'Não foi possível abrir a foto: $e');
+      return;
+    }
+    if (file == null || !mounted) return;
+
+    // guarda a foto junto dos lançamentos
+    final name = 'nota_${newId()}.jpg';
+    await File('${store.photosDir.path}/$name')
+        .writeAsBytes(await file.readAsBytes(), flush: true);
+
+    var entry = FinanceEntry(receiptFile: name);
+    String banner;
+    if (receiptOcrAvailable) {
+      if (!mounted) return;
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const AlertDialog(
+          content: Row(children: [
+            SizedBox(
+                width: 24, height: 24, child: CircularProgressIndicator()),
+            SizedBox(width: 16),
+            Expanded(child: Text('Lendo a nota…')),
+          ]),
+        ),
+      );
+      try {
+        final data = parseReceipt(await readReceiptLines(file.path));
+        entry = data.toEntry()..receiptFile = name;
+        banner = data.total > 0
+            ? 'Lido da nota: ${data.items.length} ${data.items.length == 1 ? 'item' : 'itens'}, total ${money(data.total)}. Confira antes de salvar.'
+            : 'Não consegui achar o total nesta foto. Preencha o valor (a foto fica anexada).';
+      } catch (e) {
+        banner = 'Não consegui ler a nota ($e). Preencha à mão; a foto fica anexada.';
+      }
+      if (mounted) Navigator.of(context).pop(); // fecha "Lendo a nota…"
+    } else {
+      banner =
+          'A leitura automática funciona no celular. Aqui a foto fica anexada e você preenche os valores.';
+    }
+    if (!mounted) return;
+    final saved = await editFinanceEntry(context, entry, banner: banner);
+    if (saved == null) {
+      final f = File('${store.photosDir.path}/$name');
+      if (await f.exists()) await f.delete();
+      return;
+    }
+    store.upsertEntry(saved);
+    if (!_period.contains(saved.date) && mounted) {
+      setState(() =>
+          _period = Period.month(saved.date.year, saved.date.month));
+    }
+    if (mounted) toast(context, 'Gasto lançado em ${date(saved.date)}.');
   }
 
   @override
@@ -155,6 +246,11 @@ class _FinancePageState extends State<FinancePage> {
             ],
         const SizedBox(height: 8),
         Wrap(spacing: 8, runSpacing: 8, children: [
+          FilledButton.icon(
+            onPressed: _readReceipt,
+            icon: const Icon(Icons.document_scanner_outlined),
+            label: const Text('Ler nota (foto)'),
+          ),
           FilledButton.tonalIcon(
             onPressed: () => _newEntry(),
             icon: const Icon(Icons.remove_circle_outline),
@@ -528,7 +624,7 @@ class _CashTile extends StatelessWidget {
 /// Editor de lançamento. Devolve o lançamento editado; com [canDelete],
 /// devolve um lançamento com id "__delete__" quando a pessoa exclui.
 Future<FinanceEntry?> editFinanceEntry(BuildContext context, FinanceEntry e,
-    {bool canDelete = false}) {
+    {bool canDelete = false, String? banner}) {
   final store = StoreScope.read(context);
   return showFormDialog<FinanceEntry>(
     context: context,
@@ -560,6 +656,26 @@ Future<FinanceEntry?> editFinanceEntry(BuildContext context, FinanceEntry e,
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (banner != null) ...[
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Theme.of(ctx).colorScheme.secondaryContainer,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(children: [
+                const Icon(Icons.document_scanner_outlined, size: 20),
+                const SizedBox(width: 8),
+                Expanded(child: Text(banner)),
+              ]),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (e.receiptFile.isNotEmpty) ...[
+            _ReceiptThumb(
+                file: File('${store.photosDir.path}/${e.receiptFile}')),
+            const SizedBox(height: 12),
+          ],
           SegmentedButton<bool>(
             segments: const [
               ButtonSegment(
@@ -783,4 +899,56 @@ Future<FinanceEntry?> editFinanceEntry(BuildContext context, FinanceEntry e,
       );
     },
   );
+}
+
+
+/// Miniatura da nota anexada; toque para ver inteira.
+class _ReceiptThumb extends StatelessWidget {
+  const _ReceiptThumb({required this.file});
+  final File file;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => showDialog<void>(
+        context: context,
+        builder: (ctx) => Dialog(
+          insetPadding: const EdgeInsets.all(12),
+          child: Stack(children: [
+            InteractiveViewer(
+              maxScale: 6,
+              child: Image.file(file,
+                  errorBuilder: (_, __, ___) =>
+                      const Padding(padding: EdgeInsets.all(32), child: Icon(Icons.broken_image))),
+            ),
+            Positioned(
+              right: 4,
+              top: 4,
+              child: IconButton.filledTonal(
+                tooltip: 'Fechar',
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ),
+          ]),
+        ),
+      ),
+      child: Row(children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: SizedBox(
+            width: 64,
+            height: 84,
+            child: Image.file(file,
+                fit: BoxFit.cover,
+                cacheWidth: 200,
+                errorBuilder: (_, __, ___) => const Icon(Icons.receipt_long)),
+          ),
+        ),
+        const SizedBox(width: 12),
+        const Expanded(child: Text('Foto da nota anexada · toque para ver')),
+      ]),
+    );
+  }
 }
