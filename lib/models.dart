@@ -97,6 +97,7 @@ enum LaborType {
 }
 
 enum PhotoCategory {
+  entrada('Entrada (recepção)'),
   avaria('Avaria'),
   geral('Geral do veículo'),
   documento('Documento'),
@@ -209,6 +210,9 @@ class BudgetItem {
   /// Peça que sai do estoque da oficina (vazio = comprar).
   String stockId;
 
+  /// Tarefa concluída na produção (O.S.).
+  bool done;
+
   /// Peça principal da qual este item é complemento (vazio = item normal).
   String parentId;
 
@@ -248,6 +252,7 @@ class BudgetItem {
     this.removeInstall = false,
     this.alsoRepair = false,
     this.stockId = '',
+    this.done = false,
     this.parentId = '',
     this.perPiece = false,
     this.piecePrice = 0,
@@ -276,6 +281,7 @@ class BudgetItem {
         'ri': removeInstall,
         if (alsoRepair) 'rr': true,
         if (stockId.isNotEmpty) 'stock': stockId,
+        if (done) 'done': true,
         'parent': parentId,
         if (perPiece) ...{
           'pp': true,
@@ -305,6 +311,7 @@ class BudgetItem {
         removeInstall: j['ri'] == true,
         alsoRepair: j['rr'] == true,
         stockId: _s(j['stock']),
+        done: j['done'] == true,
         parentId: _s(j['parent']),
         perPiece: j['pp'] == true,
         piecePrice: _d(j['ppv']),
@@ -408,6 +415,16 @@ class Claim {
   /// se o orçamento reabrir ou o item sair.
   Map<String, StockUse> stockTaken;
 
+  /// Avarias que já estavam no carro quando ele chegou (não entram no
+  /// orçamento): região -> intensidade 1..3.
+  Map<String, int> preDamages;
+
+  /// Checklist de entrada (recepção).
+  Reception reception;
+
+  /// Insumos usados na O.S. (lixa, massa, primer…), com custo.
+  List<SupplyUse> supplies;
+
   Claim({
     String? id,
     this.number = '',
@@ -440,9 +457,15 @@ class Claim {
     List<TimelineEvent>? timeline,
     List<CrewMember>? crew,
     Map<String, StockUse>? stockTaken,
+    Map<String, int>? preDamages,
+    Reception? reception,
+    List<SupplyUse>? supplies,
   })  : id = id ?? newId(),
         crew = crew ?? [],
         stockTaken = stockTaken ?? {},
+        preDamages = preDamages ?? {},
+        reception = reception ?? Reception(),
+        supplies = supplies ?? [],
         vehicle = vehicle ?? Vehicle(),
         createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now(),
@@ -490,6 +513,10 @@ class Claim {
         'photos': photos.map((e) => e.toJson()).toList(),
         'damages': damages,
         'crew': crew.map((e) => e.toJson()).toList(),
+        if (preDamages.isNotEmpty) 'preDamages': preDamages,
+        if (!reception.isEmpty) 'reception': reception.toJson(),
+        if (supplies.isNotEmpty)
+          'supplies': supplies.map((e) => e.toJson()).toList(),
         if (stockTaken.isNotEmpty)
           'stockTaken': {
             for (final e in stockTaken.entries) e.key: e.value.toJson()
@@ -545,6 +572,15 @@ class Claim {
           CrewMember(role: OutsourcedService.pintura, contactId: _s(j['painter'])),
       ],
       timeline: list(j['timeline']).map(TimelineEvent.fromJson).toList(),
+      preDamages: {
+        if (j['preDamages'] is Map)
+          for (final e in (j['preDamages'] as Map).entries)
+            '${e.key}': _d(e.value).round(),
+      },
+      reception: j['reception'] is Map
+          ? Reception.fromJson(Map<String, dynamic>.from(j['reception'] as Map))
+          : Reception(),
+      supplies: list(j['supplies']).map(SupplyUse.fromJson).toList(),
       stockTaken: {
         if (j['stockTaken'] is Map)
           for (final e in (j['stockTaken'] as Map).entries)
@@ -736,6 +772,8 @@ class Settings {
   double totalLossPct; // % do valor FIPE para indicar possível perda total
   bool perPieceDefault; // itens novos já cobram a mão de obra por peça
   bool showHours; // mostra horas de M.O./pintura no orçamento (seguradora)
+  String managerPin; // PIN do gestor (modo produção, baixa de insumos)
+  bool productionMode; // aparelho em modo chão de fábrica (sem valores)
 
   Settings({
     this.shopName = 'Funilar',
@@ -755,6 +793,8 @@ class Settings {
     this.totalLossPct = 75,
     this.perPieceDefault = false,
     this.showHours = false,
+    this.managerPin = '',
+    this.productionMode = false,
   }) : laborRates = laborRates ??
             {
               LaborType.funilaria.name: 90,
@@ -783,6 +823,8 @@ class Settings {
         'totalLossPct': totalLossPct,
         'perPiece': perPieceDefault,
         'showHours': showHours,
+        'managerPin': managerPin,
+        'productionMode': productionMode,
       };
 
   factory Settings.fromJson(Map<String, dynamic> j) {
@@ -805,6 +847,8 @@ class Settings {
       totalLossPct: _d(j['totalLossPct'], 75),
       perPieceDefault: j['perPiece'] == true,
       showHours: j['showHours'] == true,
+      managerPin: _s(j['managerPin']),
+      productionMode: j['productionMode'] == true,
     );
     final r = j['laborRates'];
     if (r is Map) {
@@ -1002,6 +1046,126 @@ enum OutsourcedService {
 
   /// Nome da função de quem faz (Pintor, Funileiro…).
   final String worker;
+}
+
+/// Itens conferidos na entrada do carro.
+const receptionItems = [
+  'Estepe',
+  'Macaco',
+  'Chave de roda',
+  'Triângulo',
+  'Rádio / multimídia',
+  'Tapetes',
+  'Antena',
+  'Calotas',
+  'Documento (CRLV)',
+  'Manual',
+  'Chave reserva',
+  'Objetos pessoais',
+];
+
+/// Nível de combustível na entrada.
+const fuelLevels = ['Reserva', '1/4', '1/2', '3/4', 'Cheio'];
+
+/// Checklist de entrada do veículo.
+class Reception {
+  int fuel; // -1 = não informado; 0..4 = fuelLevels
+  Set<String> items; // itens que estavam no carro
+  String notes;
+  DateTime? at;
+
+  Reception({this.fuel = -1, Set<String>? items, this.notes = '', this.at})
+      : items = items ?? {};
+
+  bool get isEmpty => fuel < 0 && items.isEmpty && notes.isEmpty && at == null;
+
+  String get fuelLabel => fuel >= 0 && fuel < fuelLevels.length ? fuelLevels[fuel] : '';
+
+  Map<String, dynamic> toJson() => {
+        'fuel': fuel,
+        'items': items.toList(),
+        'notes': notes,
+        'at': at?.toIso8601String(),
+      };
+
+  factory Reception.fromJson(Map<String, dynamic> j) => Reception(
+        fuel: _d(j['fuel'], -1).round(),
+        items: {
+          if (j['items'] is List)
+            for (final e in j['items'] as List) e.toString()
+        },
+        notes: _s(j['notes']),
+        at: _dt(j['at']),
+      );
+}
+
+/// Resumo do checklist de entrada para o PDF e a pré-visualização.
+List<String> receptionLines(Claim c) {
+  final r = c.reception;
+  String two(int n) => n.toString().padLeft(2, '0');
+  return [
+    [
+      if (r.at != null)
+        'Entrada: ${two(r.at!.day)}/${two(r.at!.month)}/${r.at!.year} ${two(r.at!.hour)}:${two(r.at!.minute)}',
+      if (r.fuelLabel.isNotEmpty) 'Combustível: ${r.fuelLabel}',
+      if (c.vehicle.km.trim().isNotEmpty) 'Km: ${c.vehicle.km.trim()}',
+    ].join('   '),
+    if (r.items.isNotEmpty)
+      'No veículo: ${[for (final i in receptionItems) if (r.items.contains(i)) i].join(', ')}',
+    if (r.notes.trim().isNotEmpty) 'Obs.: ${r.notes.trim()}',
+  ].where((e) => e.isNotEmpty).toList();
+}
+
+/// Insumo usado numa O.S. (sai do estoque, entra no custo real).
+class SupplyUse {
+  String id;
+  String stockId;
+  String name; // nome no momento da saída
+  double qty;
+  String unit;
+  double unitCost;
+  String itemId; // peça do orçamento em que foi usado (opcional)
+  DateTime date;
+  String note;
+
+  SupplyUse({
+    String? id,
+    this.stockId = '',
+    this.name = '',
+    this.qty = 1,
+    this.unit = 'un',
+    this.unitCost = 0,
+    this.itemId = '',
+    DateTime? date,
+    this.note = '',
+  })  : id = id ?? newId(),
+        date = date ?? DateTime.now();
+
+  double get total => qty * unitCost;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'stock': stockId,
+        'name': name,
+        'qty': qty,
+        'unit': unit,
+        'cost': unitCost,
+        'item': itemId,
+        'date': date.toIso8601String(),
+        'note': note,
+      };
+
+  factory SupplyUse.fromJson(Map<String, dynamic> j) => SupplyUse(
+        id: _s(j['id']).isEmpty ? null : _s(j['id']),
+        stockId: _s(j['stock']),
+        name: _s(j['name']),
+        qty: _d(j['qty'], 1),
+        unit: _s(j['unit'], 'un'),
+        unitCost: _d(j['cost']),
+        itemId: _s(j['item']),
+        date: _dt(j['date']),
+        note: _s(j['note']),
+      );
 }
 
 /// Saída de uma peça do estoque para um item do orçamento.

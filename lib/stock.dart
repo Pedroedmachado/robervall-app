@@ -3,7 +3,8 @@ import 'models.dart';
 /// Tipo de item do estoque.
 enum StockKind {
   peca('Peça'),
-  material('Material');
+  material('Insumo / material'),
+  cliente('Peça de cliente');
 
   const StockKind(this.label);
   final String label;
@@ -26,8 +27,15 @@ class StockItem {
 
   /// Quanto cobrar no orçamento (0 = usa o custo).
   double price;
+  /// Endereço: corredor > prateleira > nicho. [location] é texto livre.
+  String corridor;
+  String shelf;
+  String slot;
   String location;
   String notes;
+
+  /// Peça de cliente: sinistro do carro dono da peça.
+  String claimId;
 
   /// Foto (arquivo na pasta de fotos).
   String photo;
@@ -42,10 +50,25 @@ class StockItem {
     this.unit = 'un',
     this.cost = 0,
     this.price = 0,
+    this.corridor = '',
+    this.shelf = '',
+    this.slot = '',
     this.location = '',
     this.notes = '',
     this.photo = '',
+    this.claimId = '',
   }) : id = id ?? newId();
+
+  /// "Corredor 1 · Prateleira B5 · Nicho 3" (ou o texto livre).
+  String get address {
+    final parts = [
+      if (corridor.trim().isNotEmpty) 'Corredor ${corridor.trim()}',
+      if (shelf.trim().isNotEmpty) 'Prateleira ${shelf.trim()}',
+      if (slot.trim().isNotEmpty) 'Nicho ${slot.trim()}',
+      if (location.trim().isNotEmpty) location.trim(),
+    ];
+    return parts.join(' · ');
+  }
 
   /// Valor que entra no orçamento quando a peça sai do estoque.
   double get budgetPrice => price > 0 ? price : cost;
@@ -63,9 +86,13 @@ class StockItem {
         'unit': unit,
         'cost': cost,
         'price': price,
+        'corridor': corridor,
+        'shelf': shelf,
+        'slot': slot,
         'location': location,
         'notes': notes,
         'photo': photo,
+        if (claimId.isNotEmpty) 'claim': claimId,
       };
 
   factory StockItem.fromJson(Map<String, dynamic> j) {
@@ -85,9 +112,13 @@ class StockItem {
       unit: s(j['unit']).isEmpty ? 'un' : s(j['unit']),
       cost: d(j['cost']),
       price: d(j['price']),
+      corridor: s(j['corridor']),
+      shelf: s(j['shelf']),
+      slot: s(j['slot']),
       location: s(j['location']),
       notes: s(j['notes']),
       photo: s(j['photo']),
+      claimId: s(j['claim']),
     );
   }
 }

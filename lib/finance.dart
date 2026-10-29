@@ -1,6 +1,7 @@
 // Cálculos do financeiro: fluxo de caixa, gastos por categoria e lucro.
 import 'calc.dart';
 import 'models.dart';
+import 'stock.dart';
 
 /// Orçamento "fechado": aprovado, em reparo, concluído ou entregue.
 bool isClosedStatus(ClaimStatus s) =>
@@ -267,3 +268,62 @@ const painterAutoKey = 'pintor';
 
 bool isCrewEntry(FinanceEntry e) =>
     e.autoKey == crewAutoKey || e.autoKey == painterAutoKey;
+
+
+/// Custo real de uma O.S. comparado com o valor aprovado.
+class JobCost {
+  final double approved; // total do orçamento aprovado
+  final double crew; // pintor, funileiro, martelinho…
+  final double supplies; // insumos lançados na O.S.
+  final double stockParts; // peças que saíram do estoque (custo)
+  final double otherExpenses; // gastos lançados no Financeiro para o carro
+  const JobCost({
+    required this.approved,
+    required this.crew,
+    required this.supplies,
+    required this.stockParts,
+    required this.otherExpenses,
+  });
+
+  double get total => crew + supplies + stockParts + otherExpenses;
+  double get profit => approved - total;
+  double get marginPct => approved > 0 ? profit / approved * 100 : 0;
+}
+
+JobCost jobCost(
+  Claim c,
+  Settings s, {
+  required List<FinanceEntry> entries,
+  required Contact? Function(String id) contactById,
+  required StockItem? Function(String id) stockById,
+}) {
+  var crew = 0.0;
+  for (final m in c.crew) {
+    crew += crewCost(c, m, contactById(m.contactId)).amount;
+  }
+  var parts = 0.0;
+  for (final it in c.items) {
+    if (!it.approved || it.op != ItemOp.troca || it.stockId.isEmpty) continue;
+    final st = stockById(it.stockId);
+    if (st != null) parts += st.cost * (it.qty <= 0 ? 1 : it.qty);
+  }
+  final other = entries
+      .where((e) => !e.isIncome && e.claimId == c.id && !isCrewEntry(e))
+      .fold(0.0, (a, e) => a + e.amount);
+  return JobCost(
+    approved: computeTotals(c, s).total,
+    crew: crew,
+    supplies: c.supplies.fold(0.0, (a, u) => a + u.total),
+    stockParts: parts,
+    otherExpenses: other,
+  );
+}
+
+/// Insumos usados em cada peça do orçamento (id do item → custo).
+Map<String, double> suppliesByItem(Claim c) {
+  final m = <String, double>{};
+  for (final u in c.supplies) {
+    m[u.itemId] = (m[u.itemId] ?? 0) + u.total;
+  }
+  return m;
+}

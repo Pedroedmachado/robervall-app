@@ -8,6 +8,7 @@ import '../theme.dart';
 import 'budget_tab.dart';
 import 'claim_form_tab.dart';
 import 'damage_tab.dart';
+import 'os_tab.dart';
 import 'photos_tab.dart';
 import 'quote_preview_page.dart';
 import 'timeline_tab.dart';
@@ -62,9 +63,26 @@ class _ClaimDetailPageState extends State<ClaimDetailPage> {
     }
     final totals = computeTotals(c, store.settings);
     final wide = isWide(context);
+    final production = store.settings.productionMode;
+    final doneTasks = c.items.where((i) => i.approved && i.done).length;
+    final allTasks = c.items.where((i) => i.approved).length;
+    // modo produção: sem dados do cliente, sem orçamento e sem valores
+    final tabs = <(IconData, String, Widget)>[
+      if (!production)
+        (Icons.description_outlined, 'Dados', ClaimFormTab(claim: c)),
+      (Icons.car_repair, 'Avarias (${c.damages.length})', DamageTab(claim: c)),
+      (Icons.photo_library_outlined, 'Fotos (${c.photos.length})',
+          PhotosTab(claim: c)),
+      if (!production)
+        (Icons.request_quote_outlined, 'Orçamento (${c.items.length})',
+            BudgetTab(claim: c)),
+      (Icons.assignment_outlined, 'O.S. ($doneTasks/$allTasks)', OsTab(claim: c)),
+      (Icons.timeline, 'Histórico', TimelineTab(claim: c)),
+    ];
 
     return DefaultTabController(
-      length: 5,
+      key: ValueKey(production),
+      length: tabs.length,
       child: Scaffold(
         appBar: AppBar(
           titleSpacing: 0,
@@ -86,6 +104,7 @@ class _ClaimDetailPageState extends State<ClaimDetailPage> {
             ],
           ),
           actions: [
+            if (!production) ...[
             IconButton(
               tooltip: 'Ver orçamento',
               icon: const Icon(Icons.receipt_long_outlined),
@@ -128,6 +147,7 @@ class _ClaimDetailPageState extends State<ClaimDetailPage> {
                         title: Text('Excluir'))),
               ],
             ),
+            ],
           ],
           bottom: PreferredSize(
             preferredSize: Size.fromHeight((wide ? 72 : 46) + 44),
@@ -171,13 +191,7 @@ class _ClaimDetailPageState extends State<ClaimDetailPage> {
                   isScrollable: !wide,
                   tabAlignment: wide ? TabAlignment.fill : TabAlignment.start,
                   tabs: [
-                    for (final (icon, label) in [
-                      (Icons.description_outlined, 'Dados'),
-                      (Icons.car_repair, 'Avarias (${c.damages.length})'),
-                      (Icons.photo_library_outlined, 'Fotos (${c.photos.length})'),
-                      (Icons.request_quote_outlined, 'Orçamento (${c.items.length})'),
-                      (Icons.timeline, 'Histórico'),
-                    ])
+                    for (final (icon, label, _) in tabs)
                       wide ? Tab(icon: Icon(icon), text: label) : Tab(text: label),
                   ],
                 ),
@@ -186,15 +200,10 @@ class _ClaimDetailPageState extends State<ClaimDetailPage> {
           ),
         ),
         body: TabBarView(
-          children: [
-            ClaimFormTab(claim: c),
-            DamageTab(claim: c),
-            PhotosTab(claim: c),
-            BudgetTab(claim: c),
-            TimelineTab(claim: c),
-          ],
+          children: [for (final (_, _, page) in tabs) page],
         ),
-        bottomNavigationBar: _TotalBar(claim: c, totals: totals),
+        bottomNavigationBar:
+            production ? null : _TotalBar(claim: c, totals: totals),
       ),
     );
   }

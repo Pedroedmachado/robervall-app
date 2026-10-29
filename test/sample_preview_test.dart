@@ -11,6 +11,8 @@ import 'package:funilar/pdf_report.dart';
 import 'package:funilar/receipt_parser.dart';
 import 'package:funilar/stock.dart';
 import 'package:funilar/ui/stock_page.dart';
+import 'package:funilar/ui/os_tab.dart';
+import 'package:funilar/ui/damage_tab.dart';
 import 'package:funilar/store.dart';
 import 'package:funilar/theme.dart';
 import 'package:funilar/ui/budget_tab.dart';
@@ -207,13 +209,32 @@ void main() {
           qty: 1,
           cost: 280,
           price: 390,
-          location: 'Prateleira 2'),
+          corridor: '1',
+          shelf: 'B5',
+          slot: '3'),
       StockItem(
           name: 'Retrovisor esquerdo elétrico',
           fits: 'Gol G5',
           qty: 2,
           cost: 150,
-          price: 220),
+          price: 220,
+          corridor: '2',
+          shelf: 'A1'),
+      StockItem(
+          kind: StockKind.material,
+          name: 'Lixa P320',
+          qty: 80,
+          unit: 'folha',
+          cost: 2.5,
+          corridor: '3',
+          shelf: 'C1'),
+      StockItem(
+          kind: StockKind.cliente,
+          name: 'Para-choque dianteiro retirado',
+          claimId: claim.id,
+          corridor: '4',
+          shelf: 'D2',
+          slot: '1'),
       StockItem(
           kind: StockKind.material,
           name: 'Verniz HS 2x1',
@@ -224,6 +245,19 @@ void main() {
     ]) {
       store.upsertStock(st);
     }
+    StockItem byName(String n) => store.stock.firstWhere((e) => e.name == n);
+    final capo = claim.items.firstWhere((i) => i.description == 'Capô');
+    store.issueSupply(claim, byName('Lixa P320'), 12, itemId: capo.id);
+    store.issueSupply(claim, byName('Verniz HS 2x1'), 1, itemId: capo.id);
+    claim.items.first.done = true;
+    claim.items[1].done = true;
+    claim.preDamages.addAll({'porta_te': 1, 'teto': 1});
+    claim.reception
+      ..at = DateTime(2026, 10, 27, 8, 40)
+      ..fuel = 1
+      ..items.addAll({'Estepe', 'Macaco', 'Chave de roda', 'Documento (CRLV)'})
+      ..notes = 'Risco antigo no teto, cliente ciente.';
+    claim.vehicle.km = '84.300';
   });
 
   final shotKey = GlobalKey();
@@ -284,6 +318,24 @@ void main() {
     await tester.tap(find.text('abrir'));
     await tester.pumpAndSettle();
     await shot(tester, 'item_ri_r_p');
+  }, skip: skip != null);
+
+  for (final (name, prod) in [('os_gestor', false), ('os_producao', true)]) {
+    testWidgets('captura $name', (tester) async {
+      size(tester, const Size(420, 2300));
+      store.setProductionMode(prod);
+      addTearDown(() => store.setProductionMode(false));
+      await tester.pumpWidget(app(Scaffold(body: OsTab(claim: claim))));
+      await tester.pumpAndSettle();
+      await shot(tester, name);
+    }, skip: skip != null);
+  }
+
+  testWidgets('captura avarias_entrada', (tester) async {
+    size(tester, const Size(420, 2600));
+    await tester.pumpWidget(app(Scaffold(body: DamageTab(claim: claim))));
+    await tester.pumpAndSettle();
+    await shot(tester, 'avarias_entrada');
   }, skip: skip != null);
 
   testWidgets('captura financeiro', (tester) async {

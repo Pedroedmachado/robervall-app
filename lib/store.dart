@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'models.dart';
 import 'finance.dart';
+import 'format.dart' show hideMoney, num2;
 import 'seed.dart';
 import 'stock.dart';
 
@@ -57,6 +58,7 @@ class AppStore extends ChangeNotifier {
     final store = AppStore._(dir);
     await store.photosDir.create(recursive: true);
     await store._load();
+    hideMoney = store.settings.productionMode;
     // custos da equipe no formato novo (antes só existia o pintor)
     if (store.entries.any((e) => e.autoKey == painterAutoKey)) {
       for (final c in store.claims) {
@@ -315,6 +317,40 @@ class AppStore extends ChangeNotifier {
       stockById(e.value.stockId)?.qty -= e.value.qty;
       c.stockTaken[e.key] = e.value;
     }
+  }
+
+  /// Dá saída de um insumo do estoque para a O.S. (só o gestor libera).
+  SupplyUse issueSupply(Claim c, StockItem s, double qty,
+      {String itemId = '', String note = ''}) {
+    final u = SupplyUse(
+      stockId: s.id,
+      name: s.name,
+      qty: qty,
+      unit: s.unit,
+      unitCost: s.cost,
+      itemId: itemId,
+      note: note,
+    );
+    s.qty -= qty;
+    c.supplies.add(u);
+    c.timeline.add(TimelineEvent(
+        text: 'Insumo liberado: ${s.name} (${num2(qty)} ${s.unit})'));
+    touch(c);
+    return u;
+  }
+
+  /// Desfaz a saída do insumo (volta para o estoque).
+  void returnSupply(Claim c, SupplyUse u) {
+    stockById(u.stockId)?.qty += u.qty;
+    c.supplies.remove(u);
+    touch(c);
+  }
+
+  /// Liga/desliga o modo produção (sem valores em R\$ na tela).
+  void setProductionMode(bool on) {
+    settings.productionMode = on;
+    hideMoney = on;
+    changed();
   }
 
   /// Sinistros que usam (ou reservam) uma peça do estoque.

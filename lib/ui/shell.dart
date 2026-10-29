@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'access.dart';
 import 'catalog_page.dart';
 import 'claims_page.dart';
 import 'contacts_page.dart';
@@ -7,6 +8,7 @@ import 'dashboard_page.dart';
 import 'finance_page.dart';
 import 'settings_page.dart';
 import 'stock_page.dart';
+import '../theme.dart';
 import 'widgets.dart';
 
 class AppShell extends StatefulWidget {
@@ -31,6 +33,10 @@ class _AppShellState extends State<AppShell> {
 
   void go(int i) => setState(() => _index = i);
 
+  /// No modo produção só aparecem Sinistros e Estoque (sem valores) e um
+  /// botão para o gestor destravar.
+  static const _productionPages = [1, 3];
+
   Widget _page() {
     switch (_index) {
       case 0:
@@ -53,6 +59,8 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    final store = StoreScope.of(context);
+    if (store.settings.productionMode) return _production(context);
     final wide = isWide(context);
     final page = KeyedSubtree(key: ValueKey(_index), child: _page());
     if (!wide) {
@@ -97,6 +105,62 @@ class _AppShellState extends State<AppShell> {
           ),
           const VerticalDivider(width: 1),
           Expanded(child: page),
+        ],
+      ),
+    );
+  }
+}
+
+extension on _AppShellState {
+  Widget _production(BuildContext context) {
+    if (!_AppShellState._productionPages.contains(_index)) _index = 1;
+    final sel = _AppShellState._productionPages.indexOf(_index);
+    final page = KeyedSubtree(key: ValueKey('p$_index'), child: _page());
+    final t = Theme.of(context);
+    return Scaffold(
+      body: Column(children: [
+        Material(
+          color: t.colorScheme.tertiaryContainer,
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              child: Row(children: [
+                Icon(Icons.precision_manufacturing_outlined,
+                    size: 18, color: t.colorScheme.onTertiaryContainer),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('Modo produção · sem valores',
+                      style: TextStyle(
+                          color: t.colorScheme.onTertiaryContainer,
+                          fontWeight: FontWeight.w600)),
+                ),
+                TextButton.icon(
+                  onPressed: () => leaveProductionMode(context),
+                  icon: const Icon(Icons.lock_open, size: 18),
+                  label: const Text('Gestor'),
+                ),
+              ]),
+            ),
+          ),
+        ),
+        Expanded(
+          child: MediaQuery.removePadding(
+              context: context, removeTop: true, child: page),
+        ),
+      ]),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: sel,
+        onDestinationSelected: (i) => go(_AppShellState._productionPages[i]),
+        destinations: const [
+          NavigationDestination(
+              icon: Icon(Icons.assignment_outlined),
+              selectedIcon: Icon(Icons.assignment),
+              label: 'Ordens de serviço'),
+          NavigationDestination(
+              icon: Icon(Icons.warehouse_outlined),
+              selectedIcon: Icon(Icons.warehouse),
+              label: 'Estoque'),
         ],
       ),
     );

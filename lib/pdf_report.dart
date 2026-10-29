@@ -291,6 +291,23 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
           ]),
           pw.SizedBox(height: 8),
         ],
+        if (c.preDamages.isNotEmpty) ...[
+          box('Avarias pré-existentes (já estavam no veículo na entrada)', [
+            pw.Wrap(spacing: 10, runSpacing: 2, children: [
+              for (final e in c.preDamages.entries)
+                pw.Text(
+                    _t('- ${regionById(e.key)?.label ?? e.key} (${severityLabels[e.value] ?? ''})'),
+                    style: normal),
+            ]),
+          ]),
+          pw.SizedBox(height: 8),
+        ],
+        if (!c.reception.isEmpty) ...[
+          box('Checklist de entrada', [
+            for (final l in receptionLines(c)) pw.Text(_t(l), style: normal),
+          ]),
+          pw.SizedBox(height: 8),
+        ],
         pw.Text('Peças e serviços',
             style: pw.TextStyle(
                 fontSize: 11, fontWeight: pw.FontWeight.bold, color: primary)),

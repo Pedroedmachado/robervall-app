@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models.dart';
 import '../theme.dart';
+import 'access.dart';
 import 'widgets.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -189,6 +190,29 @@ class SettingsPage extends StatelessWidget {
                           r();
                         },
                       ),
+                    ],
+                  ),
+                  SectionCard(
+                    title: 'Modo produção (chão de fábrica)',
+                    icon: Icons.precision_manufacturing_outlined,
+                    children: [
+                      const Text(
+                          'Para o tablet ou celular da oficina: mostra só as ordens de serviço (tarefas, peças, insumos e equipe) e o estoque, sem nenhum valor em R\$. Para voltar e para liberar insumos, só com o PIN do gestor.'),
+                      const SizedBox(height: 12),
+                      Wrap(spacing: 8, runSpacing: 8, children: [
+                        FilledButton.icon(
+                          onPressed: () => enterProductionMode(context),
+                          icon: const Icon(Icons.lock_outline),
+                          label: const Text('Entrar no modo produção'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () => changeManagerPin(context),
+                          icon: const Icon(Icons.pin_outlined),
+                          label: Text(s.managerPin.isEmpty
+                              ? 'Criar PIN do gestor'
+                              : 'Trocar PIN do gestor'),
+                        ),
+                      ]),
                     ],
                   ),
                   SectionCard(

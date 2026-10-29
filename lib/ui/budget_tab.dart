@@ -549,7 +549,7 @@ class _ItemEditorState extends State<_ItemEditor> {
                 subtitle: Text([
                   '${num2(st.qty)} ${st.unit}',
                   if (st.budgetPrice > 0) money(st.budgetPrice),
-                  if (st.location.isNotEmpty) st.location,
+                  if (st.address.isNotEmpty) st.address,
                 ].join(' · ')),
                 trailing: using?.id == st.id
                     ? TextButton(

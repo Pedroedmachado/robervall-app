@@ -9,6 +9,7 @@ import '../format.dart';
 import '../models.dart';
 import '../stock.dart';
 import '../theme.dart';
+import 'access.dart';
 import 'widgets.dart';
 
 /// Aba Estoque: peças e materiais guardados na oficina, com foto.
@@ -35,7 +36,7 @@ class _StockPageState extends State<StockPage> {
                 e.name.toLowerCase().contains(q) ||
                 e.partNumber.toLowerCase().contains(q) ||
                 e.fits.toLowerCase().contains(q) ||
-                e.location.toLowerCase().contains(q)))
+                e.address.toLowerCase().contains(q)))
         .toList();
     final value = store.stock.fold(0.0, (a, e) => a + e.stockValue);
 
@@ -43,6 +44,11 @@ class _StockPageState extends State<StockPage> {
       appBar: AppBar(title: const Text('Estoque')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
+          if (!await requireManager(context,
+              reason: 'Só o gestor/almoxarife mexe no estoque.')) {
+            return;
+          }
+          if (!context.mounted) return;
           final s = await editStockItem(
               context, StockItem(kind: _kind ?? StockKind.peca));
           if (s != null) store.upsertStock(s);
@@ -72,7 +78,11 @@ class _StockPageState extends State<StockPage> {
               ),
               for (final k in StockKind.values)
                 ChoiceChip(
-                  label: Text(k == StockKind.peca ? 'Peças' : 'Materiais'),
+                  label: Text(switch (k) {
+                    StockKind.peca => 'Peças',
+                    StockKind.material => 'Insumos',
+                    StockKind.cliente => 'De clientes',
+                  }),
                   selected: _kind == k,
                   onSelected: (_) => setState(() => _kind = k),
                 ),
@@ -111,7 +121,9 @@ class _StockPageState extends State<StockPage> {
                             s.kind.label,
                             if (s.partNumber.isNotEmpty) s.partNumber,
                             if (s.fits.isNotEmpty) s.fits,
-                            if (s.location.isNotEmpty) 'local: ${s.location}',
+                            if (s.kind == StockKind.cliente)
+                              'carro ${store.claimById(s.claimId)?.number ?? '—'}${store.claimById(s.claimId)?.vehicle.plate.isNotEmpty == true ? ' · ${store.claimById(s.claimId)!.vehicle.plate}' : ''}',
+                            if (s.address.isNotEmpty) '📍 ${s.address}',
                             if (used.isNotEmpty)
                               'no orçamento ${used.map((c) => c.number).join(', ')}',
                           ].join(' · '),
@@ -134,6 +146,11 @@ class _StockPageState extends State<StockPage> {
                           ],
                         ),
                         onTap: () async {
+                          if (!await requireManager(context,
+                              reason: 'Só o gestor/almoxarife mexe no estoque.')) {
+                            return;
+                          }
+                          if (!context.mounted) return;
                           final r = await editStockItem(
                               context, StockItem.fromJson(s.toJson()),
                               canDelete: true);
@@ -254,8 +271,12 @@ Future<StockItem?> editStockItem(BuildContext context, StockItem s,
                 icon: Icon(Icons.settings_outlined)),
             ButtonSegment(
                 value: StockKind.material,
-                label: Text('Material'),
+                label: Text('Insumo'),
                 icon: Icon(Icons.format_color_fill_outlined)),
+            ButtonSegment(
+                value: StockKind.cliente,
+                label: Text('Do cliente'),
+                icon: Icon(Icons.person_pin_outlined)),
           ],
           selected: {s.kind},
           onSelectionChanged: (sel) => setS(() {
@@ -288,13 +309,31 @@ Future<StockItem?> editStockItem(BuildContext context, StockItem s,
         ]),
         const SizedBox(height: 12),
         BoundField(
-          label: s.kind == StockKind.peca
-              ? 'Peça (ex.: Farol esquerdo)'
-              : 'Material (ex.: Verniz HS 2x1)',
+          label: switch (s.kind) {
+            StockKind.peca => 'Peça (ex.: Farol esquerdo)',
+            StockKind.material => 'Insumo (ex.: Lixa P320, Verniz HS 2x1)',
+            StockKind.cliente => 'Peça do cliente (ex.: Para-choque retirado)',
+          },
           value: s.name,
           onChanged: (t) => s.name = t,
         ),
         const SizedBox(height: 12),
+        if (s.kind == StockKind.cliente) ...[
+          Picker<String>(
+            label: 'De qual carro',
+            value: store.claimById(s.claimId) == null ? '' : s.claimId,
+            values: ['', ...store.claims.map((c) => c.id)],
+            labelOf: (id) {
+              if (id.isEmpty) return 'Escolha o sinistro';
+              final c = store.claimById(id)!;
+              return [c.number, c.vehicle.plate, c.vehicle.model]
+                  .where((e) => e.isNotEmpty)
+                  .join(' · ');
+            },
+            onChanged: (id) => setS(() => s.claimId = id),
+          ),
+          const SizedBox(height: 12),
+        ],
         if (s.kind == StockKind.peca) ...[
           BoundField(
             label: 'Serve em (carro / ano)',
@@ -324,35 +363,71 @@ Future<StockItem?> editStockItem(BuildContext context, StockItem s,
             child: BoundField(
               label: 'Unidade',
               value: s.unit,
-              suggestions: const ['un', 'par', 'litro', 'quarto', 'galão', 'kg', 'lata', 'rolo'],
+              suggestions: const ['un', 'par', 'folha', 'g', 'kg', 'ml', 'litro', 'quarto', 'galão', 'lata', 'm', 'rolo'],
               onChanged: (t) => s.unit = t.trim().isEmpty ? 'un' : t.trim(),
             ),
           ),
         ]),
         const SizedBox(height: 12),
+        if (s.kind != StockKind.cliente)
         Row(children: [
           Expanded(
             child: NumField(
-              label: 'Custo (cada)',
+              label: s.kind == StockKind.material
+                  ? 'Custo por ${s.unit.isEmpty ? 'unidade' : s.unit}'
+                  : 'Custo (cada)',
               prefix: 'R\$',
               value: s.cost,
               onChanged: (n) => s.cost = n,
             ),
           ),
+          if (s.kind == StockKind.peca) ...[
+            const SizedBox(width: 8),
+            Expanded(
+              child: NumField(
+                label: 'Preço no orçamento',
+                prefix: 'R\$',
+                value: s.price,
+                onChanged: (n) => s.price = n,
+              ),
+            ),
+          ],
+        ]),
+        const SizedBox(height: 12),
+        Text('Onde está guardado', style: Theme.of(ctx).textTheme.labelLarge),
+        const SizedBox(height: 6),
+        Row(children: [
+          Expanded(
+            child: BoundField(
+              label: 'Corredor',
+              value: s.corridor,
+              capitalization: TextCapitalization.characters,
+              onChanged: (t) => s.corridor = t,
+            ),
+          ),
           const SizedBox(width: 8),
           Expanded(
-            child: NumField(
-              label: 'Preço no orçamento',
-              prefix: 'R\$',
-              value: s.price,
-              onChanged: (n) => s.price = n,
+            child: BoundField(
+              label: 'Prateleira',
+              value: s.shelf,
+              capitalization: TextCapitalization.characters,
+              onChanged: (t) => s.shelf = t,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: BoundField(
+              label: 'Nicho',
+              value: s.slot,
+              capitalization: TextCapitalization.characters,
+              onChanged: (t) => s.slot = t,
             ),
           ),
         ]),
         const SizedBox(height: 12),
         BoundField(
-          label: 'Onde está guardado (opcional)',
-          hint: 'Ex.: prateleira 2',
+          label: 'Outro local (opcional)',
+          hint: 'Ex.: mezanino, box 3',
           value: s.location,
           onChanged: (t) => s.location = t,
         ),
@@ -411,7 +486,7 @@ Future<void> showStockFor(BuildContext context, Claim c, BudgetItem it) async {
                 subtitle: Text([
                   '${num2(s.qty)} ${s.unit} em estoque',
                   if (s.fits.isNotEmpty) s.fits,
-                  if (s.location.isNotEmpty) 'local: ${s.location}',
+                  if (s.address.isNotEmpty) '📍 ${s.address}',
                   if (s.budgetPrice > 0) money(s.budgetPrice),
                 ].join(' · ')),
                 trailing: it.stockId == s.id

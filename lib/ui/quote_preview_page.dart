@@ -322,6 +322,20 @@ class _Paper extends StatelessWidget {
                       .join(' · ')),
                 ]),
               ],
+              if (c.preDamages.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                box('Avarias pré-existentes (já estavam no veículo)', [
+                  Text(c.preDamages.entries
+                      .map((e) =>
+                          '${regionById(e.key)?.label ?? e.key} (${(severityLabels[e.value] ?? '').toLowerCase()})')
+                      .join(' · ')),
+                ]),
+              ],
+              if (!c.reception.isEmpty) ...[
+                const SizedBox(height: 8),
+                box('Checklist de entrada',
+                    [for (final l in receptionLines(c)) Text(l)]),
+              ],
               const SizedBox(height: 16),
               const Text('Peças e serviços',
                   style: TextStyle(

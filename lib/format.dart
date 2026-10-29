@@ -1,6 +1,10 @@
 /// Formatação no padrão brasileiro, sem depender de inicialização de locale.
 
+/// Modo produção (chão de fábrica): nenhum valor em R\$ aparece na tela.
+bool hideMoney = false;
+
 String money(double v) {
+  if (hideMoney) return 'R\$ •••';
   final neg = v < 0;
   final cents = (v.abs() * 100).round();
   final intPart = cents ~/ 100;

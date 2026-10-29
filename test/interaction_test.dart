@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:funilar/format.dart';
 import 'package:funilar/main.dart';
 import 'package:funilar/models.dart';
+import 'package:funilar/stock.dart';
 import 'package:funilar/store.dart';
 import 'package:funilar/ui/damage_tab.dart';
 import 'package:funilar/ui/finance_page.dart';
@@ -295,6 +296,84 @@ void main() {
     expect(opCode(it.op, it.labFlag, it.paintFlag,
             removeInstall: it.removeInstall, alsoRepair: it.alsoRepair),
         'R&I / R / P');
+    await settle(t);
+  });
+
+  itest('avarias: pré-existente separado do sinistro e checklist', (t) async {
+    await start(t);
+    final c = seed();
+    await openFirstClaim(t);
+    await tab(t, 'Avarias');
+    await tap(t, find.text('Pré-existente'));
+    await tap(t, find.byTooltip('Capô'));
+    expect(c.preDamages, {'capo': 1});
+    expect(c.damages, isEmpty);
+    await tap(t, find.text('Avaria do sinistro'));
+    await tap(t, find.byTooltip('Capô'));
+    expect(c.damages, {'capo': 1});
+    await tap(t, find.text('Registrar agora'));
+    expect(c.reception.at, isNotNull);
+    await tap(t, find.widgetWithText(ChoiceChip, '1/2'));
+    await tap(t, find.widgetWithText(FilterChip, 'Estepe'));
+    expect(c.reception.fuel, 2);
+    expect(c.reception.items, {'Estepe'});
+    await settle(t);
+  });
+
+  itest('O.S.: marcar tarefa e liberar insumo', (t) async {
+    await start(t);
+    final c = seed();
+    c.items.add(BudgetItem(description: 'Porta', op: ItemOp.reparo, laborHours: 2));
+    store.upsertStock(StockItem(
+        kind: StockKind.material, name: 'Lixa P320', qty: 20, unit: 'folha', cost: 2));
+    await settle(t);
+    await openFirstClaim(t);
+    await tab(t, 'O.S.');
+    await tap(t, find.byKey(ValueKey('task-${c.items.single.id}')));
+    expect(c.items.single.done, isTrue);
+    await tap(t, find.text('Liberar insumo'));
+    await type(t, field('Quantidade (folha)'), '5');
+    await tap(t, find.text('Salvar'));
+    expect(c.supplies.single.qty, 5);
+    expect(store.stock.single.qty, 15);
+    expect(find.text('Custo real da O.S.'), findsOneWidget);
+    await settle(t);
+  });
+
+  itest('modo produção: esconde valores e volta com PIN', (t) async {
+    await start(t);
+    seed();
+    await settle(t);
+    await tap(t, nav('Ajustes'));
+    await t.dragUntilVisible(find.text('Entrar no modo produção'),
+        find.byType(ListView).first, const Offset(0, -300));
+    await t.pumpAndSettle();
+    await tap(t, find.text('Entrar no modo produção'));
+    await t.enterText(find.byKey(const ValueKey('pin')), '1234');
+    await tap(t, find.text('OK'));
+    expect(store.settings.productionMode, isTrue);
+    expect(store.settings.managerPin, '1234');
+    expect(find.text('Modo produção · sem valores'), findsOneWidget);
+    expect(find.text('Financeiro'), findsNothing);
+    expect(money(100), 'R\$ •••');
+
+    // O.S. sem a aba de orçamento
+    await tap(t, find.textContaining('Argo').first);
+    expect(find.descendant(of: find.byType(TabBar), matching: find.textContaining('Orçamento')),
+        findsNothing);
+    await tap(t, find.byTooltip('Voltar'));
+
+    // PIN errado não destrava
+    await tap(t, find.text('Gestor'));
+    await t.enterText(find.byKey(const ValueKey('pin')), '0000');
+    await tap(t, find.text('OK'));
+    expect(store.settings.productionMode, isTrue);
+    await settle(t);
+    await tap(t, find.text('Gestor'));
+    await t.enterText(find.byKey(const ValueKey('pin')), '1234');
+    await tap(t, find.text('OK'));
+    expect(store.settings.productionMode, isFalse);
+    expect(money(100), 'R\$ 100,00');
     await settle(t);
   });
 
