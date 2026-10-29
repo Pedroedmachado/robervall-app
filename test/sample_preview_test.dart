@@ -248,6 +248,17 @@ void main() {
           unit: 'quarto',
           cost: 89),
       StockItem(kind: StockKind.material, name: 'Massa poliéster', qty: 0, unit: 'lata', cost: 45),
+      StockItem(
+          kind: StockKind.material,
+          name: 'Thinner TH700 900ml',
+          unit: 'ml',
+          packName: 'lata',
+          packSize: 900,
+          packCost: 41,
+          cost: 41 / 900,
+          qty: 1800,
+          corridor: '3',
+          shelf: 'C2'),
     ]) {
       store.upsertStock(st);
     }
@@ -362,6 +373,24 @@ void main() {
       await shot(tester, name);
     }, skip: skip != null);
   }
+
+  testWidgets('captura estoque_insumo', (tester) async {
+    size(tester, const Size(420, 1500));
+    await tester.pumpWidget(app(Builder(
+      builder: (context) => Scaffold(
+        body: Center(
+          child: FilledButton(
+            onPressed: () => editStockItem(context,
+                StockItem.fromJson(store.stock.firstWhere((e) => e.name.startsWith('Thinner')).toJson())),
+            child: const Text('abrir'),
+          ),
+        ),
+      ),
+    )));
+    await tester.tap(find.text('abrir'));
+    await tester.pumpAndSettle();
+    await shot(tester, 'estoque_insumo');
+  }, skip: skip != null);
 
   testWidgets('captura financeiro', (tester) async {
     size(tester, const Size(420, 2000));

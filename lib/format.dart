@@ -18,6 +18,15 @@ String money(double v) {
   return '${neg ? '-' : ''}R\$ $buf,$dec';
 }
 
+/// Valor por unidade pequena (ex.: custo por ml): mostra até 4 casas.
+String unitMoney(double v) {
+  if (hideMoney) return 'R\$ •••';
+  if (v == 0 || v.abs() >= 1) return money(v);
+  var s = v.abs().toStringAsFixed(4).replaceAll(RegExp(r'0+$'), '');
+  if (s.split('.').last.length < 2) s = v.abs().toStringAsFixed(2);
+  return '${v < 0 ? '-' : ''}R\$ ${s.replaceAll('.', ',')}';
+}
+
 String num2(double v, {int decimals = 2}) {
   var s = v.toStringAsFixed(decimals);
   if (decimals > 0) {

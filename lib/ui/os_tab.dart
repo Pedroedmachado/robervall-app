@@ -242,7 +242,7 @@ class OsTab extends StatelessWidget {
               values: [for (final m in materials) m.id],
               labelOf: (id) {
                 final m = store.stockById(id)!;
-                return '${m.name} (${num2(m.qty)} ${m.unit})';
+                return '${m.name} (${m.qtyLabel})';
               },
               onChanged: (id) => setS(() => stockId = id),
             ),
@@ -252,11 +252,23 @@ class OsTab extends StatelessWidget {
               value: qty,
               onChanged: (n) => setS(() => qty = n),
             ),
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                [
+                  if (s.hasPack)
+                    '= ${num2(qty / s.packSize)} ${s.packName} de ${num2(s.packSize)} ${s.unit}',
+                  if (gate.can(Perm.valoresVer) && s.cost > 0)
+                    'custo ${money(s.cost * qty)} (${unitMoney(s.cost)}/${s.unit})',
+                ].join(' · '),
+                style: Theme.of(ctx).textTheme.bodySmall,
+              ),
+            ),
             if (qty > s.qty)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
-                    'Estoque tem só ${num2(s.qty)} ${s.unit} — vai ficar negativo.',
+                    'Estoque tem só ${s.qtyLabel} — vai ficar negativo.',
                     style: const TextStyle(color: Colors.orange)),
               ),
             const SizedBox(height: 12),

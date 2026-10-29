@@ -249,13 +249,37 @@ void main() {
     await settle(t);
   });
 
+  itest('estoque: insumo comprado em lata calcula o custo por ml', (t) async {
+    await start(t);
+    await tap(t, nav('Estoque'));
+    await tap(t, find.text('Adicionar'));
+    await tap(t, find.text('Insumo'));
+    await type(t, field('Insumo (ex.: Lixa P320, Verniz HS 2x1)'), 'Thinner TH700 900ml');
+    await tap(t, find.widgetWithText(ChoiceChip, 'ml'));
+    await tap(t, find.text('Em embalagem'));
+    expect(find.text('Cada lata tem'), findsOneWidget);
+    await type(t, field('Preço da lata'), '41');
+    await type(t, field('Quantidade de latas'), '2');
+    await t.pumpAndSettle();
+    expect(find.textContaining('1 lata = 900 ml'), findsOneWidget);
+    expect(find.textContaining('Custo por ml: R\$ 0,0456'), findsOneWidget);
+    await tap(t, find.text('Salvar'));
+    final s = store.stock.single;
+    expect(s.qty, 1800);
+    expect(s.unit, 'ml');
+    expect(s.cost, closeTo(41 / 900, 1e-9));
+    expect(s.stockValue, closeTo(82, 1e-9));
+    expect(find.text('1800 ml (2 latas)'), findsOneWidget);
+    await settle(t);
+  });
+
   itest('estoque: cadastrar peça e usar no orçamento', (t) async {
     await start(t);
     final c = seed();
     await tap(t, nav('Estoque'));
     await tap(t, find.text('Adicionar'));
     await type(t, field('Peça (ex.: Farol esquerdo)'), 'Farol esquerdo');
-    await type(t, field('Preço no orçamento'), '320');
+    await type(t, field('Preço no orçamento (cada)'), '320');
     await tap(t, find.text('Salvar'));
     expect(store.stock.single.name, 'Farol esquerdo');
     expect(find.text('Farol esquerdo'), findsOneWidget);

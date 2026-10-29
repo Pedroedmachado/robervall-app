@@ -135,13 +135,19 @@ class _StockPageState extends State<StockPage> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text('${num2(s.qty)} ${s.unit}',
+                            Text(s.qtyLabel,
                                 style: TextStyle(
                                     fontWeight: FontWeight.w800,
                                     color: s.qty <= 0
                                         ? Colors.red.shade700
                                         : null)),
-                            if (s.budgetPrice > 0)
+                            if (s.kind == StockKind.material && s.cost > 0)
+                              Text(
+                                  s.hasPack
+                                      ? '${money(s.packCost)}/${s.packName}'
+                                      : '${unitMoney(s.cost)}/${s.unit}',
+                                  style: t.textTheme.bodySmall)
+                            else if (s.budgetPrice > 0)
                               Text(money(s.budgetPrice),
                                   style: t.textTheme.bodySmall),
                           ],
@@ -258,6 +264,13 @@ Future<StockItem?> editStockItem(BuildContext context, StockItem s,
         return null;
       }
       s.name = s.name.trim();
+      if (s.kind == StockKind.material && s.hasPack) {
+        s.syncPackCost();
+      }
+      if (s.kind != StockKind.material) {
+        s.packSize = 0;
+        s.unit = 'un';
+      }
       return s;
     },
     body: (ctx, setS) => Column(
@@ -282,6 +295,7 @@ Future<StockItem?> editStockItem(BuildContext context, StockItem s,
           selected: {s.kind},
           onSelectionChanged: (sel) => setS(() {
             s.kind = sel.first;
+            if (s.kind != StockKind.material) s.unit = 'un';
           }),
         ),
         const SizedBox(height: 12),
@@ -351,50 +365,41 @@ Future<StockItem?> editStockItem(BuildContext context, StockItem s,
           ),
           const SizedBox(height: 12),
         ],
-        Row(children: [
-          Expanded(
-            child: NumField(
-              label: 'Quantidade',
-              value: s.qty,
-              onChanged: (n) => s.qty = n,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: BoundField(
-              label: 'Unidade',
-              value: s.unit,
-              suggestions: const ['un', 'par', 'folha', 'g', 'kg', 'ml', 'litro', 'quarto', 'galão', 'lata', 'm', 'rolo'],
-              onChanged: (t) => s.unit = t.trim().isEmpty ? 'un' : t.trim(),
-            ),
-          ),
-        ]),
-        const SizedBox(height: 12),
-        if (s.kind != StockKind.cliente)
-        Row(children: [
-          Expanded(
-            child: NumField(
-              label: s.kind == StockKind.material
-                  ? 'Custo por ${s.unit.isEmpty ? 'unidade' : s.unit}'
-                  : 'Custo (cada)',
-              prefix: 'R\$',
-              value: s.cost,
-              onChanged: (n) => s.cost = n,
-            ),
-          ),
-          if (s.kind == StockKind.peca) ...[
-            const SizedBox(width: 8),
+        if (s.kind == StockKind.material)
+          _SupplyUnits(item: s, setS: setS)
+        else ...[
+          Row(children: [
             Expanded(
               child: NumField(
-                label: 'Preço no orçamento',
-                prefix: 'R\$',
-                value: s.price,
-                onChanged: (n) => s.price = n,
+                label: 'Quantidade em estoque',
+                suffix: s.unit,
+                value: s.qty,
+                onChanged: (n) => s.qty = n,
               ),
             ),
+            if (s.kind == StockKind.peca) ...[
+              const SizedBox(width: 8),
+              Expanded(
+                child: NumField(
+                  label: 'Custo (cada)',
+                  prefix: 'R\$',
+                  value: s.cost,
+                  onChanged: (n) => s.cost = n,
+                ),
+              ),
+            ],
+          ]),
+          if (s.kind == StockKind.peca) ...[
+            const SizedBox(height: 12),
+            NumField(
+              label: 'Preço no orçamento (cada)',
+              prefix: 'R\$',
+              value: s.price,
+              onChanged: (n) => s.price = n,
+            ),
           ],
-        ]),
-        const SizedBox(height: 12),
+          const SizedBox(height: 12),
+        ],
         Text('Onde está guardado', style: Theme.of(ctx).textTheme.labelLarge),
         const SizedBox(height: 6),
         Row(children: [
@@ -485,7 +490,7 @@ Future<void> showStockFor(BuildContext context, Claim c, BudgetItem it) async {
                 leading: StockThumb(item: s, size: 52),
                 title: Text(s.name),
                 subtitle: Text([
-                  '${num2(s.qty)} ${s.unit} em estoque',
+                  '${s.qtyLabel} em estoque',
                   if (s.fits.isNotEmpty) s.fits,
                   if (s.address.isNotEmpty) '📍 ${s.address}',
                   if (s.budgetPrice > 0) money(s.budgetPrice),
@@ -587,6 +592,163 @@ class LinkChip extends StatelessWidget {
           ),
         ]),
       ),
+    );
+  }
+}
+
+
+/// Unidades do insumo: como sai para o carro e como é comprado.
+class _SupplyUnits extends StatelessWidget {
+  const _SupplyUnits({required this.item, required this.setS});
+  final StockItem item;
+  final StateSetter setS;
+
+  static const _units = ['ml', 'litro', 'g', 'kg', 'folha', 'un', 'm', 'rolo', 'par'];
+  static const _packs = ['lata', 'frasco', 'galão', 'quarto', 'balde', 'caixa', 'pacote', 'rolo'];
+
+  @override
+  Widget build(BuildContext context) {
+    final s = item;
+    final t = Theme.of(context);
+    final units = {..._units, if (s.unit.isNotEmpty) s.unit}.toList();
+    final packs = {..._packs, if (s.packName.isNotEmpty) s.packName}.toList();
+    final perUnit = s.hasPack ? s.packCost / s.packSize : s.cost;
+    final value = perUnit * (s.qty < 0 ? 0 : s.qty);
+    final suspicious = !s.hasPack && s.cost >= 5 && (s.unit == 'ml' || s.unit == 'g');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('1. Como ele sai para o carro', style: t.textTheme.labelLarge),
+        Text('A unidade usada na O.S. ao liberar o insumo.',
+            style: t.textTheme.bodySmall),
+        const SizedBox(height: 6),
+        Wrap(spacing: 6, runSpacing: 4, children: [
+          for (final u in units)
+            ChoiceChip(
+              label: Text(u),
+              selected: s.unit == u,
+              onSelected: (_) => setS(() => s.unit = u),
+            ),
+        ]),
+        const SizedBox(height: 12),
+        Text('2. Como você compra', style: t.textTheme.labelLarge),
+        const SizedBox(height: 4),
+        SegmentedButton<bool>(
+          segments: [
+            const ButtonSegment(value: true, label: Text('Em embalagem')),
+            ButtonSegment(value: false, label: Text('Por ${s.unit}')),
+          ],
+          selected: {s.hasPack},
+          onSelectionChanged: (sel) => setS(() {
+            if (sel.first) {
+              final fromName = packFromName(s.name);
+              if (fromName != null && fromName.$2 == s.unit) {
+                s.packSize = fromName.$1;
+              } else if (fromName != null && s.unit == 'ml' && fromName.$2 == 'litro') {
+                s.packSize = fromName.$1 * 1000;
+              } else {
+                s.packSize = s.packSize > 0 ? s.packSize : 1;
+              }
+              if (s.packCost == 0 && s.cost > 0) s.packCost = s.cost;
+              // estoque estava em embalagens: converte
+              if (s.qty > 0 && s.qty < s.packSize) s.qty = s.qty * s.packSize;
+            } else {
+              s.syncPackCost();
+              s.packSize = 0;
+            }
+          }),
+        ),
+        const SizedBox(height: 12),
+        if (s.hasPack) ...[
+          Wrap(spacing: 6, runSpacing: 4, children: [
+            for (final p in packs)
+              ChoiceChip(
+                label: Text(p),
+                selected: s.packName == p,
+                onSelected: (_) => setS(() => s.packName = p),
+              ),
+          ]),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(
+              child: NumField(
+                label: 'Cada ${s.packName} tem',
+                suffix: s.unit,
+                value: s.packSize,
+                onChanged: (n) => setS(() {
+                  final packs = s.packs;
+                  s.packSize = n <= 0 ? 0.0001 : n;
+                  s.qty = packs * s.packSize;
+                }),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: NumField(
+                label: 'Preço da ${s.packName}',
+                prefix: 'R\$',
+                value: s.packCost,
+                onChanged: (n) => setS(() => s.packCost = n),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 12),
+          Text('3. Quanto tem no estoque', style: t.textTheme.labelLarge),
+          const SizedBox(height: 6),
+          NumField(
+            label: 'Quantidade de ${s.packName}s',
+            value: s.packs,
+            onChanged: (n) => setS(() => s.qty = n * s.packSize),
+          ),
+        ] else ...[
+          Row(children: [
+            Expanded(
+              child: NumField(
+                label: 'Em estoque',
+                suffix: s.unit,
+                value: s.qty,
+                onChanged: (n) => setS(() => s.qty = n),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: NumField(
+                label: 'Custo de 1 ${s.unit}',
+                prefix: 'R\$',
+                value: s.cost,
+                onChanged: (n) => setS(() => s.cost = n),
+              ),
+            ),
+          ]),
+        ],
+        const SizedBox(height: 10),
+        Container(
+          key: const ValueKey('resumo-unidades'),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: (suspicious ? Colors.orange : t.colorScheme.secondaryContainer)
+                .withValues(alpha: suspicious ? 0.15 : 1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (s.hasPack)
+              Text('1 ${s.packName} = ${num2(s.packSize)} ${s.unit} por ${money(s.packCost)}'),
+            Text('Custo por ${s.unit}: ${unitMoney(perUnit)}',
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text('Em estoque: ${s.qtyLabel}'),
+            Text('Valor parado no estoque: ${money(value)}'),
+            if (suspicious)
+              const Padding(
+                padding: EdgeInsets.only(top: 4),
+                child: Text(
+                    'Confira: esse custo é de cada unidade. Se o preço é da lata/frasco, escolha "Em embalagem".',
+                    style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w600)),
+              ),
+          ]),
+        ),
+        const SizedBox(height: 12),
+      ],
     );
   }
 }

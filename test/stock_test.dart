@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:funilar/licensing.dart';
+import 'package:funilar/format.dart';
 import 'package:funilar/models.dart';
 import 'package:funilar/pdf_report.dart';
 import 'package:funilar/stock.dart';
@@ -91,5 +92,30 @@ void main() {
         BudgetItem(description: 'Farol esquerdo', op: ItemOp.troca), v);
     expect(u.toString(),
         'https://lista.mercadolivre.com.br/farol-esquerdo-gol-1-0-2019');
+  });
+
+  test('embalagem: custo por unidade, rótulos e leitura do nome', () {
+    final t = StockItem(
+        kind: StockKind.material,
+        name: 'Thinner 900ml',
+        unit: 'ml',
+        packName: 'lata',
+        packSize: 900,
+        packCost: 41,
+        qty: 450);
+    t.syncPackCost();
+    expect(t.cost, closeTo(0.04556, 1e-4));
+    expect(t.qtyLabel, '450 ml (0,5 lata)');
+    expect(unitMoney(t.cost), 'R\$ 0,0456');
+    expect(unitMoney(2.5), 'R\$ 2,50');
+    final back = StockItem.fromJson(t.toJson());
+    expect(back.packSize, 900);
+    expect(back.packCost, 41);
+    expect(StockItem(qty: 3).qtyLabel, '3 un');
+    expect(packFromName('Thinner TH700 900Ml'), (900.0, 'ml'));
+    expect(packFromName('Verniz HS 3,6 L'), (3.6, 'litro'));
+    expect(packFromName('Lixa P320'), isNull);
+    expect(StockItem(packName: 'galão', packSize: 3600, qty: 7200, unit: 'ml').qtyLabel,
+        '7200 ml (2 galões)');
   });
 }

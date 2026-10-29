@@ -1,3 +1,4 @@
+import 'format.dart';
 import 'models.dart';
 
 /// Tipo de item do estoque.
@@ -22,8 +23,15 @@ class StockItem {
   double qty;
   String unit;
 
-  /// Quanto custou cada unidade.
+  /// Quanto custou cada unidade de uso (ex.: por ml). Com embalagem é
+  /// calculado: preço da embalagem ÷ conteúdo.
   double cost;
+
+  /// Embalagem em que é comprado (ex.: lata de 900 ml por R\$ 41).
+  /// [packSize] = 0: sem embalagem (compra e usa na mesma unidade).
+  String packName;
+  double packSize;
+  double packCost;
 
   /// Quanto cobrar no orçamento (0 = usa o custo).
   double price;
@@ -49,6 +57,9 @@ class StockItem {
     this.qty = 1,
     this.unit = 'un',
     this.cost = 0,
+    this.packName = 'lata',
+    this.packSize = 0,
+    this.packCost = 0,
     this.price = 0,
     this.corridor = '',
     this.shelf = '',
@@ -70,6 +81,20 @@ class StockItem {
     return parts.join(' · ');
   }
 
+  bool get hasPack => packSize > 0;
+
+  /// Quantas embalagens dá o estoque atual.
+  double get packs => hasPack ? qty / packSize : 0;
+
+  /// "900 ml (1 lata)" ou "3 un".
+  String get qtyLabel =>
+      '${num2(qty)} $unit${hasPack ? ' (${num2(packs)} ${packs < 2 ? packName : _plural(packName)})' : ''}';
+
+  /// Recalcula o custo por unidade a partir da embalagem.
+  void syncPackCost() {
+    if (hasPack) cost = packCost / packSize;
+  }
+
   /// Valor que entra no orçamento quando a peça sai do estoque.
   double get budgetPrice => price > 0 ? price : cost;
 
@@ -85,6 +110,11 @@ class StockItem {
         'qty': qty,
         'unit': unit,
         'cost': cost,
+        if (hasPack) ...{
+          'packName': packName,
+          'packSize': packSize,
+          'packCost': packCost,
+        },
         'price': price,
         'corridor': corridor,
         'shelf': shelf,
@@ -111,6 +141,9 @@ class StockItem {
       qty: d(j['qty'], 1),
       unit: s(j['unit']).isEmpty ? 'un' : s(j['unit']),
       cost: d(j['cost']),
+      packName: s(j['packName']).isEmpty ? 'lata' : s(j['packName']),
+      packSize: d(j['packSize']),
+      packCost: d(j['packCost']),
       price: d(j['price']),
       corridor: s(j['corridor']),
       shelf: s(j['shelf']),
@@ -186,4 +219,27 @@ List<StockItem> stockFor(List<StockItem> stock, BudgetItem it) {
           s.id == it.stockId || (s.qty > 0 && stockMatchesItem(s, it)))
       .toList()
     ..sort((a, b) => b.qty.compareTo(a.qty));
+}
+
+String _plural(String w) => switch (w) {
+      'galão' => 'galões',
+      'un' => 'un',
+      _ => w.endsWith('s') ? w : '${w}s',
+    };
+
+/// Lê o conteúdo da embalagem no nome (ex.: "Thinner 900ml" → 900 ml,
+/// "Verniz 3,6 L" → 3,6 litro).
+(double, String)? packFromName(String name) {
+  final m = RegExp(r'(\d+(?:[.,]\d+)?)\s*(ml|l|lt|litros?|g|kg)\b', caseSensitive: false)
+      .firstMatch(name);
+  if (m == null) return null;
+  final v = double.tryParse(m[1]!.replaceAll(',', '.'));
+  if (v == null || v <= 0) return null;
+  final u = m[2]!.toLowerCase();
+  return switch (u) {
+    'ml' => (v, 'ml'),
+    'g' => (v, 'g'),
+    'kg' => (v, 'kg'),
+    _ => (v, 'litro'),
+  };
 }
