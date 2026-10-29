@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models.dart';
 import '../theme.dart';
+import 'update_ui.dart';
 import 'users_ui.dart';
 import 'widgets.dart';
 
@@ -31,6 +32,7 @@ class SettingsPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  const UpdateCard(),
                   SectionCard(
                     title: 'Dados da oficina (saem no PDF)',
                     icon: Icons.store_outlined,

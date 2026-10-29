@@ -1,15 +1,41 @@
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'modules.dart';
+import 'updater.dart';
+import 'ui/update_ui.dart';
 import 'store.dart';
 import 'theme.dart';
 import 'ui/shell.dart';
 
 /// Mensagens globais (ex.: módulo desativado / sem permissão).
 final messengerKey = GlobalKey<ScaffoldMessengerState>();
+final navigatorKey = GlobalKey<NavigatorState>();
+
+/// Ao abrir, confere se saiu versão nova (Windows e Android) e avisa.
+Future<void> _checkUpdateQuietly() async {
+  if (appVersion == 'dev' || !(Platform.isWindows || Platform.isAndroid)) return;
+  try {
+    await Future<void>.delayed(const Duration(seconds: 4));
+    final rel = await fetchLatestRelease();
+    if (!isNewer(rel.tag, appVersion)) return;
+    messengerKey.currentState?.showSnackBar(SnackBar(
+      duration: const Duration(seconds: 10),
+      showCloseIcon: true,
+      content: Text('Nova versão do Funilar: ${rel.tag}'),
+      action: SnackBarAction(
+        label: 'Atualizar',
+        onPressed: () => navigatorKey.currentState?.push(
+            MaterialPageRoute(builder: (_) => const UpdatePage())),
+      ),
+    ));
+  } catch (_) {
+    // sem internet: tenta na próxima vez
+  }
+}
 
 void _showDenied(AccessDenied e) {
   messengerKey.currentState
@@ -40,6 +66,7 @@ Future<void> main() async {
   installAccessGuard();
   final store = await AppStore.open();
   runApp(FunilarApp(store: store));
+  _checkUpdateQuietly();
 }
 
 class FunilarApp extends StatefulWidget {
@@ -88,6 +115,7 @@ class _FunilarAppState extends State<FunilarApp>
           return MaterialApp(
             title: 'Funilar',
             scaffoldMessengerKey: messengerKey,
+            navigatorKey: navigatorKey,
             debugShowCheckedModeBanner: false,
             theme: buildTheme(Brightness.light),
             darkTheme: buildTheme(Brightness.dark),

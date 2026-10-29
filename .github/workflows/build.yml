@@ -49,8 +49,8 @@ jobs:
               && cp test/goldens/*.png ci/exemplo/ \
               && (cd ci/exemplo && for f in *.pdf; do pdftoppm -png -r 75 "$f" "${f%.pdf}"; done; ls -la)
           } 2>&1 | tee -a ci/checks.log || true
-          flutter build apk --release 2>&1 | tee ci/android.log || status=1
-          flutter build linux --release 2>&1 | tee ci/linux.log || status=$((status+2))
+          flutter build apk --release --dart-define=FUNILAR_VERSION=v1.0.${{ github.run_number }} 2>&1 | tee ci/android.log || status=1
+          flutter build linux --release --dart-define=FUNILAR_VERSION=v1.0.${{ github.run_number }} 2>&1 | tee ci/linux.log || status=$((status+2))
           echo "$status" > ci/android-linux.status
           if [ -f build/app/outputs/flutter-apk/app-release.apk ]; then
             mkdir -p out && cp build/app/outputs/flutter-apk/app-release.apk out/Funilar-android.apk
@@ -86,7 +86,7 @@ jobs:
           mkdir -p ci
           status=0
           { bash tool/prepare_platforms.sh && flutter pub get; } 2>&1 | tee ci/windows-prep.log || status=1
-          flutter build windows --release 2>&1 | tee ci/windows.log || status=1
+          flutter build windows --release --dart-define=FUNILAR_VERSION=v1.0.${{ github.run_number }} 2>&1 | tee ci/windows.log || status=1
           echo "$status" > ci/windows.status
           if [ -d build/windows/x64/runner/Release ]; then
             mkdir -p out
@@ -127,7 +127,7 @@ jobs:
               && flutter build ios --config-only --no-codesign \
               && bash tool/prepare_platforms.sh && grep -n "platform :ios" ios/Podfile
           } 2>&1 | tee ci/ios-prep.log || status=1
-          flutter build ios --release --no-codesign 2>&1 | tee ci/ios.log || status=1
+          flutter build ios --release --no-codesign --dart-define=FUNILAR_VERSION=v1.0.${{ github.run_number }} 2>&1 | tee ci/ios.log || status=1
           if [ -d build/ios/iphoneos/Runner.app ]; then
             mkdir -p ipa/Payload
             cp -R build/ios/iphoneos/Runner.app ipa/Payload/
