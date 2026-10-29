@@ -228,6 +228,10 @@ void main() {
     await tap(t, find.textContaining('Adicionar 2'));
     expect(c.items.length, 2);
 
+    // o resumo fica depois da equipe do carro: rola até ele
+    await t.dragUntilVisible(field('Outros custos (guincho…)'),
+        find.byType(ListView).last, const Offset(0, -300));
+    await t.pumpAndSettle();
     await type(t, field('Outros custos (guincho…)'), '200');
     await settle(t);
     expect(c.extraCosts, 200);
