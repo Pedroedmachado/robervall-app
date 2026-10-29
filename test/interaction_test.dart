@@ -170,6 +170,9 @@ void main() {
     await type(t, field('Preço unitário da peça'), '450,50');
     await type(t, field('Horas de pintura'), '2');
     await tap(t, find.text('Salvar'));
+    // troca do farol oferece complementos; aqui seguimos sem eles
+    expect(find.text('Peças complementares'), findsOneWidget);
+    await tap(t, find.text('Agora não'));
     expect(c.items.length, 1);
     expect(c.items.first.op, ItemOp.troca);
     expect(c.items.first.price, closeTo(450.5, 0.001));

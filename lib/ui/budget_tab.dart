@@ -861,6 +861,8 @@ Future<void> offerComplements(BuildContext context, Claim c, BudgetItem parent,
     }
     return;
   }
+  // sozinha, só abre quando há algo que normalmente vai junto
+  if (!alwaysShow && !options.any((o) => o.$2)) return;
   final selected = <Complement>{
     for (final (comp, on) in options)
       if (on) comp
