@@ -12,7 +12,6 @@ import 'package:funilar/store.dart';
 import 'package:funilar/ui/damage_tab.dart';
 import 'package:funilar/ui/finance_page.dart';
 
-import 'test_keys.dart';
 
 /// Cada teste toca num botão das telas de sinistro/orçamento e confere
 /// se a ação realmente aconteceu nos dados e na tela.
@@ -404,48 +403,6 @@ void main() {
     await settle(t);
     expect(store.currentUser?.name, 'Dono');
     expect(money(100), 'R\$ 100,00');
-    await settle(t);
-  });
-
-  itest('Master: desliga módulo com análise de impacto e some da tela', (t) async {
-    await start(t, publicKey: testPub);
-    seed();
-    await settle(t);
-    await tap(t, nav('Ajustes'));
-    await tap(t, find.text('Acesso Master'));
-    final challenge = t.widget<SelectableText>(
-        find.byWidgetPredicate((w) => w is SelectableText && (w.data ?? '').startsWith('M-'))).data!;
-    final resp = (await t.runAsync(() => signMasterChallenge(challenge, testSeed)))!;
-    await t.enterText(find.byKey(const ValueKey('master-resposta')), resp);
-    await t.runAsync(() async {
-      await t.tap(find.text('Entrar'));
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-    });
-    await settle(t);
-    expect(find.text('Módulos'), findsOneWidget);
-
-    // Estoque não desliga com a Produção ligada: mostra o motivo
-    await tap(t, find.descendant(of: find.byKey(const ValueKey('mod-estoque')), matching: find.byType(Switch)));
-    expect(find.text('Não é possível:'), findsOneWidget);
-    await tap(t, find.text('Cancelar'));
-    // desliga a Produção e depois o Estoque
-    await tap(t, find.descendant(of: find.byKey(const ValueKey('mod-producao')), matching: find.byType(Switch)));
-    expect(find.textContaining('Nenhum dado é apagado'), findsOneWidget);
-    await t.runAsync(() async {
-      await t.tap(find.widgetWithText(FilledButton, 'Desligar'));
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-    });
-    await settle(t);
-    await tap(t, find.descendant(of: find.byKey(const ValueKey('mod-estoque')), matching: find.byType(Switch)));
-    await t.runAsync(() async {
-      await t.tap(find.widgetWithText(FilledButton, 'Desligar'));
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-    });
-    await settle(t);
-    expect(gate.active(Mod.estoque), isFalse);
-    expect(gate.active(Mod.producao), isFalse);
-    await tap(t, find.byTooltip('Voltar'));
-    expect(find.text('Estoque'), findsNothing);
     await settle(t);
   });
 

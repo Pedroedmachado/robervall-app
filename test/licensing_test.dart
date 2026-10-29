@@ -34,7 +34,8 @@ Future<String> testLicense({
         testSeed);
 
 Future<AppStore> openTest(Directory d) =>
-    AppStore.open(dir: d, publicKey: testPub, device: testDevice);
+    AppStore.open(
+        dir: d, publicKey: testPub, device: testDevice, enforceLicense: true);
 
 Future<MasterSession> master(AppStore s) async {
   final ch = newMasterChallenge(s.deviceId);
@@ -42,6 +43,18 @@ Future<MasterSession> master(AppStore s) async {
 }
 
 void main() {
+  test('sem exigência de licença: abre completo e grava normalmente', () async {
+    final d = await tmp('fn_livre');
+    final s = await AppStore.open(dir: d, device: testDevice);
+    expect(gate.readOnly, isFalse);
+    for (final m in Mod.values) {
+      expect(gate.active(m), isTrue, reason: m.name);
+    }
+    s.newClaim();
+    await s.flush();
+    expect(File('${d.path}/dados.json').readAsStringSync(), contains('FN-0001'));
+  });
+
   group('licença', () {
     test('licença oficial confere com a chave pública do app', () async {
       final r = await verifyLicense(realLicense, deviceId: 'FN-QUALQUER');

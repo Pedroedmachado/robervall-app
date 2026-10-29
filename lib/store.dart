@@ -64,6 +64,7 @@ class AppStore extends ChangeNotifier {
     @visibleForTesting License? assumeLicense,
     @visibleForTesting String? publicKey,
     @visibleForTesting String? device,
+    @visibleForTesting bool enforceLicense = false,
   }) async {
     final env = Platform.environment['FUNILAR_DATA_DIR'];
     if (dir == null && env != null && env.isNotEmpty) dir = Directory(env);
@@ -92,6 +93,7 @@ class AppStore extends ChangeNotifier {
     await store._load();
     if (publicKey != null) store._publicKey = publicKey;
     store.deviceId = device ?? await computeDeviceId(dir);
+    store._enforceLicense = enforceLicense;
     await store._loadLicensing(assumeLicense);
     await store._migrateAccess();
     store._applyAccess();
@@ -675,7 +677,24 @@ class AppStore extends ChangeNotifier {
 
   // ------------------------------------------------- licença e módulos
 
+  /// O app é liberado por completo para quem o tiver: a licença não é
+  /// exigida. O mecanismo (licença assinada, módulos, Master) continua no
+  /// código e só é ligado nos testes ([enforceLicense]).
+  bool _enforceLicense = false;
+
   Future<void> _loadLicensing(License? assume) async {
+    if (!_enforceLicense && assume == null) {
+      license = LicenseCheck(LicenseStatus.valid,
+          License.full(customer: settings.shopName.isEmpty ? 'Funilar' : settings.shopName));
+      final act = await Activation.load(_activationFile, deviceId);
+      activation = act ?? Activation();
+      if (act?.tampered == true) activation = Activation(log: act!.log);
+      // versão completa: todos os módulos ligados
+      activation.enabled = Mod.values.toSet();
+      activation.lastSeen = DateTime.now();
+      await activation.save(_activationFile, deviceId);
+      return;
+    }
     final act = await Activation.load(_activationFile, deviceId);
     if (assume != null) {
       license = LicenseCheck(LicenseStatus.valid, assume);
