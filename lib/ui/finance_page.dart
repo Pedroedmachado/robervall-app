@@ -382,10 +382,10 @@ class _FinancePageState extends State<FinancePage> {
     final e = it.entry;
     if (e == null) return;
     if (e.autoKey.isNotEmpty) {
-      // custo gerado pelo orçamento (pintor): edita-se no sinistro
+      // custo gerado pelo orçamento (equipe do carro): edita-se no sinistro
       final claim = store.claimById(e.claimId);
       if (claim != null) {
-        toast(context, 'Custo automático do pintor: ajuste no orçamento do sinistro.');
+        toast(context, 'Custo automático da equipe do carro: ajuste no orçamento do sinistro.');
         await openClaim(context, claim);
       }
       return;

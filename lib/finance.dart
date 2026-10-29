@@ -200,12 +200,12 @@ String _n(double v) {
   return s.replaceAll('.', ',');
 }
 
-/// Custo do pintor de um sinistro.
-class PainterCost {
-  final int pieces; // peças com pintura (P), só itens aprovados
+/// Custo de um profissional num carro.
+class CrewCost {
+  final double pieces;
   final double rate;
   final PayType payType;
-  const PainterCost(this.pieces, this.rate, this.payType);
+  const CrewCost(this.pieces, this.rate, this.payType);
 
   /// Por peça: peças × valor; empreita: valor por carro; salário: 0 (já é
   /// lançado como salário mensal).
@@ -219,7 +219,51 @@ class PainterCost {
 int paintedPieces(Claim c) =>
     c.items.where((i) => i.approved && i.paintHours > 0).length;
 
-PainterCost painterCost(Claim c, Contact painter) =>
-    PainterCost(paintedPieces(c), painter.rate, painter.payType);
+/// Peças do orçamento que contam para a função (null = não dá para contar
+/// sozinho; a pessoa informa).
+int? autoPieces(Claim c, OutsourcedService role) {
+  int count(LaborType t, {bool partsOnly = false}) => c.items
+      .where((i) =>
+          i.approved &&
+          i.laborHours > 0 &&
+          i.laborType == t &&
+          (!partsOnly || i.parentId.isEmpty))
+      .length;
+  return switch (role) {
+    OutsourcedService.pintura => paintedPieces(c),
+    OutsourcedService.funilaria => count(LaborType.funilaria, partsOnly: true),
+    OutsourcedService.mecanica => count(LaborType.mecanica),
+    OutsourcedService.eletrica => count(LaborType.eletrica),
+    OutsourcedService.tapecaria => count(LaborType.tapecaria),
+    OutsourcedService.vidracaria => count(LaborType.vidracaria),
+    _ => null,
+  };
+}
 
+/// O que a peça conta para a função, para explicar na tela.
+String autoPiecesHint(OutsourcedService role) => switch (role) {
+      OutsourcedService.pintura => 'peças com pintura (P)',
+      OutsourcedService.funilaria => 'peças com M.O. de funilaria',
+      OutsourcedService.mecanica => 'itens com M.O. de mecânica',
+      OutsourcedService.eletrica => 'itens com M.O. de elétrica',
+      OutsourcedService.tapecaria => 'itens com M.O. de tapeçaria',
+      OutsourcedService.vidracaria => 'itens com M.O. de vidraçaria',
+      _ => 'peças',
+    };
+
+double crewPieces(Claim c, CrewMember m) =>
+    m.pieces ?? (autoPieces(c, m.role)?.toDouble() ?? 1);
+
+CrewCost crewCost(Claim c, CrewMember m, Contact? worker) => CrewCost(
+    crewPieces(c, m),
+    m.rate ?? worker?.rate ?? 0,
+    worker?.payType ?? PayType.porPeca);
+
+/// Lançamentos automáticos da equipe do carro.
+const crewAutoKey = 'equipe';
+
+/// Chave antiga (só pintor); ainda reconhecida para limpar.
 const painterAutoKey = 'pintor';
+
+bool isCrewEntry(FinanceEntry e) =>
+    e.autoKey == crewAutoKey || e.autoKey == painterAutoKey;

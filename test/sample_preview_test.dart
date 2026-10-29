@@ -113,7 +113,27 @@ void main() {
         payType: PayType.porPeca,
         rate: 35);
     store.upsertContact(joao);
-    claim.painterId = joao.id;
+    final baiano = Contact(
+        kind: ContactKind.funcionario,
+        name: 'Baiano',
+        outsourced: true,
+        service: OutsourcedService.funilaria,
+        payType: PayType.empreita,
+        rate: 500);
+    final ze = Contact(
+        kind: ContactKind.funcionario,
+        name: 'Zé martelinho',
+        outsourced: true,
+        service: OutsourcedService.martelinho,
+        payType: PayType.porPeca,
+        rate: 80);
+    store.upsertContact(baiano);
+    store.upsertContact(ze);
+    claim.crew = [
+      CrewMember(role: OutsourcedService.pintura, contactId: joao.id),
+      CrewMember(role: OutsourcedService.funilaria, contactId: baiano.id),
+      CrewMember(role: OutsourcedService.martelinho, contactId: ze.id, pieces: 3),
+    ];
     claim.approvedAt = DateTime.now();
     // complementos da troca da porta dianteira esquerda
     final porta = claim.items
@@ -171,7 +191,7 @@ void main() {
           claimId: claim.id,
           date: day(9)),
     ]);
-    store.syncPainterCost(claim);
+    store.syncCrewCosts(claim);
   });
 
   final shotKey = GlobalKey();

@@ -55,6 +55,13 @@ class AppStore extends ChangeNotifier {
     final store = AppStore._(dir);
     await store.photosDir.create(recursive: true);
     await store._load();
+    // custos da equipe no formato novo (antes só existia o pintor)
+    if (store.entries.any((e) => e.autoKey == painterAutoKey)) {
+      for (final c in store.claims) {
+        store.syncCrewCosts(c);
+      }
+      store.entries.removeWhere((e) => e.autoKey == painterAutoKey);
+    }
     return store;
   }
 
@@ -213,7 +220,7 @@ class AppStore extends ChangeNotifier {
 
   void touch(Claim c) {
     c.updatedAt = DateTime.now();
-    syncPainterCost(c);
+    syncCrewCosts(c);
     changed();
   }
 
@@ -225,45 +232,46 @@ class AppStore extends ChangeNotifier {
     return null;
   }
 
-  /// Mantém no Financeiro o custo do pintor do sinistro: lançado quando o
-  /// orçamento está fechado, atualizado se o orçamento ou o valor mudar e
-  /// removido se o pintor sair ou o orçamento deixar de estar fechado.
-  void syncPainterCost(Claim c) {
-    final existing = entries
-        .where((e) => e.claimId == c.id && e.autoKey == painterAutoKey)
-        .toList();
-    final painter = contactById(c.painterId);
-    final cost = painter == null ? null : painterCost(c, painter);
-    if (painter == null ||
-        cost == null ||
-        cost.amount <= 0 ||
-        !isClosedStatus(c.status) ||
-        !claims.contains(c)) {
-      entries.removeWhere(existing.contains);
-      return;
+  /// Mantém no Financeiro o custo de cada profissional do carro (pintor,
+  /// funileiro, martelinho…): lançado quando o orçamento está fechado,
+  /// atualizado se o orçamento ou o valor mudar e removido se a pessoa sair
+  /// da equipe ou o orçamento deixar de estar fechado.
+  void syncCrewCosts(Claim c) {
+    final existing =
+        entries.where((e) => e.claimId == c.id && isCrewEntry(e)).toList();
+    final keep = <FinanceEntry>{};
+    final active = isClosedStatus(c.status) && claims.contains(c);
+    if (active) {
+      for (final m in c.crew) {
+        final w = contactById(m.contactId);
+        if (w == null) continue;
+        final cost = crewCost(c, m, w);
+        if (cost.amount <= 0) continue;
+        final id = 'equipe-${c.id}-${m.id}';
+        final found = existing.where((e) => e.id == id);
+        final e = found.isNotEmpty
+            ? found.first
+            : FinanceEntry(id: id, autoKey: crewAutoKey);
+        e
+          ..isIncome = false
+          ..category = ExpenseCategory.funcionario
+          ..outsourced = w.outsourced
+          ..service = m.role
+          ..payType = cost.payType
+          ..pieces = cost.pieces
+          ..pieceValue = cost.rate
+          ..amount = cost.amount
+          ..contact = w.name
+          ..claimId = c.id
+          ..recurring = false
+          ..description =
+              '${m.role.label} ${c.number}${c.vehicle.plate.isEmpty ? '' : ' · ${c.vehicle.plate}'}'
+          ..date = closedDate(c);
+        keep.add(e);
+        if (found.isEmpty) entries.add(e);
+      }
     }
-    final e = existing.isNotEmpty
-        ? existing.first
-        : FinanceEntry(id: 'pintor-${c.id}', autoKey: painterAutoKey);
-    for (final extra in existing.skip(1)) {
-      entries.remove(extra);
-    }
-    e
-      ..isIncome = false
-      ..category = ExpenseCategory.funcionario
-      ..outsourced = painter.outsourced
-      ..service = painter.outsourced ? painter.service : OutsourcedService.pintura
-      ..payType = painter.payType
-      ..pieces = cost.pieces.toDouble()
-      ..pieceValue = cost.rate
-      ..amount = cost.amount
-      ..contact = painter.name
-      ..claimId = c.id
-      ..recurring = false
-      ..description =
-          'Pintura ${c.number}${c.vehicle.plate.isEmpty ? '' : ' · ${c.vehicle.plate}'}'
-      ..date = closedDate(c);
-    if (existing.isEmpty) entries.add(e);
+    entries.removeWhere((e) => existing.contains(e) && !keep.contains(e));
   }
 
   void setStatus(Claim c, ClaimStatus s, {String? note}) {
@@ -314,8 +322,7 @@ class AppStore extends ChangeNotifier {
       if (await f.exists()) await f.delete();
     }
     claims.remove(c);
-    entries.removeWhere(
-        (e) => e.claimId == c.id && e.autoKey == painterAutoKey);
+    entries.removeWhere((e) => e.claimId == c.id && isCrewEntry(e));
     changed();
   }
 
@@ -345,9 +352,9 @@ class AppStore extends ChangeNotifier {
 
   void upsertContact(Contact ct) {
     if (!contacts.contains(ct)) contacts.add(ct);
-    // valor do funcionário mudou: atualiza o custo de pintura lançado
+    // valor do funcionário mudou: atualiza os custos lançados
     for (final c in claims) {
-      if (c.painterId == ct.id) syncPainterCost(c);
+      if (c.crew.any((m) => m.contactId == ct.id)) syncCrewCosts(c);
     }
     contacts.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     changed();
@@ -356,9 +363,9 @@ class AppStore extends ChangeNotifier {
   void removeContact(Contact ct) {
     contacts.remove(ct);
     for (final c in claims) {
-      if (c.painterId == ct.id) {
-        c.painterId = '';
-        syncPainterCost(c);
+      if (c.crew.any((m) => m.contactId == ct.id)) {
+        c.crew.removeWhere((m) => m.contactId == ct.id);
+        syncCrewCosts(c);
       }
     }
     changed();

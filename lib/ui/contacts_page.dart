@@ -296,7 +296,7 @@ Future<Contact?> editContact(BuildContext context, Contact ct) {
             Text(
               ct.payType == PayType.salario
                   ? 'Salário entra no Financeiro como gasto fixo mensal.'
-                  : 'Esse valor é usado quando ele for escolhido como pintor no orçamento.',
+                  : 'Esse valor é usado quando ele for escalado na equipe do carro, no orçamento.',
               style: Theme.of(ctx).textTheme.bodySmall,
             ),
           ],

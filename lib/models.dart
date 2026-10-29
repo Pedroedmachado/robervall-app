@@ -357,7 +357,8 @@ class Claim {
   List<BudgetItem> items;
   List<ClaimPhoto> photos;
   Map<String, int> damages; // região -> severidade 1..3
-  String painterId; // funcionário que pinta o carro (cadastro)
+  /// Quem trabalha no carro (pintor, funileiro, martelinho…), com o custo.
+  List<CrewMember> crew;
   List<TimelineEvent> timeline;
 
   Claim({
@@ -390,8 +391,9 @@ class Claim {
     List<ClaimPhoto>? photos,
     Map<String, int>? damages,
     List<TimelineEvent>? timeline,
-    this.painterId = '',
+    List<CrewMember>? crew,
   })  : id = id ?? newId(),
+        crew = crew ?? [],
         vehicle = vehicle ?? Vehicle(),
         createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now(),
@@ -438,7 +440,7 @@ class Claim {
         'items': items.map((e) => e.toJson()).toList(),
         'photos': photos.map((e) => e.toJson()).toList(),
         'damages': damages,
-        'painter': painterId,
+        'crew': crew.map((e) => e.toJson()).toList(),
         'timeline': timeline.map((e) => e.toJson()).toList(),
       };
 
@@ -483,7 +485,12 @@ class Claim {
       items: list(j['items']).map(BudgetItem.fromJson).toList(),
       photos: list(j['photos']).map(ClaimPhoto.fromJson).toList(),
       damages: dmg,
-      painterId: _s(j['painter']),
+      crew: [
+        ...list(j['crew']).map(CrewMember.fromJson),
+        // versões antigas: só um pintor por carro
+        if (j['crew'] == null && _s(j['painter']).isNotEmpty)
+          CrewMember(role: OutsourcedService.pintura, contactId: _s(j['painter'])),
+      ],
       timeline: list(j['timeline']).map(TimelineEvent.fromJson).toList(),
     );
   }
@@ -866,18 +873,57 @@ enum PayType {
   final String label;
 }
 
-/// Serviço feito por terceirizado.
+/// Serviço feito por terceirizado (e função de quem trabalha no carro).
 enum OutsourcedService {
-  funilaria('Funilaria'),
-  pintura('Pintura'),
-  mecanica('Mecânica'),
-  eletrica('Elétrica'),
-  tapecaria('Tapeçaria'),
-  vidracaria('Vidraçaria'),
-  outros('Outros');
+  funilaria('Funilaria', 'Funileiro'),
+  pintura('Pintura', 'Pintor'),
+  martelinho('Martelinho de ouro', 'Martelinho de ouro'),
+  mecanica('Mecânica', 'Mecânico'),
+  eletrica('Elétrica', 'Eletricista'),
+  polimento('Polimento', 'Polidor'),
+  tapecaria('Tapeçaria', 'Tapeceiro'),
+  vidracaria('Vidraçaria', 'Vidraceiro'),
+  outros('Outros', 'Outro serviço');
 
-  const OutsourcedService(this.label);
+  const OutsourcedService(this.label, this.worker);
   final String label;
+
+  /// Nome da função de quem faz (Pintor, Funileiro…).
+  final String worker;
+}
+
+/// Profissional escalado num carro: função, quem é e quanto custa.
+/// [pieces] e [rate] nulos = automático (peças do orçamento / valor do cadastro).
+class CrewMember {
+  String id;
+  OutsourcedService role;
+  String contactId;
+  double? pieces;
+  double? rate;
+
+  CrewMember({
+    String? id,
+    this.role = OutsourcedService.pintura,
+    this.contactId = '',
+    this.pieces,
+    this.rate,
+  }) : id = id ?? newId();
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'role': role.name,
+        'contact': contactId,
+        if (pieces != null) 'pieces': pieces,
+        if (rate != null) 'rate': rate,
+      };
+
+  factory CrewMember.fromJson(Map<String, dynamic> j) => CrewMember(
+        id: _s(j['id']).isEmpty ? null : _s(j['id']),
+        role: _enum(OutsourcedService.values, j['role'], OutsourcedService.outros),
+        contactId: _s(j['contact']),
+        pieces: j['pieces'] == null ? null : _d(j['pieces']),
+        rate: j['rate'] == null ? null : _d(j['rate']),
+      );
 }
 
 /// Lançamento manual do financeiro (gasto ou receita avulsa).

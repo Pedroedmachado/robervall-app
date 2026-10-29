@@ -231,7 +231,7 @@ class BudgetTab extends StatelessWidget {
               SizedBox(
                   width: 340,
                   child: Column(children: [
-                    _PainterCard(claim: c),
+                    _CrewCard(claim: c),
                     summary,
                   ])),
             ],
@@ -240,7 +240,7 @@ class BudgetTab extends StatelessWidget {
       }
       return ListView(
         padding: const EdgeInsets.all(12),
-        children: [itemsCard, _PainterCard(claim: c), summary],
+        children: [itemsCard, _CrewCard(claim: c), summary],
       );
     });
   }
@@ -982,9 +982,28 @@ void addComplements(Claim c, BudgetItem parent, List<Complement> comps) {
 }
 
 
-/// Escolha do pintor do carro e o custo dele (peças com P).
-class _PainterCard extends StatelessWidget {
-  const _PainterCard({required this.claim});
+IconData _roleIcon(OutsourcedService r) => switch (r) {
+      OutsourcedService.pintura => Icons.format_paint_outlined,
+      OutsourcedService.funilaria => Icons.handyman_outlined,
+      OutsourcedService.martelinho => Icons.hardware_outlined,
+      OutsourcedService.mecanica => Icons.build_outlined,
+      OutsourcedService.eletrica => Icons.electrical_services_outlined,
+      OutsourcedService.polimento => Icons.auto_awesome_outlined,
+      OutsourcedService.tapecaria => Icons.event_seat_outlined,
+      OutsourcedService.vidracaria => Icons.window_outlined,
+      OutsourcedService.outros => Icons.engineering_outlined,
+    };
+
+String _rateLabel(PayType p) => switch (p) {
+      PayType.porPeca => '/peça',
+      PayType.empreita => '/carro',
+      PayType.salario => '/mês',
+    };
+
+/// Equipe do carro: pintor, funileiro, martelinho de ouro… e o custo de
+/// cada um, lançado sozinho no Financeiro quando o orçamento fecha.
+class _CrewCard extends StatelessWidget {
+  const _CrewCard({required this.claim});
   final Claim claim;
 
   @override
@@ -992,113 +1011,286 @@ class _PainterCard extends StatelessWidget {
     final store = StoreScope.of(context);
     final c = claim;
     final t = Theme.of(context);
-    final workers = store.contactsOf(ContactKind.funcionario);
-    final painter = store.contactById(c.painterId);
-    final pieces = paintedPieces(c);
-    final cost = painter == null ? null : painterCost(c, painter);
-    final launched = store.entries.any(
-        (e) => e.claimId == c.id && e.autoKey == painterAutoKey);
-
-    Future<void> register() async {
-      final ct = await editContact(
-          context,
-          Contact(
-              kind: ContactKind.funcionario,
-              payType: PayType.porPeca,
-              outsourced: false));
-      if (ct == null) return;
-      store.upsertContact(ct);
-      c.painterId = ct.id;
-      store.touch(c);
+    final launched = {
+      for (final e in store.entries)
+        if (e.claimId == c.id && isCrewEntry(e)) e.id
+    };
+    var total = 0.0;
+    final rows = <Widget>[];
+    for (final m in c.crew) {
+      final w = store.contactById(m.contactId);
+      final cost = crewCost(c, m, w);
+      total += cost.amount;
+      final pieces = cost.pieces;
+      final detail = w == null
+          ? 'Escolha o profissional'
+          : switch (cost.payType) {
+              PayType.salario => 'Assalariado: sem custo por carro',
+              PayType.empreita => 'Empreita: ${money(cost.rate)} por carro',
+              PayType.porPeca =>
+                '${num2(pieces)} ${pieces == 1 ? 'peça' : 'peças'} × ${money(cost.rate)}',
+            };
+      final isLaunched = launched.contains('equipe-${c.id}-${m.id}');
+      rows.add(ListTile(
+        key: ValueKey('crew-${m.id}'),
+        contentPadding: EdgeInsets.zero,
+        onTap: () => _editCrewMember(context, c, m),
+        leading: CircleAvatar(
+          backgroundColor: t.colorScheme.secondaryContainer,
+          child: Icon(_roleIcon(m.role), size: 20),
+        ),
+        title: Text('${m.role.worker} · ${w?.name ?? '—'}',
+            maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: Text(
+            [detail, if (isLaunched) 'lançado ✓'].join(' · '),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis),
+        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text(money(cost.amount),
+              style: const TextStyle(fontWeight: FontWeight.w700)),
+          IconButton(
+            tooltip: 'Tirar da equipe',
+            icon: const Icon(Icons.close, size: 18),
+            onPressed: () {
+              final i = c.crew.indexOf(m);
+              c.crew.remove(m);
+              store.touch(c);
+              showUndo(context, '${m.role.worker} removido', () {
+                c.crew.insert(i.clamp(0, c.crew.length), m);
+                store.touch(c);
+              });
+            },
+          ),
+        ]),
+      ));
     }
 
     return SectionCard(
-      title: 'Pintor do carro',
-      icon: Icons.format_paint_outlined,
+      title: 'Equipe do carro',
+      icon: Icons.engineering_outlined,
       children: [
-        Text('$pieces ${pieces == 1 ? 'peça' : 'peças'} com pintura (P) neste orçamento.',
-            style: t.textTheme.bodyMedium),
-        const SizedBox(height: 10),
-        if (workers.isEmpty)
-          OutlinedButton.icon(
-            onPressed: register,
-            icon: const Icon(Icons.person_add_alt),
-            label: const Text('Cadastrar pintor'),
-          )
-        else ...[
-          Text('Escolha o pintor:', style: t.textTheme.labelLarge),
-          const SizedBox(height: 6),
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            ChoiceChip(
-              label: const Text('Nenhum'),
-              selected: painter == null,
-              onSelected: (_) {
-                if (painter == null) return;
-                c.painterId = '';
-                c.timeline.add(TimelineEvent(text: 'Pintor removido'));
-                store.touch(c);
-              },
+        if (c.crew.isEmpty)
+          Text(
+              'Escale quem vai trabalhar no carro. O custo de cada um entra no Financeiro, vinculado a este sinistro.',
+              style: t.textTheme.bodySmall),
+        ...rows,
+        const SizedBox(height: 6),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final r in const [
+            OutsourcedService.pintura,
+            OutsourcedService.funilaria,
+            OutsourcedService.martelinho,
+          ])
+            ActionChip(
+              avatar: Icon(_roleIcon(r), size: 18),
+              label: Text(r.worker),
+              onPressed: () =>
+                  _editCrewMember(context, c, CrewMember(role: r), isNew: true),
             ),
-            for (final w in workers)
-              ChoiceChip(
-                avatar: Icon(
-                    w.outsourced ? Icons.handshake_outlined : Icons.badge_outlined,
-                    size: 18),
-                label: Text(
-                    '${w.name}${w.rate > 0 ? ' · ${money(w.rate)}${w.payType == PayType.porPeca ? '/peça' : (w.payType == PayType.empreita ? '/carro' : '/mês')}' : ''}'),
-                selected: c.painterId == w.id,
-                onSelected: (_) {
-                  if (c.painterId == w.id) return;
-                  c.painterId = w.id;
-                  c.timeline.add(TimelineEvent(text: 'Pintor: ${w.name}'));
-                  store.touch(c);
-                },
-              ),
-          ]),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: register,
-              icon: const Icon(Icons.person_add_alt, size: 18),
-              label: const Text('Cadastrar outro'),
-            ),
+          ActionChip(
+            avatar: const Icon(Icons.add, size: 18),
+            label: const Text('Outro'),
+            onPressed: () => _editCrewMember(
+                context, c, CrewMember(role: OutsourcedService.mecanica),
+                isNew: true),
           ),
-        ],
-        if (painter != null && cost != null) ...[
-          const Divider(height: 16),
-          if (painter.payType == PayType.salario)
-            Text(
-                '${painter.name} é assalariado: o salário já entra no Financeiro como gasto fixo, sem custo por carro.',
-                style: t.textTheme.bodySmall)
-          else ...[
-            Text(
-              painter.payType == PayType.porPeca
-                  ? '$pieces ${pieces == 1 ? 'peça' : 'peças'} × ${money(painter.rate)}'
-                  : 'Empreita por carro',
-              style: t.textTheme.bodySmall,
-            ),
-            KeyValue('Custo do pintor', money(cost.amount), bold: true),
-            const SizedBox(height: 4),
-            Row(children: [
-              Icon(
-                  launched ? Icons.check_circle : Icons.schedule,
-                  size: 16,
-                  color: launched ? Colors.green.shade700 : t.colorScheme.outline),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  launched
-                      ? 'Lançado no Financeiro (Funcionários) e atualizado automaticamente.'
-                      : (painter.rate <= 0
-                          ? 'Informe o valor do pintor no cadastro dele.'
-                          : 'Entra no Financeiro quando o orçamento for fechado (aprovado).'),
-                  style: t.textTheme.bodySmall,
-                ),
+        ]),
+        if (c.crew.isNotEmpty) ...[
+          const Divider(height: 20),
+          KeyValue('Custo da equipe', money(total), bold: true),
+          const SizedBox(height: 4),
+          Row(children: [
+            Icon(launched.isNotEmpty ? Icons.check_circle : Icons.schedule,
+                size: 16,
+                color: launched.isNotEmpty
+                    ? Colors.green.shade700
+                    : t.colorScheme.outline),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                launched.isNotEmpty
+                    ? 'Lançado no Financeiro (Funcionários e terceirizados) e atualizado automaticamente.'
+                    : 'Entra no Financeiro quando o orçamento for fechado (aprovado).',
+                style: t.textTheme.bodySmall,
               ),
-            ]),
-          ],
+            ),
+          ]),
         ],
       ],
     );
   }
+}
+
+/// Adiciona ou edita um profissional da equipe do carro.
+Future<void> _editCrewMember(BuildContext context, Claim c, CrewMember original,
+    {bool isNew = false}) async {
+  final store = StoreScope.read(context);
+  final m = CrewMember.fromJson(original.toJson());
+  final r = await showFormDialog<CrewMember>(
+    context: context,
+    title: isNew ? 'Adicionar à equipe' : 'Editar ${m.role.worker.toLowerCase()}',
+    onSave: () {
+      if (store.contactById(m.contactId) == null) {
+        toast(context, 'Escolha o profissional.');
+        return null;
+      }
+      return m;
+    },
+    body: (ctx, setS) {
+      final t = Theme.of(ctx);
+      final workers = [...store.contactsOf(ContactKind.funcionario)]
+        ..sort((a, b) {
+          int score(Contact w) => w.outsourced && w.service == m.role ? 0 : 1;
+          return score(a).compareTo(score(b));
+        });
+      final w = store.contactById(m.contactId);
+      final auto = autoPieces(c, m.role);
+      final cost = crewCost(c, m, w);
+      final payType = w?.payType ?? PayType.porPeca;
+
+      Future<void> register() async {
+        final ct = await editContact(
+            ctx,
+            Contact(
+                kind: ContactKind.funcionario,
+                payType: PayType.porPeca,
+                outsourced: m.role != OutsourcedService.pintura,
+                service: m.role));
+        if (ct == null) return;
+        store.upsertContact(ct);
+        setS(() {
+          m.contactId = ct.id;
+          m.rate = null;
+        });
+      }
+
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Função', style: t.textTheme.labelLarge),
+          const SizedBox(height: 6),
+          Wrap(spacing: 8, runSpacing: 6, children: [
+            for (final r in OutsourcedService.values)
+              ChoiceChip(
+                avatar: Icon(_roleIcon(r), size: 18),
+                label: Text(r.worker),
+                selected: m.role == r,
+                onSelected: (_) => setS(() {
+                  m.role = r;
+                  m.pieces = null;
+                }),
+              ),
+          ]),
+          const SizedBox(height: 14),
+          Text('Profissional', style: t.textTheme.labelLarge),
+          const SizedBox(height: 6),
+          Wrap(spacing: 8, runSpacing: 6, children: [
+            for (final x in workers)
+              ChoiceChip(
+                avatar: Icon(
+                    x.outsourced ? Icons.handshake_outlined : Icons.badge_outlined,
+                    size: 18),
+                label: Text(
+                    '${x.name}${x.rate > 0 ? ' · ${money(x.rate)}${_rateLabel(x.payType)}' : ''}'),
+                selected: m.contactId == x.id,
+                onSelected: (_) => setS(() {
+                  m.contactId = x.id;
+                  m.rate = null;
+                }),
+              ),
+            ActionChip(
+              avatar: const Icon(Icons.person_add_alt, size: 18),
+              label: const Text('Cadastrar novo'),
+              onPressed: register,
+            ),
+          ]),
+          if (w != null) ...[
+            const SizedBox(height: 6),
+            Text(w.workerSummary, style: t.textTheme.bodySmall),
+          ],
+          const SizedBox(height: 14),
+          if (w != null && payType == PayType.salario)
+            Text(
+                '${w.name} é assalariado: o salário já entra no Financeiro como gasto fixo, sem custo por carro.',
+                style: t.textTheme.bodySmall)
+          else ...[
+            Row(children: [
+              if (payType == PayType.porPeca) ...[
+                Expanded(
+                  child: NumField(
+                    label: m.role == OutsourcedService.martelinho
+                        ? 'Nº de peças / amassados'
+                        : 'Nº de peças',
+                    value: crewPieces(c, m),
+                    onChanged: (n) => setS(() => m.pieces = n),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Expanded(
+                child: NumField(
+                  label: payType == PayType.porPeca
+                      ? 'Valor por peça'
+                      : 'Valor por carro',
+                  prefix: 'R\$',
+                  value: m.rate ?? w?.rate ?? 0,
+                  onChanged: (n) => setS(
+                      () => m.rate = (w != null && n == w.rate) ? null : n),
+                ),
+              ),
+            ]),
+            if (payType == PayType.porPeca) ...[
+              const SizedBox(height: 4),
+              Text(
+                auto == null
+                    ? 'Informe quantas peças ele vai fazer neste carro.'
+                    : (m.pieces == null
+                        ? 'Automático: $auto ${autoPiecesHint(m.role)} no orçamento.'
+                        : 'O orçamento tem $auto ${autoPiecesHint(m.role)}.'),
+                style: t.textTheme.bodySmall,
+              ),
+              if (auto != null && m.pieces != null)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: () => setS(() => m.pieces = null),
+                    child: const Text('Usar a contagem do orçamento'),
+                  ),
+                ),
+            ],
+            const SizedBox(height: 8),
+            KeyValue('Custo', money(cost.amount), bold: true),
+          ],
+          if (!isNew) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                onPressed: () =>
+                    Navigator.pop(ctx, CrewMember(id: '__delete__')),
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('Tirar da equipe'),
+              ),
+            ),
+          ],
+        ],
+      );
+    },
+  );
+  if (r == null) return;
+  final i = c.crew.indexWhere((x) => x.id == original.id);
+  if (r.id == '__delete__') {
+    if (i >= 0) c.crew.removeAt(i);
+  } else {
+    if (i >= 0) {
+      c.crew[i] = r;
+    } else {
+      c.crew.add(r);
+    }
+    final name = store.contactById(r.contactId)?.name ?? '';
+    c.timeline.add(TimelineEvent(text: '${r.role.worker}: $name'));
+  }
+  store.touch(c);
 }

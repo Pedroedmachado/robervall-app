@@ -495,7 +495,7 @@ void main() {
     await settle(t);
   });
 
-  itest('pintor do carro: escolher, ver custo e lançar no financeiro', (t) async {
+  itest('equipe do carro: pintor e martelinho com custo no financeiro', (t) async {
     await start(t);
     final c = seed();
     c.items = [
@@ -510,9 +510,13 @@ void main() {
     await settle(t);
     await openFirstClaim(t);
     await tab(t, 'Orçamento');
+    await tap(t, find.widgetWithText(ActionChip, 'Pintor'));
     await tap(t, find.widgetWithText(ChoiceChip, 'João pintor · R\$ 35,00/peça'));
-    expect(c.painterId, isNotEmpty);
-    expect(find.text('Custo do pintor'), findsOneWidget);
+    expect(find.textContaining('Automático: 2 peças com pintura'), findsOneWidget);
+    await tap(t, find.text('Salvar'));
+    expect(c.crew.single.role, OutsourcedService.pintura);
+    expect(find.text('Pintor · João pintor'), findsOneWidget);
+    expect(find.text('Custo da equipe'), findsOneWidget);
     expect(find.text(money(70)), findsWidgets);
     expect(find.textContaining('quando o orçamento for fechado'), findsOneWidget);
 
@@ -520,6 +524,20 @@ void main() {
     await settle(t);
     expect(store.entries.single.amount, 70);
     expect(find.textContaining('Lançado no Financeiro'), findsOneWidget);
+
+    // martelinho de ouro: cadastra na hora e informa os amassados
+    await tap(t, find.widgetWithText(ActionChip, 'Martelinho de ouro'));
+    await tap(t, find.widgetWithText(ActionChip, 'Cadastrar novo'));
+    await type(t, field('Nome'), 'Zé martelinho');
+    await type(t, field('Valor por peça').last, '80');
+    await tap(t, find.text('Salvar').last);
+    await type(t, field('Nº de peças / amassados'), '3');
+    await tap(t, find.text('Salvar').last);
+    expect(c.crew.length, 2);
+    final mart = store.entries.firstWhere((e) => e.contact == 'Zé martelinho');
+    expect(mart.amount, 240);
+    expect(mart.claimId, c.id);
+    expect(mart.service, OutsourcedService.martelinho);
     await settle(t);
   });
 }
