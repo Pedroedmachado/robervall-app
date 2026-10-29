@@ -765,7 +765,6 @@ class _ItemEditorState extends State<_ItemEditor> {
               ],
             ],
           ],
-          ],
           const SizedBox(height: 8),
           FieldGrid(maxColumns: 2, children: [
             if (showPrice)
