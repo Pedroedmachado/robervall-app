@@ -11,6 +11,7 @@ import 'package:funilar/pdf_report.dart';
 import 'package:funilar/store.dart';
 import 'package:funilar/theme.dart';
 import 'package:funilar/ui/budget_tab.dart';
+import 'package:funilar/ui/contacts_page.dart';
 import 'package:funilar/ui/finance_page.dart';
 import 'package:funilar/ui/quote_preview_page.dart';
 
@@ -105,6 +106,13 @@ void main() {
             op: ItemOp.servico,
             price: 120),
       ];
+    final joao = Contact(
+        kind: ContactKind.funcionario,
+        name: 'João pintor',
+        payType: PayType.porPeca,
+        rate: 35);
+    store.upsertContact(joao);
+    claim.painterId = joao.id;
     claim.approvedAt = DateTime.now();
     // complementos da troca da porta dianteira esquerda
     final porta = claim.items
@@ -162,6 +170,7 @@ void main() {
           claimId: claim.id,
           date: day(9)),
     ]);
+    store.syncPainterCost(claim);
   });
 
   final shotKey = GlobalKey();
@@ -293,5 +302,31 @@ void main() {
     await tester.tap(find.text('abrir'));
     await tester.pumpAndSettle();
     await shot(tester, 'janela_complementos');
+  }, skip: skip != null);
+
+  testWidgets('captura cadastro_funcionario', (tester) async {
+    size(tester, const Size(420, 1200));
+    await tester.pumpWidget(app(Builder(
+      builder: (context) => Scaffold(
+        body: Center(
+          child: FilledButton(
+            onPressed: () => editContact(
+                context,
+                Contact(
+                    kind: ContactKind.funcionario,
+                    name: 'Carlos Pinturas',
+                    outsourced: true,
+                    service: OutsourcedService.pintura,
+                    payType: PayType.porPeca,
+                    rate: 40,
+                    phone: '(11) 97777-6666')),
+            child: const Text('abrir'),
+          ),
+        ),
+      ),
+    )));
+    await tester.tap(find.text('abrir'));
+    await tester.pumpAndSettle();
+    await shot(tester, 'cadastro_funcionario');
   }, skip: skip != null);
 }

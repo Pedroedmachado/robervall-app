@@ -349,6 +349,15 @@ class _FinancePageState extends State<FinancePage> {
     }
     final e = it.entry;
     if (e == null) return;
+    if (e.autoKey.isNotEmpty) {
+      // custo gerado pelo orçamento (pintor): edita-se no sinistro
+      final claim = store.claimById(e.claimId);
+      if (claim != null) {
+        toast(context, 'Custo automático do pintor: ajuste no orçamento do sinistro.');
+        await openClaim(context, claim);
+      }
+      return;
+    }
     final copy = FinanceEntry.fromJson(e.toJson());
     final r = await editFinanceEntry(context, copy, canDelete: true);
     if (r == null) return;
@@ -703,7 +712,27 @@ Future<FinanceEntry?> editFinanceEntry(BuildContext context, FinanceEntry e,
               for (final k in contactKinds)
                 for (final c in store.contactsOf(k)) c.name
             ],
-            onChanged: (t) => e.contact = t,
+            onChanged: (t) {
+              e.contact = t;
+              // funcionário cadastrado: puxa modalidade e valor combinados
+              if (!e.isWorker) return;
+              final match = store.contactsOf(ContactKind.funcionario).where(
+                  (w) => w.name.toLowerCase() == t.trim().toLowerCase());
+              if (match.isEmpty) return;
+              final w = match.first;
+              setS(() {
+                e.outsourced = w.outsourced;
+                e.service = w.service;
+                e.payType = w.payType;
+                e.recurring = !w.outsourced && w.payType == PayType.salario;
+                if (w.payType == PayType.porPeca) {
+                  e.pieceValue = w.rate;
+                  e.syncPieceAmount();
+                } else if (w.rate > 0) {
+                  e.amount = w.rate;
+                }
+              });
+            },
           ),
           const SizedBox(height: 12),
           Picker<String>(

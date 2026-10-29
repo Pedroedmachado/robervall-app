@@ -357,6 +357,7 @@ class Claim {
   List<BudgetItem> items;
   List<ClaimPhoto> photos;
   Map<String, int> damages; // região -> severidade 1..3
+  String painterId; // funcionário que pinta o carro (cadastro)
   List<TimelineEvent> timeline;
 
   Claim({
@@ -389,6 +390,7 @@ class Claim {
     List<ClaimPhoto>? photos,
     Map<String, int>? damages,
     List<TimelineEvent>? timeline,
+    this.painterId = '',
   })  : id = id ?? newId(),
         vehicle = vehicle ?? Vehicle(),
         createdAt = createdAt ?? DateTime.now(),
@@ -436,6 +438,7 @@ class Claim {
         'items': items.map((e) => e.toJson()).toList(),
         'photos': photos.map((e) => e.toJson()).toList(),
         'damages': damages,
+        'painter': painterId,
         'timeline': timeline.map((e) => e.toJson()).toList(),
       };
 
@@ -480,6 +483,7 @@ class Claim {
       items: list(j['items']).map(BudgetItem.fromJson).toList(),
       photos: list(j['photos']).map(ClaimPhoto.fromJson).toList(),
       damages: dmg,
+      painterId: _s(j['painter']),
       timeline: list(j['timeline']).map(TimelineEvent.fromJson).toList(),
     );
   }
@@ -494,6 +498,12 @@ class Contact {
   String doc;
   String notes;
 
+  // Funcionário: modalidade, forma de pagamento e valor combinado
+  bool outsourced;
+  OutsourcedService service;
+  PayType payType;
+  double rate; // salário mensal, valor da empreita ou valor por peça
+
   Contact({
     String? id,
     this.kind = ContactKind.cliente,
@@ -502,7 +512,17 @@ class Contact {
     this.email = '',
     this.doc = '',
     this.notes = '',
+    this.outsourced = false,
+    this.service = OutsourcedService.pintura,
+    this.payType = PayType.porPeca,
+    this.rate = 0,
   }) : id = id ?? newId();
+
+  /// Ex.: "Terceirizado · Pintura · Por peça".
+  String get workerSummary => [
+        outsourced ? 'Terceirizado · ${service.label}' : 'Funcionário',
+        payType.label,
+      ].join(' · ');
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -512,6 +532,10 @@ class Contact {
         'email': email,
         'doc': doc,
         'notes': notes,
+        'outsourced': outsourced,
+        'service': service.name,
+        'payType': payType.name,
+        'rate': rate,
       };
 
   factory Contact.fromJson(Map<String, dynamic> j) => Contact(
@@ -522,6 +546,11 @@ class Contact {
         email: _s(j['email']),
         doc: _s(j['doc']),
         notes: _s(j['notes']),
+        outsourced: j['outsourced'] == true,
+        service: _enum(OutsourcedService.values, j['service'],
+            OutsourcedService.pintura),
+        payType: _enum(PayType.values, j['payType'], PayType.porPeca),
+        rate: _d(j['rate']),
       );
 }
 
@@ -872,6 +901,9 @@ class FinanceEntry {
   double pieces; // quantidade de peças (pagamento por peça)
   double pieceValue; // valor de cada peça
 
+  /// Lançamento gerado pelo app (ex.: 'pintor'); vazio = lançado à mão.
+  String autoKey;
+
   FinanceEntry({
     String? id,
     this.isIncome = false,
@@ -889,6 +921,7 @@ class FinanceEntry {
     this.payType = PayType.salario,
     this.pieces = 0,
     this.pieceValue = 0,
+    this.autoKey = '',
   })  : id = id ?? newId(),
         date = date ?? DateTime.now();
 
@@ -928,6 +961,7 @@ class FinanceEntry {
         'payType': payType.name,
         'pieces': pieces,
         'pieceValue': pieceValue,
+        'auto': autoKey,
       };
 
   factory FinanceEntry.fromJson(Map<String, dynamic> j) => FinanceEntry(
@@ -949,5 +983,6 @@ class FinanceEntry {
         payType: _enum(PayType.values, j['payType'], PayType.salario),
         pieces: _d(j['pieces']),
         pieceValue: _d(j['pieceValue']),
+        autoKey: _s(j['auto']),
       );
 }

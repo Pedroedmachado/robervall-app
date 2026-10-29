@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../format.dart';
 import '../models.dart';
 import '../theme.dart';
 import 'claims_page.dart';
@@ -117,6 +118,8 @@ class _ContactsPageState extends State<ContactsPage> {
               child: Text(c.name.isEmpty ? '?' : c.name[0].toUpperCase())),
           title: Text(c.name),
           subtitle: Text([
+            if (k == ContactKind.funcionario)
+              '${c.workerSummary}${c.rate > 0 ? ' ${money(c.rate)}' : ''}',
             if (c.phone.isNotEmpty) c.phone,
             if (c.email.isNotEmpty) c.email,
             if (c.doc.isNotEmpty) c.doc,
@@ -199,7 +202,11 @@ class _ContactsPageState extends State<ContactsPage> {
   }
 }
 
-Future<Contact?> _editContact(BuildContext context, Contact ct) {
+Future<Contact?> _editContact(BuildContext context, Contact ct) =>
+    editContact(context, ct);
+
+/// Cadastro de cliente, seguradora, fornecedor ou funcionário.
+Future<Contact?> editContact(BuildContext context, Contact ct) {
   return showFormDialog<Contact>(
     context: context,
     title: ct.name.isEmpty ? 'Novo cadastro' : 'Editar cadastro',
@@ -211,48 +218,114 @@ Future<Contact?> _editContact(BuildContext context, Contact ct) {
       ct.name = ct.name.trim();
       return ct;
     },
-    body: (ctx, setS) => Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Picker<ContactKind>(
-          label: 'Tipo',
-          value: ct.kind,
-          values: ContactKind.values,
-          labelOf: (e) => e.label,
-          onChanged: (e) => setS(() => ct.kind = e),
-        ),
-        const SizedBox(height: 12),
-        BoundField(
-            label: 'Nome',
-            value: ct.name,
-            capitalization: TextCapitalization.words,
-            onChanged: (t) => ct.name = t),
-        const SizedBox(height: 12),
-        BoundField(
-            label: 'Telefone',
-            value: ct.phone,
-            keyboard: TextInputType.phone,
-            onChanged: (t) => ct.phone = t),
-        const SizedBox(height: 12),
-        BoundField(
-            label: 'E-mail',
-            value: ct.email,
-            keyboard: TextInputType.emailAddress,
-            capitalization: TextCapitalization.none,
-            onChanged: (t) => ct.email = t),
-        const SizedBox(height: 12),
-        BoundField(
-            label: 'CPF / CNPJ',
-            value: ct.doc,
-            onChanged: (t) => ct.doc = t),
-        const SizedBox(height: 12),
-        BoundField(
-            label: 'Observações',
-            value: ct.notes,
-            maxLines: 3,
-            onChanged: (t) => ct.notes = t),
-      ],
-    ),
+    body: (ctx, setS) {
+      final worker = ct.kind == ContactKind.funcionario;
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Picker<ContactKind>(
+            label: 'Tipo',
+            value: ct.kind,
+            values: ContactKind.values,
+            labelOf: (e) => e.label,
+            onChanged: (e) => setS(() => ct.kind = e),
+          ),
+          const SizedBox(height: 12),
+          BoundField(
+              label: 'Nome',
+              value: ct.name,
+              capitalization: TextCapitalization.words,
+              onChanged: (t) => ct.name = t),
+          if (worker) ...[
+            const SizedBox(height: 16),
+            SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(
+                    value: false,
+                    label: Text('Funcionário'),
+                    icon: Icon(Icons.badge_outlined)),
+                ButtonSegment(
+                    value: true,
+                    label: Text('Terceirizado'),
+                    icon: Icon(Icons.handshake_outlined)),
+              ],
+              selected: {ct.outsourced},
+              onSelectionChanged: (sel) => setS(() {
+                ct.outsourced = sel.first;
+                if (ct.outsourced && ct.payType == PayType.salario) {
+                  ct.payType = PayType.porPeca;
+                }
+              }),
+            ),
+            if (ct.outsourced) ...[
+              const SizedBox(height: 12),
+              Picker<OutsourcedService>(
+                label: 'Serviço',
+                value: ct.service,
+                values: OutsourcedService.values,
+                labelOf: (v) => v.label,
+                onChanged: (v) => setS(() => ct.service = v),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Text('Forma de pagamento',
+                style: Theme.of(ctx).textTheme.labelLarge),
+            const SizedBox(height: 4),
+            Wrap(spacing: 8, runSpacing: 4, children: [
+              for (final pt in PayType.values)
+                if (!(ct.outsourced && pt == PayType.salario))
+                  ChoiceChip(
+                    label: Text(pt.label),
+                    selected: ct.payType == pt,
+                    onSelected: (_) => setS(() => ct.payType = pt),
+                  ),
+            ]),
+            const SizedBox(height: 12),
+            NumField(
+              label: switch (ct.payType) {
+                PayType.porPeca => 'Valor por peça',
+                PayType.empreita => 'Valor da empreita (por carro)',
+                PayType.salario => 'Salário mensal',
+              },
+              prefix: 'R\$',
+              value: ct.rate,
+              onChanged: (n) => ct.rate = n,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              ct.payType == PayType.salario
+                  ? 'Salário entra no Financeiro como gasto fixo mensal.'
+                  : 'Esse valor é usado quando ele for escolhido como pintor no orçamento.',
+              style: Theme.of(ctx).textTheme.bodySmall,
+            ),
+          ],
+          const SizedBox(height: 12),
+          BoundField(
+              label: 'Telefone',
+              value: ct.phone,
+              keyboard: TextInputType.phone,
+              onChanged: (t) => ct.phone = t),
+          const SizedBox(height: 12),
+          BoundField(
+              label: 'E-mail',
+              value: ct.email,
+              keyboard: TextInputType.emailAddress,
+              capitalization: TextCapitalization.none,
+              onChanged: (t) => ct.email = t),
+          const SizedBox(height: 12),
+          BoundField(
+              label: 'CPF / CNPJ',
+              value: ct.doc,
+              onChanged: (t) => ct.doc = t),
+          const SizedBox(height: 12),
+          BoundField(
+              label: 'Observações',
+              value: ct.notes,
+              maxLines: 3,
+              onChanged: (t) => ct.notes = t),
+        ],
+      );
+    },
   );
 }

@@ -438,4 +438,33 @@ void main() {
     expect(c.items.length, kids.length + 1);
     await settle(t);
   });
+
+  itest('pintor do carro: escolher, ver custo e lançar no financeiro', (t) async {
+    await start(t);
+    final c = seed();
+    c.items = [
+      BudgetItem(description: 'Capô', op: ItemOp.troca, price: 500, paintHours: 4),
+      BudgetItem(description: 'Teto', op: ItemOp.pintura, paintHours: 2),
+    ];
+    store.upsertContact(Contact(
+        kind: ContactKind.funcionario,
+        name: 'João pintor',
+        payType: PayType.porPeca,
+        rate: 35));
+    await settle(t);
+    await openFirstClaim(t);
+    await tab(t, 'Orçamento');
+    await tap(t, find.byType(DropdownMenu<String>).last);
+    await tap(t, find.textContaining('João pintor').last);
+    expect(c.painterId, isNotEmpty);
+    expect(find.text('Custo do pintor'), findsOneWidget);
+    expect(find.text(money(70)), findsWidgets);
+    expect(find.textContaining('quando o orçamento for fechado'), findsOneWidget);
+
+    store.setStatus(c, ClaimStatus.aprovado);
+    await settle(t);
+    expect(store.entries.single.amount, 70);
+    expect(find.textContaining('Lançado no Financeiro'), findsOneWidget);
+    await settle(t);
+  });
 }

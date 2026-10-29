@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../calc.dart';
 import '../complements.dart';
+import '../finance.dart';
 import '../format.dart';
 import '../models.dart';
 import '../store.dart';
 import '../theme.dart';
+import 'contacts_page.dart' show editContact;
 import 'widgets.dart';
 
 class BudgetTab extends StatelessWidget {
@@ -226,14 +228,19 @@ class BudgetTab extends StatelessWidget {
             children: [
               Expanded(child: itemsCard),
               const SizedBox(width: 16),
-              SizedBox(width: 340, child: summary),
+              SizedBox(
+                  width: 340,
+                  child: Column(children: [
+                    _PainterCard(claim: c),
+                    summary,
+                  ])),
             ],
           ),
         );
       }
       return ListView(
         padding: const EdgeInsets.all(12),
-        children: [itemsCard, summary],
+        children: [itemsCard, _PainterCard(claim: c), summary],
       );
     });
   }
@@ -972,4 +979,115 @@ void addComplements(Claim c, BudgetItem parent, List<Complement> comps) {
   final after = idx < 0 ? c.items.length : idx + 1 + childrenOf(c.items, parent).length;
   c.items.insertAll(after.clamp(0, c.items.length), items);
   c.items = groupChildren(c.items);
+}
+
+
+/// Escolha do pintor do carro e o custo dele (peças com P).
+class _PainterCard extends StatelessWidget {
+  const _PainterCard({required this.claim});
+  final Claim claim;
+
+  @override
+  Widget build(BuildContext context) {
+    final store = StoreScope.of(context);
+    final c = claim;
+    final t = Theme.of(context);
+    final workers = store.contactsOf(ContactKind.funcionario);
+    final painter = store.contactById(c.painterId);
+    final pieces = paintedPieces(c);
+    final cost = painter == null ? null : painterCost(c, painter);
+    final launched = store.entries.any(
+        (e) => e.claimId == c.id && e.autoKey == painterAutoKey);
+
+    Future<void> register() async {
+      final ct = await editContact(
+          context,
+          Contact(
+              kind: ContactKind.funcionario,
+              payType: PayType.porPeca,
+              outsourced: false));
+      if (ct == null) return;
+      store.upsertContact(ct);
+      c.painterId = ct.id;
+      store.touch(c);
+    }
+
+    return SectionCard(
+      title: 'Pintor do carro',
+      icon: Icons.format_paint_outlined,
+      children: [
+        Text('$pieces ${pieces == 1 ? 'peça' : 'peças'} com pintura (P) neste orçamento.',
+            style: t.textTheme.bodyMedium),
+        const SizedBox(height: 10),
+        if (workers.isEmpty)
+          OutlinedButton.icon(
+            onPressed: register,
+            icon: const Icon(Icons.person_add_alt),
+            label: const Text('Cadastrar pintor'),
+          )
+        else ...[
+          Picker<String>(
+            label: 'Pintor',
+            value: painter == null ? '' : c.painterId,
+            values: ['', ...workers.map((w) => w.id)],
+            labelOf: (id) {
+              if (id.isEmpty) return 'Nenhum';
+              final w = store.contactById(id)!;
+              return '${w.name} · ${w.payType.label}${w.rate > 0 ? ' ${money(w.rate)}' : ''}';
+            },
+            onChanged: (id) {
+              c.painterId = id;
+              c.timeline.add(TimelineEvent(
+                  text: id.isEmpty
+                      ? 'Pintor removido'
+                      : 'Pintor: ${store.contactById(id)!.name}'));
+              store.touch(c);
+            },
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: register,
+              icon: const Icon(Icons.person_add_alt, size: 18),
+              label: const Text('Cadastrar outro'),
+            ),
+          ),
+        ],
+        if (painter != null && cost != null) ...[
+          const Divider(height: 16),
+          if (painter.payType == PayType.salario)
+            Text(
+                '${painter.name} é assalariado: o salário já entra no Financeiro como gasto fixo, sem custo por carro.',
+                style: t.textTheme.bodySmall)
+          else ...[
+            Text(
+              painter.payType == PayType.porPeca
+                  ? '$pieces ${pieces == 1 ? 'peça' : 'peças'} × ${money(painter.rate)}'
+                  : 'Empreita por carro',
+              style: t.textTheme.bodySmall,
+            ),
+            KeyValue('Custo do pintor', money(cost.amount), bold: true),
+            const SizedBox(height: 4),
+            Row(children: [
+              Icon(
+                  launched ? Icons.check_circle : Icons.schedule,
+                  size: 16,
+                  color: launched ? Colors.green.shade700 : t.colorScheme.outline),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  launched
+                      ? 'Lançado no Financeiro (Funcionários) e atualizado automaticamente.'
+                      : (painter.rate <= 0
+                          ? 'Informe o valor do pintor no cadastro dele.'
+                          : 'Entra no Financeiro quando o orçamento for fechado (aprovado).'),
+                  style: t.textTheme.bodySmall,
+                ),
+              ),
+            ]),
+          ],
+        ],
+      ],
+    );
+  }
 }

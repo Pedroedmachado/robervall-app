@@ -167,6 +167,7 @@ FinanceSummary summarize(
             '${_n(e.pieces)} ${e.pieces == 1 ? 'peça' : 'peças'}',
           if (e.contact.isNotEmpty) e.contact,
           if (e.recurring) 'mensal',
+          if (e.autoKey.isNotEmpty) 'automático',
         ].join(' · '),
         amount: e.isIncome ? e.amount : -e.amount,
         kind: e.isIncome ? CashKind.income : CashKind.expense,
@@ -196,3 +197,27 @@ String _n(double v) {
   if (s.endsWith('.')) s = s.substring(0, s.length - 1);
   return s.replaceAll('.', ',');
 }
+
+/// Custo do pintor de um sinistro.
+class PainterCost {
+  final int pieces; // peças com pintura (P), só itens aprovados
+  final double rate;
+  final PayType payType;
+  const PainterCost(this.pieces, this.rate, this.payType);
+
+  /// Por peça: peças × valor; empreita: valor por carro; salário: 0 (já é
+  /// lançado como salário mensal).
+  double get amount => switch (payType) {
+        PayType.porPeca => pieces * rate,
+        PayType.empreita => pieces > 0 ? rate : 0,
+        PayType.salario => 0,
+      };
+}
+
+int paintedPieces(Claim c) =>
+    c.items.where((i) => i.approved && i.paintHours > 0).length;
+
+PainterCost painterCost(Claim c, Contact painter) =>
+    PainterCost(paintedPieces(c), painter.rate, painter.payType);
+
+const painterAutoKey = 'pintor';
