@@ -311,6 +311,9 @@ void main() {
     await tap(t, find.text('Avaria do sinistro'));
     await tap(t, find.byTooltip('Capô'));
     expect(c.damages, {'capo': 1});
+    await t.dragUntilVisible(find.text('Registrar agora'),
+        find.byType(ListView).last, const Offset(0, -300));
+    await t.pumpAndSettle();
     await tap(t, find.text('Registrar agora'));
     expect(c.reception.at, isNotNull);
     await tap(t, find.widgetWithText(ChoiceChip, '1/2'));
