@@ -519,9 +519,10 @@ class _ItemsTable extends StatelessWidget {
                     padding: const EdgeInsets.all(6),
                     child: Align(
                         alignment: Alignment.centerLeft, child: _code(it))),
-                cell(it.partNumber.isEmpty
-                    ? it.description
-                    : '${it.description}  (${it.partNumber})'),
+                cell((it.parentId.isEmpty ? '' : '      ↳ ') +
+                    (it.partNumber.isEmpty
+                        ? it.description
+                        : '${it.description}  (${it.partNumber})')),
                 cell(it.op == ItemOp.troca ? _originShort(it.origin) : ''),
                 cell(priced ? num2(it.qty <= 0 ? 1 : it.qty) : '', right: true),
                 cell(it.laborHours > 0 ? num2(it.laborHours) : '', right: true),
@@ -566,8 +567,14 @@ class _ItemsTable extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(it.description,
-                            style: const TextStyle(fontWeight: FontWeight.w600)),
+                        Text(
+                            it.parentId.isEmpty
+                                ? it.description
+                                : '↳ ${it.description}',
+                            style: TextStyle(
+                                fontWeight: it.parentId.isEmpty
+                                    ? FontWeight.w600
+                                    : FontWeight.w400)),
                         if (info.isNotEmpty)
                           Text(info.join('  ·  '),
                               style: TextStyle(

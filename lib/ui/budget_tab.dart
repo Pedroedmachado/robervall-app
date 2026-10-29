@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../calc.dart';
+import '../complements.dart';
 import '../format.dart';
 import '../models.dart';
 import '../store.dart';
@@ -28,6 +29,7 @@ class BudgetTab extends StatelessWidget {
             if (it != null) {
               c.items.add(it);
               store.touch(c);
+              if (context.mounted) await offerComplements(context, c, it);
             }
           },
           icon: const Icon(Icons.add),
@@ -80,6 +82,8 @@ class BudgetTab extends StatelessWidget {
               if (b > a) b--;
               final it = c.items.removeAt(a);
               c.items.insert(b, it);
+              // complementos acompanham a peça principal
+              c.items = groupChildren(c.items);
               store.touch(c);
             },
             itemBuilder: (context, i) {
@@ -89,11 +93,19 @@ class BudgetTab extends StatelessWidget {
                 index: i,
                 item: it,
                 values: itemValues(it, s),
+                hasComplements: complementsFor(it).isNotEmpty,
+                onComplements: () => offerComplements(context, c, it,
+                    alwaysShow: true),
                 onTap: () async {
                   final edited = await editBudgetItem(context, it);
                   if (edited != null) {
+                    final becameReplace = it.op != ItemOp.troca &&
+                        edited.op == ItemOp.troca;
                     c.items[i] = edited;
                     store.touch(c);
+                    if (becameReplace && context.mounted) {
+                      await offerComplements(context, c, edited);
+                    }
                   }
                 },
                 onToggle: (v) {
@@ -101,10 +113,19 @@ class BudgetTab extends StatelessWidget {
                   store.touch(c);
                 },
                 onDelete: () {
-                  c.items.removeAt(i);
+                  // apagar a peça principal leva junto os complementos
+                  final before = List<BudgetItem>.of(c.items);
+                  final kids = childrenOf(c.items, it);
+                  c.items.remove(it);
+                  c.items.removeWhere(kids.contains);
                   store.touch(c);
-                  showUndo(context, '"${it.description}" removido', () {
-                    c.items.insert(i.clamp(0, c.items.length), it);
+                  showUndo(
+                      context,
+                      kids.isEmpty
+                          ? '"${it.description}" removido'
+                          : '"${it.description}" e ${kids.length} complementos removidos',
+                      () {
+                    c.items = before;
                     store.touch(c);
                   });
                 },
@@ -227,7 +248,11 @@ class _ItemRow extends StatelessWidget {
     required this.onTap,
     required this.onToggle,
     required this.onDelete,
+    this.hasComplements = false,
+    this.onComplements,
   });
+  final bool hasComplements;
+  final VoidCallback? onComplements;
   final int index;
   final BudgetItem item;
   final ItemValues values;
@@ -249,10 +274,11 @@ class _ItemRow extends StatelessWidget {
       if (it.discountPct > 0) 'desconto ${num2(it.discountPct)}%',
       if (it.supplier.isNotEmpty) it.supplier,
     ];
+    final child = it.parentId.isNotEmpty;
     return Opacity(
       opacity: it.approved ? 1 : 0.5,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 6),
+        margin: EdgeInsets.only(bottom: 6, left: child ? 28 : 0),
         decoration: BoxDecoration(
           border: Border.all(color: t.colorScheme.outlineVariant),
           borderRadius: BorderRadius.circular(10),
@@ -276,14 +302,28 @@ class _ItemRow extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        it.description.isEmpty ? '(sem descrição)' : it.description,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          decoration:
-                              it.approved ? null : TextDecoration.lineThrough,
+                      Row(children: [
+                        if (child)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 4),
+                            child: Icon(Icons.subdirectory_arrow_right,
+                                size: 16, color: t.colorScheme.outline),
+                          ),
+                        Expanded(
+                          child: Text(
+                            it.description.isEmpty
+                                ? '(sem descrição)'
+                                : it.description,
+                            style: TextStyle(
+                              fontWeight:
+                                  child ? FontWeight.w500 : FontWeight.w600,
+                              decoration: it.approved
+                                  ? null
+                                  : TextDecoration.lineThrough,
+                            ),
+                          ),
                         ),
-                      ),
+                      ]),
                       const SizedBox(height: 4),
                       Wrap(
                         spacing: 4,
@@ -324,6 +364,17 @@ class _ItemRow extends StatelessWidget {
                             onChanged: (v) => onToggle(v ?? true),
                           ),
                         ),
+                        if (hasComplements)
+                          IconButton(
+                            tooltip: 'Peças complementares',
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                                minWidth: 32, minHeight: 32),
+                            icon: const Icon(Icons.account_tree_outlined,
+                                size: 20),
+                            onPressed: onComplements,
+                          ),
                         IconButton(
                           tooltip: 'Remover',
                           visualDensity: VisualDensity.compact,
@@ -789,4 +840,134 @@ Future<List<CatalogItem>> pickFromCatalog(
     ),
   );
   return r == true ? selected.toList() : <CatalogItem>[];
+}
+
+
+/// Mostra os complementos da peça (vidro, máquina, forro, chicote...) para
+/// adicionar junto. Com [alwaysShow], abre mesmo se já estiverem lançados.
+Future<void> offerComplements(BuildContext context, Claim c, BudgetItem parent,
+    {bool alwaysShow = false}) async {
+  final store = StoreScope.read(context);
+  final existing = {
+    for (final k in childrenOf(c.items, parent)) k.description.toLowerCase()
+  };
+  final options = [
+    for (final (comp, on) in complementsFor(parent))
+      if (!existing.contains(comp.name.toLowerCase())) (comp, on)
+  ];
+  if (options.isEmpty) {
+    if (alwaysShow && context.mounted) {
+      toast(context, 'Todos os complementos desta peça já estão no orçamento.');
+    }
+    return;
+  }
+  final selected = <Complement>{
+    for (final (comp, on) in options)
+      if (on) comp
+  };
+  final s = store.settings;
+  final picked = await showModalBottomSheet<List<Complement>>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setS) => SafeArea(
+        child: ConstrainedBox(
+          constraints:
+              BoxConstraints(maxHeight: MediaQuery.sizeOf(ctx).height * 0.85),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+                child: Text('Peças complementares',
+                    style: Theme.of(ctx).textTheme.titleLarge),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: Text(
+                  parent.op == ItemOp.troca
+                      ? 'Na troca de "${parent.description}" também entram:'
+                      : 'Para reparar/pintar "${parent.description}" normalmente sai:',
+                  style: Theme.of(ctx).textTheme.bodyMedium,
+                ),
+              ),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final (comp, _) in options)
+                      CheckboxListTile(
+                        dense: true,
+                        value: selected.contains(comp),
+                        onChanged: (b) => setS(() {
+                          if (b == true) {
+                            selected.add(comp);
+                          } else {
+                            selected.remove(comp);
+                          }
+                        }),
+                        title: Text(comp.name),
+                        subtitle: Text(comp.removeInstall
+                            ? 'R&I · ${num2(comp.hours)} h · ${comp.laborType.label} · ${money(comp.hours * s.rateFor(comp.laborType))}'
+                            : 'Troca · informe o preço depois'),
+                      ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: OverflowBar(
+                  alignment: MainAxisAlignment.end,
+                  spacing: 8,
+                  overflowAlignment: OverflowBarAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => setS(() {
+                        if (selected.length == options.length) {
+                          selected.clear();
+                        } else {
+                          selected
+                            ..clear()
+                            ..addAll(options.map((o) => o.$1));
+                        }
+                      }),
+                      child: Text(selected.length == options.length
+                          ? 'Desmarcar todos'
+                          : 'Marcar todos'),
+                    ),
+                    TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Agora não')),
+                    FilledButton(
+                      onPressed: selected.isEmpty
+                          ? null
+                          : () => Navigator.pop(ctx, [
+                                for (final (comp, _) in options)
+                                  if (selected.contains(comp)) comp
+                              ]),
+                      child: Text('Adicionar ${selected.length}'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+  if (picked == null || picked.isEmpty) return;
+  addComplements(c, parent, picked);
+  store.touch(c);
+}
+
+/// Insere os complementos logo abaixo da peça principal.
+void addComplements(Claim c, BudgetItem parent, List<Complement> comps) {
+  final items = [for (final comp in comps) comp.toItem(parent.id)];
+  final idx = c.items.indexOf(parent);
+  final after = idx < 0 ? c.items.length : idx + 1 + childrenOf(c.items, parent).length;
+  c.items.insertAll(after.clamp(0, c.items.length), items);
+  c.items = groupChildren(c.items);
 }

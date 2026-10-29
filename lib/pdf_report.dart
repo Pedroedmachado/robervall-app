@@ -304,7 +304,8 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
                   return <String>[
                     opCode(it.op, it.laborHours, it.paintHours,
                         removeInstall: it.removeInstall),
-                    _t(it.description +
+                    _t((it.parentId.isEmpty ? '' : '      \u00b7 ') +
+                        it.description +
                         (it.partNumber.isEmpty ? '' : '  (${it.partNumber})')),
                     _t(it.op == ItemOp.troca ? _originShort(it.origin) : ''),
                     priced ? num2(it.qty <= 0 ? 1 : it.qty) : '',

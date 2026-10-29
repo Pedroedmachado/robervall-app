@@ -5,10 +5,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:funilar/complements.dart';
 import 'package:funilar/models.dart';
 import 'package:funilar/pdf_report.dart';
 import 'package:funilar/store.dart';
 import 'package:funilar/theme.dart';
+import 'package:funilar/ui/budget_tab.dart';
 import 'package:funilar/ui/finance_page.dart';
 import 'package:funilar/ui/quote_preview_page.dart';
 
@@ -104,6 +106,13 @@ void main() {
             price: 120),
       ];
     claim.approvedAt = DateTime.now();
+    // complementos da troca da porta dianteira esquerda
+    final porta = claim.items
+        .firstWhere((i) => i.description == 'Porta dianteira esquerda');
+    addComplements(claim, porta, [
+      for (final (comp, on) in complementsFor(porta))
+        if (on && comp.removeInstall) comp
+    ]);
     final now = DateTime.now();
     DateTime day(int d) => DateTime(now.year, now.month, d);
     store.entries.addAll([
@@ -258,4 +267,31 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
     }, skip: skip != null);
   }
+
+  testWidgets('captura orcamento_complementos', (tester) async {
+    size(tester, const Size(420, 2600));
+    await tester.pumpWidget(app(Scaffold(body: BudgetTab(claim: claim))));
+    await tester.pumpAndSettle();
+    await shot(tester, 'orcamento_complementos');
+  }, skip: skip != null);
+
+  testWidgets('captura janela_complementos', (tester) async {
+    size(tester, const Size(420, 1000));
+    final c = Claim(items: [
+      BudgetItem(description: 'Porta traseira direita', op: ItemOp.troca, price: 900)
+    ]);
+    await tester.pumpWidget(app(Builder(
+      builder: (context) => Scaffold(
+        body: Center(
+          child: FilledButton(
+            onPressed: () => offerComplements(context, c, c.items.first),
+            child: const Text('abrir'),
+          ),
+        ),
+      ),
+    )));
+    await tester.tap(find.text('abrir'));
+    await tester.pumpAndSettle();
+    await shot(tester, 'janela_complementos');
+  }, skip: skip != null);
 }

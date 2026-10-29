@@ -237,7 +237,15 @@ class AppStore extends ChangeNotifier {
     settings.nextNumber++;
     copy.status = ClaimStatus.aberto;
     copy.photos = [];
-    copy.items = c.items.map((e) => e.copy()).toList();
+    final newIds = <String, String>{};
+    copy.items = c.items.map((e) {
+      final n = e.copy();
+      newIds[e.id] = n.id;
+      return n;
+    }).toList();
+    for (final it in copy.items) {
+      if (it.parentId.isNotEmpty) it.parentId = newIds[it.parentId] ?? '';
+    }
     copy.timeline = [
       TimelineEvent(text: 'Duplicado de ${c.number}', isStatus: true)
     ];

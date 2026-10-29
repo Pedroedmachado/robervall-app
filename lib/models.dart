@@ -203,6 +203,9 @@ class BudgetItem {
   /// Mão de obra na peça é remoção e instalação (R&I), não reparo.
   bool removeInstall;
 
+  /// Peça principal da qual este item é complemento (vazio = item normal).
+  String parentId;
+
   BudgetItem({
     String? id,
     this.description = '',
@@ -220,6 +223,7 @@ class BudgetItem {
     this.approved = true,
     this.note = '',
     this.removeInstall = false,
+    this.parentId = '',
   }) : id = id ?? newId();
 
   BudgetItem copy() => BudgetItem.fromJson(toJson())..id = newId();
@@ -241,6 +245,7 @@ class BudgetItem {
         'approved': approved,
         'note': note,
         'ri': removeInstall,
+        'parent': parentId,
       };
 
   factory BudgetItem.fromJson(Map<String, dynamic> j) => BudgetItem(
@@ -261,6 +266,7 @@ class BudgetItem {
         approved: j['approved'] != false,
         note: _s(j['note']),
         removeInstall: j['ri'] == true,
+        parentId: _s(j['parent']),
       );
 }
 
@@ -760,7 +766,7 @@ ItemOp opFor({required bool service, required bool replace, required double labo
 List<BudgetItem> mergePartLines(List<BudgetItem> items) {
   final out = <BudgetItem>[];
   for (final it in items) {
-    if (it.op == ItemOp.servico) {
+    if (it.op == ItemOp.servico || it.parentId.isNotEmpty) {
       out.add(it);
       continue;
     }
@@ -768,6 +774,7 @@ List<BudgetItem> mergePartLines(List<BudgetItem> items) {
     BudgetItem? same;
     for (final o in out) {
       if (o.op != ItemOp.servico &&
+          o.parentId.isEmpty &&
           o.approved == it.approved &&
           o.description.trim().toLowerCase() == key &&
           !(o.op == ItemOp.troca && it.op == ItemOp.troca)) {

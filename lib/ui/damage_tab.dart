@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../complements.dart';
 import '../models.dart';
 import '../seed.dart';
 import '../theme.dart';
+import 'budget_tab.dart' show addComplements;
 import 'widgets.dart';
 
 class DamageTab extends StatelessWidget {
@@ -51,7 +53,7 @@ class DamageTab extends StatelessWidget {
           final paint = ops.contains(ItemOp.pintura)
               ? suggestedPaintHours(ItemOp.pintura, sev)
               : 0.0;
-          c.items.add(BudgetItem(
+          final part = BudgetItem(
             description: desc,
             region: id,
             op: opFor(
@@ -61,8 +63,17 @@ class DamageTab extends StatelessWidget {
                 paintHours: paint),
             laborHours: labor,
             paintHours: paint,
-          ));
+          );
+          c.items.add(part);
           added++;
+          // troca: já entram os complementos (vidro, forro, chicote...)
+          if (replace) {
+            final comps = [
+              for (final (comp, on) in complementsFor(part))
+                if (on) comp
+            ];
+            if (comps.isNotEmpty) addComplements(c, part, comps);
+          }
         });
       });
       if (added > 0) {

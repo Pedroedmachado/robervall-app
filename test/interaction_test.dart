@@ -404,4 +404,35 @@ void main() {
     expect(find.text('Por peça'), findsOneWidget);
     await settle(t);
   });
+
+  itest('troca de porta oferece os complementos e apaga junto', (t) async {
+    await start(t);
+    final c = seed();
+    await openFirstClaim(t);
+    await tab(t, 'Orçamento');
+    await tap(t, find.text('Novo item'));
+    await type(t, find.widgetWithText(TextField, 'Peça'), 'Porta dianteira esquerda');
+    await tap(t, find.text('Trocar a peça'));
+    await type(t, field('Preço unitário da peça'), '900');
+    await tap(t, find.text('Salvar'));
+    expect(find.text('Peças complementares'), findsOneWidget);
+    expect(find.text('Máquina de vidro'), findsOneWidget);
+    await tap(t, find.textContaining('Adicionar'));
+    final porta = c.items.first;
+    final kids = c.items.where((i) => i.parentId == porta.id).toList();
+    expect(kids.length, greaterThan(8));
+    expect(kids.every((k) => k.removeInstall), isTrue);
+    expect(c.items.indexOf(kids.first), 1); // logo abaixo da porta
+
+    // o botão de complementos avisa quando já está tudo lançado
+    await tap(t, find.byTooltip('Peças complementares').first);
+    expect(find.textContaining('já estão no orçamento'), findsOneWidget);
+
+    // apagar a porta leva os complementos; desfazer devolve tudo
+    await tap(t, find.byTooltip('Remover').first);
+    expect(c.items, isEmpty);
+    await tap(t, find.text('Desfazer'));
+    expect(c.items.length, kids.length + 1);
+    await settle(t);
+  });
 }
