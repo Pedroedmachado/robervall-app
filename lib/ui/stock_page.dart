@@ -330,7 +330,15 @@ Future<StockItem?> editStockItem(BuildContext context, StockItem s,
             StockKind.cliente => 'Peça do cliente (ex.: Para-choque retirado)',
           },
           value: s.name,
-          onChanged: (t) => s.name = t,
+          onChanged: (t) {
+            final was = s.isSandpaper;
+            s.name = t;
+            if (!was && s.isSandpaper && s.kind == StockKind.material && s.unit == 'un') {
+              s.unit = 'folha';
+            }
+            // virou lixa: atualiza a tela para mostrar folha/disco
+            if (s.isSandpaper != was) setS(() {});
+          },
         ),
         const SizedBox(height: 12),
         if (s.kind == StockKind.cliente) ...[
@@ -603,7 +611,7 @@ class _SupplyUnits extends StatelessWidget {
   final StockItem item;
   final StateSetter setS;
 
-  static const _units = ['ml', 'litro', 'g', 'kg', 'folha', 'un', 'm', 'rolo', 'par'];
+  static const _units = ['ml', 'litro', 'g', 'kg', 'folha', 'disco', 'un', 'm', 'rolo', 'par'];
   static const _packs = ['lata', 'frasco', 'galão', 'quarto', 'balde', 'caixa', 'pacote', 'rolo'];
 
   @override
@@ -619,6 +627,38 @@ class _SupplyUnits extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (s.isSandpaper) ...[
+          Text('Formato da lixa', style: t.textTheme.labelLarge),
+          const SizedBox(height: 6),
+          Wrap(spacing: 6, runSpacing: 4, children: [
+            ChoiceChip(
+              avatar: const Icon(Icons.crop_square, size: 18),
+              label: const Text('Folha (corta em 4)'),
+              selected: s.unit == 'folha',
+              onSelected: (_) => setS(() {
+                s.unit = 'folha';
+                if (s.hasPack && s.packName == 'caixa') s.packName = 'pacote';
+              }),
+            ),
+            ChoiceChip(
+              avatar: const Icon(Icons.circle_outlined, size: 18),
+              label: const Text('Disco'),
+              selected: s.unit == 'disco',
+              onSelected: (_) => setS(() {
+                s.unit = 'disco';
+                if (s.hasPack && s.packName == 'pacote') s.packName = 'caixa';
+              }),
+            ),
+          ]),
+          const SizedBox(height: 4),
+          Text(
+            s.unit == 'disco'
+                ? 'Disco: sai inteiro na O.S. Se vem em caixa, use "Em embalagem" (ex.: caixa com 100 discos).'
+                : 'Folha: estoque em folhas inteiras. Na O.S. sai em 1/4 de folha (um pedaço) ou 2/4 no taco (meia folha). O app desconta a fração certa.',
+            style: t.textTheme.bodySmall,
+          ),
+          const SizedBox(height: 12),
+        ],
         Text('1. Como ele sai para o carro', style: t.textTheme.labelLarge),
         Text('A unidade usada na O.S. ao liberar o insumo.',
             style: t.textTheme.bodySmall),

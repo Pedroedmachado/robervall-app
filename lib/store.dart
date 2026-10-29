@@ -394,7 +394,7 @@ class AppStore extends ChangeNotifier {
     s.qty -= qty;
     c.supplies.add(u);
     c.timeline.add(TimelineEvent(
-        text: 'Insumo liberado: ${s.name} (${num2(qty)} ${s.unit})'));
+        text: 'Insumo liberado: ${s.name} (${qtyText(qty, s.unit)})'));
     touch(c);
     return u;
   }

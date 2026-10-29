@@ -364,10 +364,17 @@ void main() {
     await tap(t, find.byKey(ValueKey('task-${c.items.single.id}')));
     expect(c.items.single.done, isTrue);
     await tap(t, find.text('Liberar insumo'));
-    await type(t, field('Quantidade (folha)'), '5');
+    // lixa em folha: sai em pedaços de 1/4 ou 2/4 no taco
+    expect(find.text('1/4 de folha'), findsOneWidget);
+    await type(t, field('Quantos pedaços'), '5');
+    await t.pumpAndSettle();
+    expect(find.text('Sai do estoque: 1 e 1/4 folha'), findsOneWidget);
+    await tap(t, find.widgetWithText(ChoiceChip, '2/4 no taco'));
+    expect(find.text('Sai do estoque: 2 e 1/2 folhas'), findsOneWidget);
     await tap(t, find.text('Salvar'));
-    expect(c.supplies.single.qty, 5);
-    expect(store.stock.single.qty, 15);
+    expect(c.supplies.single.qty, 2.5);
+    expect(store.stock.single.qty, 17.5);
+    expect(find.textContaining('Lixa P320 · 2 e 1/2 folhas'), findsOneWidget);
     expect(find.text('Custo real da O.S.'), findsOneWidget);
     await settle(t);
   });
@@ -412,8 +419,8 @@ void main() {
     });
     await settle(t);
     await tap(t, find.text('Salvar'));
-    expect(c.supplies.single.qty, 1);
-    expect(store.stock.single.qty, 19);
+    expect(c.supplies.single.qty, 0.25); // um pedaço de 1/4
+    expect(store.stock.single.qty, 19.75);
     await tap(t, find.byTooltip('Voltar'));
 
     // troca de usuário

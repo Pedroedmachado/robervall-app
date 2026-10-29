@@ -83,7 +83,7 @@ class OsTab extends StatelessWidget {
                       removeInstall: it.removeInstall,
                       alsoRepair: it.alsoRepair),
                   if (byItem[it.id] != null)
-                    'insumos: ${byItem[it.id]!.map((u) => '${u.name} ${num2(u.qty)} ${u.unit}').join(', ')}',
+                    'insumos: ${byItem[it.id]!.map((u) => '${u.name} ${qtyText(u.qty, u.unit)}').join(', ')}',
                   if (it.note.isNotEmpty) it.note,
                 ].join(' · ')),
               ),
@@ -142,7 +142,7 @@ class OsTab extends StatelessWidget {
                 key: ValueKey('supply-${u.id}'),
                 dense: true,
                 contentPadding: EdgeInsets.zero,
-                title: Text('${u.name} · ${num2(u.qty)} ${u.unit}'),
+                title: Text('${u.name} · ${qtyText(u.qty, u.unit)}'),
                 subtitle: Text([
                   date(u.date),
                   if (u.itemId.isNotEmpty && itemName(u.itemId).isNotEmpty)
@@ -216,7 +216,9 @@ class OsTab extends StatelessWidget {
     }
     if (!context.mounted) return;
     var stockId = materials.first.id;
-    var qty = 1.0;
+    var qty = store.stockById(materials.first.id)?.unit == 'folha' ? 0.25 : 1.0;
+    var piece = 0.25; // lixa em folha: tamanho do pedaço
+    var pieces = 1.0;
     var itemId = '';
     var note = '';
     final ok = await showFormDialog<bool>(
@@ -244,20 +246,61 @@ class OsTab extends StatelessWidget {
                 final m = store.stockById(id)!;
                 return '${m.name} (${m.qtyLabel})';
               },
-              onChanged: (id) => setS(() => stockId = id),
+              onChanged: (id) => setS(() {
+                stockId = id;
+                if (store.stockById(id)?.unit == 'folha') {
+                  piece = 0.25;
+                  pieces = 1;
+                  qty = 0.25;
+                } else {
+                  qty = 1;
+                }
+              }),
             ),
             const SizedBox(height: 12),
-            NumField(
-              label: 'Quantidade (${s.unit})',
-              value: qty,
-              onChanged: (n) => setS(() => qty = n),
-            ),
+            if (s.unit == 'folha') ...[
+              Text('Tamanho do pedaço', style: Theme.of(ctx).textTheme.labelLarge),
+              const SizedBox(height: 4),
+              Wrap(spacing: 6, runSpacing: 4, children: [
+                for (final (f, label, hint) in sheetPieces)
+                  Tooltip(
+                    message: hint,
+                    child: ChoiceChip(
+                      label: Text(label),
+                      selected: piece == f,
+                      onSelected: (_) => setS(() {
+                        piece = f;
+                        qty = pieces * piece;
+                      }),
+                    ),
+                  ),
+              ]),
+              const SizedBox(height: 12),
+              NumField(
+                label: piece == 1.0 ? 'Quantas folhas' : 'Quantos pedaços',
+                value: pieces,
+                onChanged: (n) => setS(() {
+                  pieces = n;
+                  qty = pieces * piece;
+                }),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('Sai do estoque: ${qtyText(qty, 'folha')}',
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+              ),
+            ] else
+              NumField(
+                label: s.unit == 'disco' ? 'Quantos discos' : 'Quantidade (${s.unit})',
+                value: qty,
+                onChanged: (n) => setS(() => qty = n),
+              ),
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
                 [
                   if (s.hasPack)
-                    '= ${num2(qty / s.packSize)} ${s.packName} de ${num2(s.packSize)} ${s.unit}',
+                    '= ${num2(qty / s.packSize)} ${s.packName} de ${qtyText(s.packSize, s.unit)}',
                   if (gate.can(Perm.valoresVer) && s.cost > 0)
                     'custo ${money(s.cost * qty)} (${unitMoney(s.cost)}/${s.unit})',
                 ].join(' · '),

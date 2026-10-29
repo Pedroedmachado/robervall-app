@@ -118,4 +118,16 @@ void main() {
     expect(StockItem(packName: 'galão', packSize: 3600, qty: 7200, unit: 'ml').qtyLabel,
         '7200 ml (2 galões)');
   });
+
+  test('lixa: folha em quartos e disco', () {
+    expect(qtyText(0.25, 'folha'), '1/4 de folha');
+    expect(qtyText(0.5, 'folha'), '1/2 folha');
+    expect(qtyText(1, 'folha'), '1 folha');
+    expect(qtyText(2.75, 'folha'), '2 e 3/4 folhas');
+    expect(qtyText(0.3, 'folha'), '0,3 folha');
+    expect(qtyText(3, 'disco'), '3 discos');
+    expect(StockItem(kind: StockKind.material, name: 'Lixa P400', unit: 'folha').isSandpaper, isTrue);
+    expect(StockItem(kind: StockKind.material, name: 'Thinner', unit: 'ml').isSandpaper, isFalse);
+    expect(StockItem(kind: StockKind.material, name: 'Disco 6 pol', unit: 'disco', qty: 1).qtyLabel, '1 disco');
+  });
 }

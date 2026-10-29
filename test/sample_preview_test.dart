@@ -392,6 +392,17 @@ void main() {
     await shot(tester, 'estoque_insumo');
   }, skip: skip != null);
 
+  testWidgets('captura liberar_lixa', (tester) async {
+    size(tester, const Size(420, 4200));
+    await tester.pumpWidget(app(Scaffold(body: OsTab(claim: claim))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Liberar insumo'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, '2/4 no taco'));
+    await tester.pumpAndSettle();
+    await shot(tester, 'liberar_lixa');
+  }, skip: skip != null);
+
   testWidgets('captura financeiro', (tester) async {
     size(tester, const Size(420, 2000));
     await tester.pumpWidget(app(const FinancePage()));

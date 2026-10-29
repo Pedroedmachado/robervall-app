@@ -86,9 +86,13 @@ class StockItem {
   /// Quantas embalagens dá o estoque atual.
   double get packs => hasPack ? qty / packSize : 0;
 
-  /// "900 ml (1 lata)" ou "3 un".
+  /// Lixa (folha que se corta em 4, ou disco).
+  bool get isSandpaper =>
+      name.toLowerCase().contains('lixa') || unit == 'disco';
+
+  /// "900 ml (1 lata)", "2 e 3/4 folhas" ou "3 un".
   String get qtyLabel =>
-      '${num2(qty)} $unit${hasPack ? ' (${num2(packs)} ${packs < 2 ? packName : _plural(packName)})' : ''}';
+      '${qtyText(qty, unit)}${hasPack ? ' (${num2(packs)} ${packs < 2 ? packName : _plural(packName)})' : ''}';
 
   /// Recalcula o custo por unidade a partir da embalagem.
   void syncPackCost() {
@@ -242,4 +246,33 @@ String _plural(String w) => switch (w) {
     'kg' => (v, 'kg'),
     _ => (v, 'litro'),
   };
+}
+
+
+/// Pedaços de folha de lixa: a folha é cortada em 4.
+const sheetPieces = [
+  (0.25, '1/4 de folha', 'um pedaço'),
+  (0.5, '2/4 no taco', 'meia folha: dois pedaços no taco'),
+  (1.0, 'Folha inteira', 'sem cortar'),
+];
+
+/// Quantidade com a unidade. Folha aparece em quartos ("1 e 1/4 folha").
+String qtyText(double q, String unit) {
+  if (unit == 'folha') {
+    final quarters = (q * 4).round();
+    if ((q * 4 - quarters).abs() < 1e-6) {
+      final neg = quarters < 0;
+      final a = quarters.abs();
+      final whole = a ~/ 4, rest = a % 4;
+      final frac = switch (rest) { 1 => '1/4', 2 => '1/2', 3 => '3/4', _ => '' };
+      final txt = whole == 0
+          ? (frac.isEmpty ? '0 folha' : (rest == 2 ? '1/2 folha' : '$frac de folha'))
+          : (frac.isEmpty
+              ? '$whole ${whole == 1 ? 'folha' : 'folhas'}'
+              : '$whole e $frac ${whole == 1 ? 'folha' : 'folhas'}');
+      return neg ? '-$txt' : txt;
+    }
+  }
+  if (unit == 'disco') return '${num2(q)} ${q == 1 ? 'disco' : 'discos'}';
+  return '${num2(q)} $unit';
 }
