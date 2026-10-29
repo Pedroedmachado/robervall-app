@@ -67,78 +67,14 @@ class _FinancePageState extends State<FinancePage> {
   /// Foto da nota → lê valor, data, loja e itens → abre para conferir.
   Future<void> _readReceipt() async {
     final store = StoreScope.read(context);
-    final mobile = Platform.isAndroid || Platform.isIOS;
-    ImageSource? source = ImageSource.gallery;
-    if (mobile) {
-      source = await showModalBottomSheet<ImageSource>(
-        context: context,
-        showDragHandle: true,
-        builder: (ctx) => SafeArea(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            ListTile(
-              leading: const Icon(Icons.photo_camera_outlined),
-              title: const Text('Tirar foto da nota'),
-              onTap: () => Navigator.pop(ctx, ImageSource.camera),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Escolher da galeria'),
-              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-            ),
-          ]),
-        ),
-      );
-    }
-    if (source == null || !mounted) return;
-    final XFile? file;
-    try {
-      file = await ImagePicker()
-          .pickImage(source: source, maxWidth: 2400, imageQuality: 90);
-    } catch (e) {
-      if (mounted) toast(context, 'Não foi possível abrir a foto: $e');
-      return;
-    }
-    if (file == null || !mounted) return;
-
-    // guarda a foto junto dos lançamentos
-    final name = 'nota_${newId()}.jpg';
-    await File('${store.photosDir.path}/$name')
-        .writeAsBytes(await file.readAsBytes(), flush: true);
-
-    var entry = FinanceEntry(receiptFile: name);
-    String banner;
-    if (receiptOcrAvailable) {
-      if (!mounted) return;
-      showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const AlertDialog(
-          content: Row(children: [
-            SizedBox(
-                width: 24, height: 24, child: CircularProgressIndicator()),
-            SizedBox(width: 16),
-            Expanded(child: Text('Lendo a nota…')),
-          ]),
-        ),
-      );
-      try {
-        final data = parseReceipt(await readReceiptLines(file.path));
-        entry = data.toEntry()..receiptFile = name;
-        banner = data.total > 0
-            ? 'Lido da nota: ${data.items.length} ${data.items.length == 1 ? 'item' : 'itens'}, total ${money(data.total)}. Confira antes de salvar.'
-            : 'Não consegui achar o total nesta foto. Preencha o valor (a foto fica anexada).';
-      } catch (e) {
-        banner = 'Não consegui ler a nota ($e). Preencha à mão; a foto fica anexada.';
-      }
-      if (mounted) Navigator.of(context).pop(); // fecha "Lendo a nota…"
-    } else {
-      banner =
-          'A leitura automática funciona no celular. Aqui a foto fica anexada e você preenche os valores.';
-    }
-    if (!mounted) return;
-    final saved = await editFinanceEntry(context, entry, banner: banner);
+    final scan = await scanReceiptPhoto(context);
+    if (scan == null || !mounted) return;
+    final entry = FinanceEntry(receiptFile: scan.file);
+    scan.data?.applyTo(entry);
+    final saved =
+        await editFinanceEntry(context, entry, banner: scan.message);
     if (saved == null) {
-      final f = File('${store.photosDir.path}/$name');
+      final f = File('${store.photosDir.path}/${scan.file}');
       if (await f.exists()) await f.delete();
       return;
     }
@@ -621,11 +557,120 @@ class _CashTile extends StatelessWidget {
   }
 }
 
+/// Ganchos para os testes (escolher a foto e ler o texto sem câmera/ML Kit).
+@visibleForTesting
+Future<String?> Function(BuildContext context)? debugPickReceipt;
+@visibleForTesting
+Future<List<String>> Function(String path)? debugReadReceipt;
+
+/// Resultado de anexar a foto de uma nota.
+class ReceiptScan {
+  const ReceiptScan(this.file, this.data, this.message);
+
+  /// Nome do arquivo salvo na pasta de fotos.
+  final String file;
+
+  /// O que foi lido (null quando não deu para ler).
+  final ReceiptData? data;
+
+  /// Aviso para mostrar no lançamento.
+  final String message;
+}
+
+/// Pede a foto da nota (câmera ou galeria), guarda junto dos lançamentos e,
+/// no celular, lê sozinho loja, data, nº da nota, itens, pagamento e total.
+Future<ReceiptScan?> scanReceiptPhoto(BuildContext context) async {
+  final store = StoreScope.read(context);
+  String? path;
+  if (debugPickReceipt != null) {
+    path = await debugPickReceipt!(context);
+  } else {
+    final mobile = Platform.isAndroid || Platform.isIOS;
+    ImageSource? source = ImageSource.gallery;
+    if (mobile) {
+      source = await showModalBottomSheet<ImageSource>(
+        context: context,
+        showDragHandle: true,
+        builder: (ctx) => SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Tirar foto da nota'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Escolher da galeria'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ]),
+        ),
+      );
+    }
+    if (source == null || !context.mounted) return null;
+    try {
+      final f = await ImagePicker()
+          .pickImage(source: source, maxWidth: 2400, imageQuality: 90);
+      path = f?.path;
+    } catch (e) {
+      if (context.mounted) toast(context, 'Não foi possível abrir a foto: $e');
+      return null;
+    }
+  }
+  if (path == null || !context.mounted) return null;
+
+  // guarda a foto junto dos lançamentos
+  final name = 'nota_${newId()}.jpg';
+  await File('${store.photosDir.path}/$name')
+      .writeAsBytes(await File(path).readAsBytes(), flush: true);
+
+  final reader = debugReadReceipt ??
+      (receiptOcrAvailable ? readReceiptLines : null);
+  if (reader == null) {
+    return ReceiptScan(name, null,
+        'A leitura automática funciona no celular. Aqui a foto fica anexada e você preenche os valores.');
+  }
+  if (!context.mounted) return null;
+  showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const AlertDialog(
+      content: Row(children: [
+        SizedBox(width: 24, height: 24, child: CircularProgressIndicator()),
+        SizedBox(width: 16),
+        Expanded(child: Text('Lendo a nota…')),
+      ]),
+    ),
+  );
+  ReceiptScan scan;
+  try {
+    final data = parseReceipt(await reader(path));
+    final n = data.items.length;
+    scan = ReceiptScan(
+      name,
+      data,
+      data.total > 0
+          ? 'Nota lida: ${[
+              if (data.docNumber.isNotEmpty) data.docNumber,
+              '$n ${n == 1 ? 'item' : 'itens'}',
+              'total ${money(data.total)}',
+            ].join(' · ')}. Resumo preenchido abaixo — confira antes de salvar.'
+          : 'Não consegui achar o total nesta foto. Preencha o valor (a foto fica anexada).',
+    );
+  } catch (e) {
+    scan = ReceiptScan(name, null,
+        'Não consegui ler a nota ($e). Preencha à mão; a foto fica anexada.');
+  }
+  if (context.mounted) Navigator.of(context).pop(); // fecha "Lendo a nota…"
+  return scan;
+}
+
 /// Editor de lançamento. Devolve o lançamento editado; com [canDelete],
 /// devolve um lançamento com id "__delete__" quando a pessoa exclui.
 Future<FinanceEntry?> editFinanceEntry(BuildContext context, FinanceEntry e,
     {bool canDelete = false, String? banner}) {
   final store = StoreScope.read(context);
+  var note = banner;
   return showFormDialog<FinanceEntry>(
     context: context,
     title: e.description.isEmpty
@@ -656,7 +701,7 @@ Future<FinanceEntry?> editFinanceEntry(BuildContext context, FinanceEntry e,
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (banner != null) ...[
+          if (note != null) ...[
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
@@ -666,7 +711,7 @@ Future<FinanceEntry?> editFinanceEntry(BuildContext context, FinanceEntry e,
               child: Row(children: [
                 const Icon(Icons.document_scanner_outlined, size: 20),
                 const SizedBox(width: 8),
-                Expanded(child: Text(banner)),
+                Expanded(child: Text(note!)),
               ]),
             ),
             const SizedBox(height: 12),
@@ -674,6 +719,27 @@ Future<FinanceEntry?> editFinanceEntry(BuildContext context, FinanceEntry e,
           if (e.receiptFile.isNotEmpty) ...[
             _ReceiptThumb(
                 file: File('${store.photosDir.path}/${e.receiptFile}')),
+            const SizedBox(height: 8),
+          ],
+          if (!e.isIncome) ...[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  final scan = await scanReceiptPhoto(ctx);
+                  if (scan == null) return;
+                  setS(() {
+                    e.receiptFile = scan.file;
+                    scan.data?.applyTo(e);
+                    note = scan.message;
+                  });
+                },
+                icon: const Icon(Icons.document_scanner_outlined),
+                label: Text(e.receiptFile.isEmpty
+                    ? 'Anexar foto da nota'
+                    : 'Trocar foto da nota'),
+              ),
+            ),
             const SizedBox(height: 12),
           ],
           SegmentedButton<bool>(
@@ -850,6 +916,36 @@ Future<FinanceEntry?> editFinanceEntry(BuildContext context, FinanceEntry e,
               });
             },
           ),
+          if (!e.isIncome) ...[
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(
+                child: BoundField(
+                  label: 'Nº da nota / fatura',
+                  value: e.invoiceNumber,
+                  onChanged: (t) => e.invoiceNumber = t,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: BoundField(
+                  label: 'Pagamento',
+                  value: e.paymentMethod,
+                  hint: 'À vista, Pix, cartão…',
+                  suggestions: const [
+                    'À vista',
+                    'Pix',
+                    'Dinheiro',
+                    'Cartão de débito',
+                    'Cartão de crédito',
+                    'Boleto',
+                    'A prazo',
+                  ],
+                  onChanged: (t) => e.paymentMethod = t,
+                ),
+              ),
+            ]),
+          ],
           const SizedBox(height: 12),
           Picker<String>(
             label: 'Vincular a um sinistro (opcional)',
@@ -877,9 +973,11 @@ Future<FinanceEntry?> editFinanceEntry(BuildContext context, FinanceEntry e,
             ),
           const SizedBox(height: 12),
           BoundField(
-            label: 'Observação',
+            label: e.receiptFile.isEmpty
+                ? 'Observação'
+                : 'Resumo da nota / observação',
             value: e.notes,
-            maxLines: 2,
+            maxLines: e.receiptFile.isEmpty ? 2 : 6,
             onChanged: (t) => e.notes = t,
           ),
           if (canDelete) ...[

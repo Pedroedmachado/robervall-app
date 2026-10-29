@@ -52,6 +52,8 @@ class ReceiptData {
   final List<ReceiptItem> items;
   final ExpenseCategory category;
   final String rawText;
+  final String docNumber; // ex.: "Reserva 0819365"
+  final String payment; // ex.: "À vista"
 
   const ReceiptData({
     required this.supplier,
@@ -60,7 +62,37 @@ class ReceiptData {
     required this.items,
     required this.category,
     required this.rawText,
+    this.docNumber = '',
+    this.payment = '',
   });
+
+  /// Descrição curta: loja e os primeiros itens.
+  String get shortDescription {
+    final names = items
+        .take(3)
+        .map((i) => i.description.split(' ').first)
+        .where((n) => n.isNotEmpty)
+        .toList();
+    final base = supplier.isEmpty ? 'Compra' : supplier;
+    if (names.isEmpty) return base;
+    return '$base · ${names.join(', ')}${items.length > 3 ? '…' : ''}';
+  }
+
+  /// Resumo completo da nota para guardar no lançamento.
+  String get summary {
+    final head = [
+      if (docNumber.isNotEmpty) docNumber,
+      if (date != null)
+        '${date!.day.toString().padLeft(2, '0')}/${date!.month.toString().padLeft(2, '0')}/${date!.year}',
+      if (payment.isNotEmpty) payment,
+    ].join(' · ');
+    return [
+      if (head.isNotEmpty) 'Nota: $head',
+      for (final i in items)
+        '• ${i.description} — ${_fmtQty(i.qty)}${i.unit.isEmpty ? '' : ' ${i.unit.toLowerCase()}'} × ${_money(i.unitPrice)} = ${_money(i.total)}',
+      if (total > 0) 'Total: ${_money(total)}',
+    ].join('\n');
+  }
 
   double get itemsSum => items.fold(0.0, (a, i) => a + i.total);
 
@@ -71,15 +103,21 @@ class ReceiptData {
               .replaceAll('  ', ' '))
       .join('\n');
 
-  FinanceEntry toEntry() => FinanceEntry(
-        isIncome: false,
-        date: date ?? DateTime.now(),
-        description: supplier.isEmpty ? 'Compra' : supplier,
-        contact: supplier,
-        category: category,
-        amount: total,
-        notes: itemsText,
-      );
+  FinanceEntry toEntry() => applyTo(FinanceEntry());
+
+  /// Preenche um lançamento com o que foi lido (sem apagar o que não foi achado).
+  FinanceEntry applyTo(FinanceEntry e) {
+    e.isIncome = false;
+    if (date != null) e.date = date!;
+    e.description = shortDescription;
+    if (supplier.isNotEmpty) e.contact = supplier;
+    if (items.isNotEmpty || supplier.isNotEmpty) e.category = category;
+    if (total > 0) e.amount = total;
+    if (docNumber.isNotEmpty) e.invoiceNumber = docNumber;
+    if (payment.isNotEmpty) e.paymentMethod = payment;
+    e.notes = summary;
+    return e;
+  }
 }
 
 final _moneyRe = RegExp(r'(\d{1,3}(?:[.\s]\d{3})+|\d+)\s?[,.]\s?(\d{2})(?!\d)');
@@ -287,6 +325,42 @@ ReceiptData parseReceipt(List<String> rawLines) {
           ? ExpenseCategory.fornecedor
           : ExpenseCategory.materiais);
 
+  // nº da nota / reserva / pedido
+  var doc = '';
+  final docRe = RegExp(
+      r'\b(RESERVA|PEDIDO|CUPOM|NFC-?E|NF-?E|NOTA FISCAL|NOTA|FATURA|VENDA|ORCAMENTO|DOCUMENTO)\b\s*(?:N[O°º]?\.?|NUMERO)?\s*[:#-]?\s*(\d{3,})');
+  for (final l in up) {
+    if (l.contains('SEM VALOR')) continue;
+    final m = docRe.firstMatch(_fixDigits(l));
+    if (m != null) {
+      doc = '${_title(m[1]!)} ${m[2]}';
+      break;
+    }
+  }
+
+  // forma de pagamento
+  var payment = '';
+  for (final l in up) {
+    final t = l.trim();
+    if (t.contains('TOTAL')) continue;
+    if (RegExp(r'^A ?VISTA\b').hasMatch(t) || t.contains('PAGAMENTO A VISTA')) {
+      payment = 'À vista';
+    } else if (t.contains('PIX')) {
+      payment = 'Pix';
+    } else if (t.contains('CARTAO') && t.contains('CRED')) {
+      payment = 'Cartão de crédito';
+    } else if (t.contains('CARTAO') && t.contains('DEB')) {
+      payment = 'Cartão de débito';
+    } else if (t.contains('DINHEIRO')) {
+      payment = 'Dinheiro';
+    } else if (t.contains('BOLETO')) {
+      payment = 'Boleto';
+    } else if (t.contains('A PRAZO') || t.contains('PARCEL')) {
+      payment = 'A prazo';
+    }
+    if (payment.isNotEmpty) break;
+  }
+
   return ReceiptData(
     supplier: supplier,
     date: date,
@@ -294,6 +368,8 @@ ReceiptData parseReceipt(List<String> rawLines) {
     items: items,
     category: category,
     rawText: lines.join('\n'),
+    docNumber: doc,
+    payment: payment,
   );
 }
 

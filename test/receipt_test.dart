@@ -49,6 +49,25 @@ void main() {
     expect(e.amount, closeTo(409.90, 0.001));
     expect(e.contact, 'Art Color Tintas');
     expect(e.notes, contains('356,00'));
+    // nº da nota, pagamento e resumo automático
+    expect(r.docNumber, 'Reserva 0819365');
+    expect(r.payment, 'À vista');
+    expect(e.invoiceNumber, 'Reserva 0819365');
+    expect(e.paymentMethod, 'À vista');
+    expect(e.description, startsWith('Art Color Tintas · Verniz'));
+    expect(e.notes, startsWith('Nota: Reserva 0819365 · 22/09/2026 · À vista'));
+    expect(e.notes, contains('Total: '));
+    // ida e volta no JSON
+    final back = FinanceEntry.fromJson(e.toJson());
+    expect(back.invoiceNumber, 'Reserva 0819365');
+    expect(back.paymentMethod, 'À vista');
+  });
+
+  test('anexar nota num lançamento existente mantém o que não foi lido', () {
+    final e = FinanceEntry(description: 'x', amount: 10, invoiceNumber: '55');
+    parseReceipt(['LOJA QUALQUER', 'sem números úteis']).applyTo(e);
+    expect(e.amount, 10);
+    expect(e.invoiceNumber, '55');
   });
 
   test('aguenta erros comuns do OCR (O no lugar de 0, colunas separadas)', () {

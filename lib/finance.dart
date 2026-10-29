@@ -168,6 +168,7 @@ FinanceSummary summarize(
           if (e.contact.isNotEmpty) e.contact,
           if (e.recurring) 'mensal',
           if (e.autoKey.isNotEmpty) 'automático',
+          if (e.invoiceNumber.isNotEmpty) e.invoiceNumber,
           if (e.receiptFile.isNotEmpty) 'com nota',
         ].join(' · '),
         amount: e.isIncome ? e.amount : -e.amount,

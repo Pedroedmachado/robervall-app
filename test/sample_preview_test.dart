@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:funilar/complements.dart';
 import 'package:funilar/models.dart';
 import 'package:funilar/pdf_report.dart';
+import 'package:funilar/receipt_parser.dart';
 import 'package:funilar/store.dart';
 import 'package:funilar/theme.dart';
 import 'package:funilar/ui/budget_tab.dart';
@@ -244,6 +245,37 @@ void main() {
       await shot(tester, name);
     }, skip: skip != null);
   }
+
+  testWidgets('captura nota_lida', (tester) async {
+    size(tester, const Size(420, 1700));
+    final data = parseReceipt(const [
+      'ART COLOR TINTAS',
+      'RESERVA 0819365',
+      '22/09/2026-17:19   VEND: 00010',
+      'VERNIZ A.SOLIDOS HS-2X1 13000 C/CAT.SKY',
+      '4,00 QUART   89,00   356,00',
+      'ACELERADOR SECAGEM RRA- 1LT SIKKENS',
+      '1,00 LITRO   53,90   53,90',
+      'TOTAL :   409,90',
+      'A vista',
+    ]);
+    await tester.pumpWidget(app(Builder(
+      builder: (context) => Scaffold(
+        body: Center(
+          child: FilledButton(
+            onPressed: () => editFinanceEntry(
+                context, data.toEntry()..receiptFile = 'nota_exemplo.jpg',
+                banner:
+                    'Nota lida: Reserva 0819365 · 2 itens · total R\$ 409,90. Resumo preenchido abaixo — confira antes de salvar.'),
+            child: const Text('abrir'),
+          ),
+        ),
+      ),
+    )));
+    await tester.tap(find.text('abrir'));
+    await tester.pumpAndSettle();
+    await shot(tester, 'nota_lida');
+  }, skip: skip != null);
 
   test('gera PDFs de exemplo', () async {
     final dir = Directory(out!)..createSync(recursive: true);

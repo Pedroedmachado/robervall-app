@@ -907,6 +907,10 @@ class FinanceEntry {
   /// Foto da nota/recibo (arquivo na pasta de fotos).
   String receiptFile;
 
+  /// Nº da nota / fatura / pedido e forma de pagamento.
+  String invoiceNumber;
+  String paymentMethod;
+
   FinanceEntry({
     String? id,
     this.isIncome = false,
@@ -926,6 +930,8 @@ class FinanceEntry {
     this.pieceValue = 0,
     this.autoKey = '',
     this.receiptFile = '',
+    this.invoiceNumber = '',
+    this.paymentMethod = '',
   })  : id = id ?? newId(),
         date = date ?? DateTime.now();
 
@@ -967,6 +973,8 @@ class FinanceEntry {
         'pieceValue': pieceValue,
         'auto': autoKey,
         'receipt': receiptFile,
+        'invoice': invoiceNumber,
+        'payment': paymentMethod,
       };
 
   factory FinanceEntry.fromJson(Map<String, dynamic> j) => FinanceEntry(
@@ -990,5 +998,7 @@ class FinanceEntry {
         pieceValue: _d(j['pieceValue']),
         autoKey: _s(j['auto']),
         receiptFile: _s(j['receipt']),
+        invoiceNumber: _s(j['invoice']),
+        paymentMethod: _s(j['payment']),
       );
 }

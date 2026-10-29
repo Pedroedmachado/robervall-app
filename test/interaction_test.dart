@@ -7,6 +7,7 @@ import 'package:funilar/main.dart';
 import 'package:funilar/models.dart';
 import 'package:funilar/store.dart';
 import 'package:funilar/ui/damage_tab.dart';
+import 'package:funilar/ui/finance_page.dart';
 
 /// Cada teste toca num botão das telas de sinistro/orçamento e confere
 /// se a ação realmente aconteceu nos dados e na tela.
@@ -371,6 +372,61 @@ void main() {
     await tap(t, find.byTooltip('Próximo'));
     expect(find.text('Prejuízo'), findsOneWidget);
     expect(find.text(money(-1500)), findsWidgets);
+    await settle(t);
+  });
+
+  itest('financeiro: anexar foto da nota preenche o lançamento sozinho', (t) async {
+    await start(t);
+    final img = (await t.runAsync(() async {
+      final d = await Directory.systemTemp.createTemp('funilar_nota');
+      final f = File('${d.path}/nota.jpg');
+      await f.writeAsBytes([0, 1, 2, 3]);
+      return f.path;
+    }))!;
+    debugPickReceipt = (_) async => img;
+    debugReadReceipt = (_) async => const [
+          'ART COLOR TINTAS',
+          'RESERVA 0819365',
+          '22/09/2026-17:19   VEND: 00010',
+          'QTDE UNID   PRC UNIT   TOTAL',
+          'VERNIZ A.SOLIDOS HS-2X1 13000 C/CAT.SKY',
+          '4,00 QUART   89,00   356,00',
+          'ACELERADOR SECAGEM RRA- 1LT SIKKENS',
+          '1,00 LITRO   53,90   53,90',
+          'TOTAL :   409,90',
+          'A vista',
+        ];
+    addTearDown(() {
+      debugPickReceipt = null;
+      debugReadReceipt = null;
+    });
+
+    await tap(t, nav('Financeiro'));
+    await tap(t, find.text('Lançar gasto'));
+    final attach = find.text('Anexar foto da nota');
+    await t.ensureVisible(attach);
+    await t.pumpAndSettle();
+    await t.runAsync(() async {
+      await t.tap(attach);
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    });
+    await t.pumpAndSettle();
+    await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
+    await t.pumpAndSettle();
+
+    expect(find.textContaining('Nota lida'), findsOneWidget);
+    expect(find.text('Trocar foto da nota'), findsOneWidget);
+    expect(find.text('Reserva 0819365'), findsWidgets);
+    await tap(t, find.text('Salvar'));
+    final e = store.entries.single;
+    expect(e.amount, closeTo(409.90, 0.001));
+    expect(e.invoiceNumber, 'Reserva 0819365');
+    expect(e.paymentMethod, 'À vista');
+    expect(e.contact, 'Art Color Tintas');
+    expect(e.category, ExpenseCategory.materiais);
+    expect(e.date, DateTime(2026, 9, 22));
+    expect(e.receiptFile, startsWith('nota_'));
+    expect(e.notes, contains('Verniz'));
     await settle(t);
   });
 
