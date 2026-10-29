@@ -164,6 +164,20 @@ class OsTab extends StatelessWidget {
                   ),
                 ]),
               ),
+          if (c.supplies.isNotEmpty && !production) ...[
+            const Divider(height: 16),
+            Row(children: [
+              Expanded(
+                child: Text(
+                    'Total de insumos (${c.supplies.length} ${c.supplies.length == 1 ? 'saída' : 'saídas'})',
+                    style: const TextStyle(fontWeight: FontWeight.w800)),
+              ),
+              Text(money(c.supplies.fold(0.0, (a, u) => a + u.total)),
+                  key: const ValueKey('total-insumos'),
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+              const SizedBox(width: 40),
+            ]),
+          ],
         ],
       ),
       SectionCard(

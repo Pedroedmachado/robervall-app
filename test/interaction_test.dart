@@ -375,6 +375,9 @@ void main() {
     expect(c.supplies.single.qty, 2.5);
     expect(store.stock.single.qty, 17.5);
     expect(find.textContaining('Lixa P320 · 2 e 1/2 folhas'), findsOneWidget);
+    expect(find.text('Total de insumos (1 saída)'), findsOneWidget);
+    expect(find.byKey(const ValueKey('total-insumos')), findsOneWidget);
+    expect(t.widget<Text>(find.byKey(const ValueKey('total-insumos'))).data, money(5));
     expect(find.text('Custo real da O.S.'), findsOneWidget);
     await settle(t);
   });
