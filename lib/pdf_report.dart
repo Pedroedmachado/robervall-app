@@ -318,7 +318,7 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
                       it.op == ItemOp.troca || it.op == ItemOp.servico;
                   return <String>[
                     opCode(it.op, it.labFlag, it.paintFlag,
-                        removeInstall: it.removeInstall),
+                        removeInstall: it.removeInstall, alsoRepair: it.alsoRepair),
                     _t((it.parentId.isEmpty ? '' : '      \u00b7 ') +
                         it.description +
                         (it.partNumber.isEmpty ? '' : '  (${it.partNumber})')),
@@ -504,9 +504,16 @@ pw.Widget _signature(String name) => pw.Column(children: [
       pw.Text(name, style: const pw.TextStyle(fontSize: 8)),
     ]);
 
-String _fileName(Claim c, bool prices) =>
-    '${prices ? 'orcamento' : 'vistoria'}-${c.number}${c.vehicle.plate.isEmpty ? '' : '-${c.vehicle.plate}'}.pdf'
-        .replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+/// Nome do arquivo: só o modelo e a placa (ex.: "Gol 1.0 ABC-1D23.pdf").
+String pdfFileName(Claim c) {
+  final base = [c.vehicle.model.trim(), c.vehicle.plate.trim().toUpperCase()]
+      .where((e) => e.isNotEmpty)
+      .join(' ')
+      .replaceAll(RegExp(r'[\\/:*?"<>|]'), '-')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  return '${base.isEmpty ? c.number : base}.pdf';
+}
 
 enum PdfAction { print, share, save }
 
@@ -520,7 +527,7 @@ Future<void> exportClaimPdf(
   bool withPrices = true,
 }) async {
   final origin = shareOrigin(context);
-  final name = _fileName(c, withPrices);
+  final name = pdfFileName(c);
   try {
     final bytes = await buildClaimPdf(store, c,
         withPhotos: withPhotos, withPrices: withPrices);

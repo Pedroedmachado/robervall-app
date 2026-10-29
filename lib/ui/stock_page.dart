@@ -1,0 +1,512 @@
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../format.dart';
+import '../models.dart';
+import '../stock.dart';
+import '../theme.dart';
+import 'widgets.dart';
+
+/// Aba Estoque: peças e materiais guardados na oficina, com foto.
+class StockPage extends StatefulWidget {
+  const StockPage({super.key});
+
+  @override
+  State<StockPage> createState() => _StockPageState();
+}
+
+class _StockPageState extends State<StockPage> {
+  String _q = '';
+  StockKind? _kind;
+
+  @override
+  Widget build(BuildContext context) {
+    final store = StoreScope.of(context);
+    final t = Theme.of(context);
+    final q = _q.toLowerCase();
+    final list = store.stock
+        .where((e) =>
+            (_kind == null || e.kind == _kind) &&
+            (q.isEmpty ||
+                e.name.toLowerCase().contains(q) ||
+                e.partNumber.toLowerCase().contains(q) ||
+                e.fits.toLowerCase().contains(q) ||
+                e.location.toLowerCase().contains(q)))
+        .toList();
+    final value = store.stock.fold(0.0, (a, e) => a + e.stockValue);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Estoque')),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () async {
+          final s = await editStockItem(
+              context, StockItem(kind: _kind ?? StockKind.peca));
+          if (s != null) store.upsertStock(s);
+        },
+        icon: const Icon(Icons.add),
+        label: const Text('Adicionar'),
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: TextField(
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.search),
+                hintText: 'Buscar por nome, código, carro ou local',
+              ),
+              onChanged: (v) => setState(() => _q = v.trim()),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: Wrap(spacing: 8, runSpacing: 4, children: [
+              ChoiceChip(
+                label: const Text('Tudo'),
+                selected: _kind == null,
+                onSelected: (_) => setState(() => _kind = null),
+              ),
+              for (final k in StockKind.values)
+                ChoiceChip(
+                  label: Text(k == StockKind.peca ? 'Peças' : 'Materiais'),
+                  selected: _kind == k,
+                  onSelected: (_) => setState(() => _kind = k),
+                ),
+            ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+            child: Row(children: [
+              Expanded(
+                child: Text(
+                    '${store.stock.length} ${store.stock.length == 1 ? 'item' : 'itens'} · valor em estoque ${money(value)}',
+                    style: t.textTheme.bodySmall),
+              ),
+            ]),
+          ),
+          Expanded(
+            child: list.isEmpty
+                ? const EmptyState(
+                    icon: Icons.warehouse_outlined,
+                    text:
+                        'Cadastre as peças e os materiais que você tem guardados. Quando um orçamento precisar trocar uma peça que está aqui, o app avisa.')
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 96),
+                    itemCount: list.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (ctx, i) {
+                      final s = list[i];
+                      final used = store.claimsUsingStock(s);
+                      return ListTile(
+                        key: ValueKey('stock-${s.id}'),
+                        leading: StockThumb(item: s, size: 52),
+                        title: Text(s.name.isEmpty ? '(sem nome)' : s.name,
+                            maxLines: 2, overflow: TextOverflow.ellipsis),
+                        subtitle: Text(
+                          [
+                            s.kind.label,
+                            if (s.partNumber.isNotEmpty) s.partNumber,
+                            if (s.fits.isNotEmpty) s.fits,
+                            if (s.location.isNotEmpty) 'local: ${s.location}',
+                            if (used.isNotEmpty)
+                              'no orçamento ${used.map((c) => c.number).join(', ')}',
+                          ].join(' · '),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text('${num2(s.qty)} ${s.unit}',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    color: s.qty <= 0
+                                        ? Colors.red.shade700
+                                        : null)),
+                            if (s.budgetPrice > 0)
+                              Text(money(s.budgetPrice),
+                                  style: t.textTheme.bodySmall),
+                          ],
+                        ),
+                        onTap: () async {
+                          final r = await editStockItem(
+                              context, StockItem.fromJson(s.toJson()),
+                              canDelete: true);
+                          if (r == null) return;
+                          if (r.id == '__delete__') {
+                            await store.removeStock(s);
+                            if (context.mounted) {
+                              showUndo(context, 'Item do estoque excluído',
+                                  () => store.upsertStock(s));
+                            }
+                            return;
+                          }
+                          final idx = store.stock.indexOf(s);
+                          if (idx >= 0) store.stock[idx] = r;
+                          store.upsertStock(store.stock[idx]);
+                        },
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Miniatura da foto de um item do estoque (ou ícone).
+class StockThumb extends StatelessWidget {
+  const StockThumb({super.key, required this.item, this.size = 48});
+  final StockItem item;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final store = StoreScope.of(context);
+    final t = Theme.of(context);
+    final icon = Icon(
+        item.kind == StockKind.peca
+            ? Icons.settings_outlined
+            : Icons.format_color_fill_outlined,
+        color: t.colorScheme.onSecondaryContainer);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: size,
+        height: size,
+        color: t.colorScheme.secondaryContainer,
+        child: item.photo.isEmpty
+            ? icon
+            : Image.file(File('${store.photosDir.path}/${item.photo}'),
+                fit: BoxFit.cover,
+                cacheWidth: (size * 3).round(),
+                errorBuilder: (_, __, ___) => icon),
+      ),
+    );
+  }
+}
+
+Future<Uint8List?> _pickPhoto(BuildContext context) async {
+  final mobile = Platform.isAndroid || Platform.isIOS;
+  ImageSource? source = ImageSource.gallery;
+  if (mobile) {
+    source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: const Icon(Icons.photo_camera_outlined),
+            title: const Text('Tirar foto'),
+            onTap: () => Navigator.pop(ctx, ImageSource.camera),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined),
+            title: const Text('Escolher da galeria'),
+            onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+          ),
+        ]),
+      ),
+    );
+  }
+  if (source == null) return null;
+  try {
+    final f = await ImagePicker()
+        .pickImage(source: source, maxWidth: 1600, imageQuality: 85);
+    return f == null ? null : await f.readAsBytes();
+  } catch (e) {
+    if (context.mounted) toast(context, 'Não foi possível abrir a foto: $e');
+    return null;
+  }
+}
+
+/// Cadastro de peça/material do estoque. Devolve o item editado; com
+/// [canDelete], um item com id "__delete__" quando a pessoa exclui.
+Future<StockItem?> editStockItem(BuildContext context, StockItem s,
+    {bool canDelete = false}) {
+  final store = StoreScope.read(context);
+  return showFormDialog<StockItem>(
+    context: context,
+    title: s.name.isEmpty ? 'Novo no estoque' : 'Editar estoque',
+    onSave: () {
+      if (s.name.trim().isEmpty) {
+        toast(context, 'Informe o nome.');
+        return null;
+      }
+      s.name = s.name.trim();
+      return s;
+    },
+    body: (ctx, setS) => Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SegmentedButton<StockKind>(
+          segments: const [
+            ButtonSegment(
+                value: StockKind.peca,
+                label: Text('Peça'),
+                icon: Icon(Icons.settings_outlined)),
+            ButtonSegment(
+                value: StockKind.material,
+                label: Text('Material'),
+                icon: Icon(Icons.format_color_fill_outlined)),
+          ],
+          selected: {s.kind},
+          onSelectionChanged: (sel) => setS(() {
+            s.kind = sel.first;
+          }),
+        ),
+        const SizedBox(height: 12),
+        Row(children: [
+          StockThumb(item: s, size: 72),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Wrap(spacing: 8, runSpacing: 4, children: [
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final bytes = await _pickPhoto(ctx);
+                  if (bytes == null) return;
+                  final name = await store.saveStockPhoto(s, bytes);
+                  setS(() => s.photo = name);
+                },
+                icon: const Icon(Icons.add_a_photo_outlined),
+                label: Text(s.photo.isEmpty ? 'Adicionar foto' : 'Trocar foto'),
+              ),
+              if (s.photo.isNotEmpty)
+                TextButton(
+                  onPressed: () => setS(() => s.photo = ''),
+                  child: const Text('Tirar foto'),
+                ),
+            ]),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        BoundField(
+          label: s.kind == StockKind.peca
+              ? 'Peça (ex.: Farol esquerdo)'
+              : 'Material (ex.: Verniz HS 2x1)',
+          value: s.name,
+          onChanged: (t) => s.name = t,
+        ),
+        const SizedBox(height: 12),
+        if (s.kind == StockKind.peca) ...[
+          BoundField(
+            label: 'Serve em (carro / ano)',
+            hint: 'Ex.: Gol G5 2009-2012',
+            value: s.fits,
+            onChanged: (t) => s.fits = t,
+          ),
+          const SizedBox(height: 12),
+          BoundField(
+            label: 'Código da peça (opcional)',
+            value: s.partNumber,
+            capitalization: TextCapitalization.characters,
+            onChanged: (t) => s.partNumber = t,
+          ),
+          const SizedBox(height: 12),
+        ],
+        Row(children: [
+          Expanded(
+            child: NumField(
+              label: 'Quantidade',
+              value: s.qty,
+              onChanged: (n) => s.qty = n,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: BoundField(
+              label: 'Unidade',
+              value: s.unit,
+              suggestions: const ['un', 'par', 'litro', 'quarto', 'galão', 'kg', 'lata', 'rolo'],
+              onChanged: (t) => s.unit = t.trim().isEmpty ? 'un' : t.trim(),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(
+            child: NumField(
+              label: 'Custo (cada)',
+              prefix: 'R\$',
+              value: s.cost,
+              onChanged: (n) => s.cost = n,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: NumField(
+              label: 'Preço no orçamento',
+              prefix: 'R\$',
+              value: s.price,
+              onChanged: (n) => s.price = n,
+            ),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        BoundField(
+          label: 'Onde está guardado (opcional)',
+          hint: 'Ex.: prateleira 2',
+          value: s.location,
+          onChanged: (t) => s.location = t,
+        ),
+        const SizedBox(height: 12),
+        BoundField(
+          label: 'Observação',
+          value: s.notes,
+          maxLines: 2,
+          onChanged: (t) => s.notes = t,
+        ),
+        if (canDelete) ...[
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              onPressed: () => Navigator.pop(ctx, StockItem(id: '__delete__')),
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Excluir do estoque'),
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
+/// Peças do estoque que servem para o item: escolher usar ou não.
+Future<void> showStockFor(BuildContext context, Claim c, BudgetItem it) async {
+  final store = StoreScope.read(context);
+  final matches = stockFor(store.stock, it);
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (ctx) => SafeArea(
+      child: ConstrainedBox(
+        constraints:
+            BoxConstraints(maxHeight: MediaQuery.sizeOf(ctx).height * 0.8),
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          children: [
+            Text('No estoque para "${it.description}"',
+                style: Theme.of(ctx).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(
+                'Ao usar, o preço da peça vem do estoque e a baixa acontece quando o orçamento for aprovado.',
+                style: Theme.of(ctx).textTheme.bodySmall),
+            const SizedBox(height: 8),
+            for (final s in matches)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: StockThumb(item: s, size: 52),
+                title: Text(s.name),
+                subtitle: Text([
+                  '${num2(s.qty)} ${s.unit} em estoque',
+                  if (s.fits.isNotEmpty) s.fits,
+                  if (s.location.isNotEmpty) 'local: ${s.location}',
+                  if (s.budgetPrice > 0) money(s.budgetPrice),
+                ].join(' · ')),
+                trailing: it.stockId == s.id
+                    ? const Chip(label: Text('Em uso'))
+                    : FilledButton(
+                        onPressed: () {
+                          it.stockId = s.id;
+                          if (s.budgetPrice > 0) it.price = s.budgetPrice;
+                          it.supplier = 'Estoque da oficina';
+                          c.timeline.add(
+                              TimelineEvent(text: 'Peça do estoque: ${s.name}'));
+                          store.touch(c);
+                          Navigator.pop(ctx);
+                        },
+                        child: const Text('Usar'),
+                      ),
+              ),
+            if (it.stockId.isNotEmpty)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () {
+                    it.stockId = '';
+                    if (it.supplier == 'Estoque da oficina') it.supplier = '';
+                    store.touch(c);
+                    Navigator.pop(ctx);
+                  },
+                  icon: const Icon(Icons.shopping_cart_outlined),
+                  label: const Text('Não usar o estoque (vou comprar)'),
+                ),
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// Endereço da busca da peça no Mercado Livre (peça + modelo + ano).
+Uri marketSearchUri(BudgetItem it, Vehicle v) {
+  final words = [it.description, v.model, v.year]
+      .join(' ')
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^\wÀ-ÿ ]'), ' ')
+      .split(RegExp(r'\s+'))
+      .where((w) => w.isNotEmpty)
+      .toList();
+  return Uri.parse(
+      'https://lista.mercadolivre.com.br/${Uri.encodeComponent(words.join('-')).replaceAll('%2D', '-')}');
+}
+
+Future<void> openMarketSearch(
+    BuildContext context, BudgetItem it, Vehicle v) async {
+  final uri = marketSearchUri(it, v);
+  try {
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && context.mounted) toast(context, 'Não consegui abrir o navegador.');
+  } catch (e) {
+    if (context.mounted) toast(context, 'Não consegui abrir o navegador: $e');
+  }
+}
+
+/// Etiquetas pequenas e clicáveis (estoque, Mercado Livre) na linha do item.
+class LinkChip extends StatelessWidget {
+  const LinkChip(
+      {super.key,
+      required this.icon,
+      required this.label,
+      required this.onTap,
+      this.color});
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = color ?? brandSeed;
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          border: Border.all(color: c.withValues(alpha: 0.5)),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 14, color: c),
+          const SizedBox(width: 4),
+          Text(label,
+              style: TextStyle(
+                  color: c, fontSize: 12, fontWeight: FontWeight.w600)),
+        ]),
+      ),
+    );
+  }
+}

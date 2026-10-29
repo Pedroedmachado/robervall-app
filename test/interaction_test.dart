@@ -243,6 +243,61 @@ void main() {
     await settle(t);
   });
 
+  itest('estoque: cadastrar peça e usar no orçamento', (t) async {
+    await start(t);
+    final c = seed();
+    await tap(t, nav('Estoque'));
+    await tap(t, find.text('Adicionar'));
+    await type(t, field('Peça (ex.: Farol esquerdo)'), 'Farol esquerdo');
+    await type(t, field('Preço no orçamento'), '320');
+    await tap(t, find.text('Salvar'));
+    expect(store.stock.single.name, 'Farol esquerdo');
+    expect(find.text('Farol esquerdo'), findsOneWidget);
+
+    c.items.add(BudgetItem(description: 'Farol esquerdo', op: ItemOp.troca));
+    store.changed();
+    await settle(t);
+    await tap(t, nav('Sinistros'));
+    await openFirstClaim(t);
+    await tab(t, 'Orçamento');
+    expect(find.text('Mercado Livre'), findsOneWidget);
+    await tap(t, find.text('Tem no estoque (1)'));
+    await tap(t, find.widgetWithText(FilledButton, 'Usar'));
+    expect(c.items.single.stockId, store.stock.single.id);
+    expect(c.items.single.price, 320);
+    expect(find.text('Do estoque ✓'), findsOneWidget);
+
+    store.setStatus(c, ClaimStatus.aprovado);
+    await settle(t);
+    expect(store.stock.single.qty, 0);
+    await settle(t);
+  });
+
+  itest('item: R&I, reparo e pintura juntos', (t) async {
+    await start(t);
+    final c = seed();
+    await openFirstClaim(t);
+    await tab(t, 'Orçamento');
+    await tap(t, find.text('Novo item'));
+    await type(t, find.widgetWithText(TextField, 'Peça'), 'Para-lama dianteiro esquerdo');
+    await tap(t, find.text('Por peça'));
+    await tap(t, find.text('Remoção e instalação (R&I)'));
+    await tap(t, find.text('Pintura (P)'));
+    await type(t, field('Valor da mão de obra da peça'), '450');
+    await tap(t, find.text('Salvar'));
+    if (find.text('Agora não').evaluate().isNotEmpty) {
+      await tap(t, find.text('Agora não'));
+    }
+    final it = c.items.first;
+    expect(it.removeInstall, isTrue);
+    expect(it.alsoRepair, isTrue);
+    expect(it.doPaint, isTrue);
+    expect(opCode(it.op, it.labFlag, it.paintFlag,
+            removeInstall: it.removeInstall, alsoRepair: it.alsoRepair),
+        'R&I / R / P');
+    await settle(t);
+  });
+
   itest('orçamento: itens do catálogo, outros custos e desconto', (t) async {
     await start(t);
     final c = seed();

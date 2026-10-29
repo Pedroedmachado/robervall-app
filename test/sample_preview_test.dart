@@ -9,6 +9,8 @@ import 'package:funilar/complements.dart';
 import 'package:funilar/models.dart';
 import 'package:funilar/pdf_report.dart';
 import 'package:funilar/receipt_parser.dart';
+import 'package:funilar/stock.dart';
+import 'package:funilar/ui/stock_page.dart';
 import 'package:funilar/store.dart';
 import 'package:funilar/theme.dart';
 import 'package:funilar/ui/budget_tab.dart';
@@ -198,6 +200,30 @@ void main() {
           date: day(9)),
     ]);
     store.syncCrewCosts(claim);
+    for (final st in [
+      StockItem(
+          name: 'Farol esquerdo',
+          fits: 'Gol G6 2013-2016',
+          qty: 1,
+          cost: 280,
+          price: 390,
+          location: 'Prateleira 2'),
+      StockItem(
+          name: 'Retrovisor esquerdo elétrico',
+          fits: 'Gol G5',
+          qty: 2,
+          cost: 150,
+          price: 220),
+      StockItem(
+          kind: StockKind.material,
+          name: 'Verniz HS 2x1',
+          qty: 3,
+          unit: 'quarto',
+          cost: 89),
+      StockItem(kind: StockKind.material, name: 'Massa poliéster', qty: 0, unit: 'lata', cost: 45),
+    ]) {
+      store.upsertStock(st);
+    }
   });
 
   final shotKey = GlobalKey();
@@ -225,6 +251,40 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
   }
+
+  testWidgets('captura estoque', (tester) async {
+    size(tester, const Size(420, 900));
+    await tester.pumpWidget(app(const StockPage()));
+    await tester.pumpAndSettle();
+    await shot(tester, 'estoque_celular');
+  }, skip: skip != null);
+
+  testWidgets('captura item R&I + R + P', (tester) async {
+    size(tester, const Size(420, 1100));
+    await tester.pumpWidget(app(Builder(
+      builder: (context) => Scaffold(
+        body: Center(
+          child: FilledButton(
+            onPressed: () => editBudgetItem(
+                context,
+                BudgetItem(
+                    description: 'Para-lama dianteiro esquerdo',
+                    op: ItemOp.reparo,
+                    perPiece: true,
+                    piecePrice: 450,
+                    removeInstall: true,
+                    alsoRepair: true,
+                    doPaint: true),
+                vehicle: claim.vehicle),
+            child: const Text('abrir'),
+          ),
+        ),
+      ),
+    )));
+    await tester.tap(find.text('abrir'));
+    await tester.pumpAndSettle();
+    await shot(tester, 'item_ri_r_p');
+  }, skip: skip != null);
 
   testWidgets('captura financeiro', (tester) async {
     size(tester, const Size(420, 2000));

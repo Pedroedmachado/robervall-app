@@ -6,6 +6,7 @@ import 'contacts_page.dart';
 import 'dashboard_page.dart';
 import 'finance_page.dart';
 import 'settings_page.dart';
+import 'stock_page.dart';
 import 'widgets.dart';
 
 class AppShell extends StatefulWidget {
@@ -22,6 +23,7 @@ class _AppShellState extends State<AppShell> {
     (Icons.space_dashboard_outlined, Icons.space_dashboard, 'Painel'),
     (Icons.car_crash_outlined, Icons.car_crash, 'Sinistros'),
     (Icons.account_balance_wallet_outlined, Icons.account_balance_wallet, 'Financeiro'),
+    (Icons.warehouse_outlined, Icons.warehouse, 'Estoque'),
     (Icons.inventory_2_outlined, Icons.inventory_2, 'Catálogo'),
     (Icons.contacts_outlined, Icons.contacts, 'Cadastros'),
     (Icons.settings_outlined, Icons.settings, 'Ajustes'),
@@ -39,8 +41,10 @@ class _AppShellState extends State<AppShell> {
       case 2:
         return const FinancePage();
       case 3:
-        return const CatalogPage();
+        return const StockPage();
       case 4:
+        return const CatalogPage();
+      case 5:
         return const ContactsPage();
       default:
         return const SettingsPage();
@@ -57,7 +61,7 @@ class _AppShellState extends State<AppShell> {
         bottomNavigationBar: NavigationBar(
           selectedIndex: _index,
           onDestinationSelected: go,
-          // 6 abas: em telas estreitas mostra o nome só da aba aberta
+          // 7 abas: em telas estreitas mostra o nome só da aba aberta
           labelBehavior: MediaQuery.sizeOf(context).width < 480
               ? NavigationDestinationLabelBehavior.onlyShowSelected
               : NavigationDestinationLabelBehavior.alwaysShow,

@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'models.dart';
 import 'finance.dart';
 import 'seed.dart';
+import 'stock.dart';
 
 /// Armazenamento local (offline) em JSON + pasta de fotos.
 class AppStore extends ChangeNotifier {
@@ -20,6 +21,7 @@ class AppStore extends ChangeNotifier {
   final List<Contact> contacts = [];
   final List<CatalogItem> catalog = [];
   final List<FinanceEntry> entries = [];
+  final List<StockItem> stock = [];
   Timer? _saveTimer;
   bool _saving = false;
   bool _pendingSave = false;
@@ -106,6 +108,9 @@ class AppStore extends ChangeNotifier {
     entries
       ..clear()
       ..addAll(list(j['entries']).map(FinanceEntry.fromJson));
+    stock
+      ..clear()
+      ..addAll(list(j['stock']).map(StockItem.fromJson));
   }
 
   Map<String, dynamic> toJson() => {
@@ -117,6 +122,7 @@ class AppStore extends ChangeNotifier {
         'contacts': contacts.map((e) => e.toJson()).toList(),
         'catalog': catalog.map((e) => e.toJson()).toList(),
         'entries': entries.map((e) => e.toJson()).toList(),
+        'stock': stock.map((e) => e.toJson()).toList(),
       };
 
   Future<void> _write() async {
@@ -221,6 +227,7 @@ class AppStore extends ChangeNotifier {
   void touch(Claim c) {
     c.updatedAt = DateTime.now();
     syncCrewCosts(c);
+    syncStock(c);
     changed();
   }
 
@@ -274,6 +281,71 @@ class AppStore extends ChangeNotifier {
     entries.removeWhere((e) => existing.contains(e) && !keep.contains(e));
   }
 
+  StockItem? stockById(String id) {
+    if (id.isEmpty) return null;
+    for (final s in stock) {
+      if (s.id == id) return s;
+    }
+    return null;
+  }
+
+  /// Dá baixa no estoque das peças usadas quando o orçamento fecha, e
+  /// devolve se ele reabrir, se o item sair ou trocar de peça.
+  void syncStock(Claim c) {
+    final want = <String, StockUse>{};
+    if (isClosedStatus(c.status) && claims.contains(c)) {
+      for (final it in c.items) {
+        if (it.stockId.isEmpty || !it.approved || it.op != ItemOp.troca) continue;
+        if (stockById(it.stockId) == null) continue;
+        want[it.id] = StockUse(it.stockId, it.qty <= 0 ? 1 : it.qty);
+      }
+    }
+    // devolve o que não deveria mais estar fora
+    for (final e in c.stockTaken.entries.toList()) {
+      final w = want[e.key];
+      if (w != null && w.stockId == e.value.stockId && w.qty == e.value.qty) {
+        continue;
+      }
+      stockById(e.value.stockId)?.qty += e.value.qty;
+      c.stockTaken.remove(e.key);
+    }
+    // tira o que falta
+    for (final e in want.entries) {
+      if (c.stockTaken.containsKey(e.key)) continue;
+      stockById(e.value.stockId)?.qty -= e.value.qty;
+      c.stockTaken[e.key] = e.value;
+    }
+  }
+
+  /// Sinistros que usam (ou reservam) uma peça do estoque.
+  List<Claim> claimsUsingStock(StockItem s) => claims
+      .where((c) => c.items.any((i) => i.stockId == s.id))
+      .toList();
+
+  void upsertStock(StockItem s) {
+    if (!stock.contains(s)) stock.add(s);
+    stock.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    changed();
+  }
+
+  Future<void> removeStock(StockItem s) async {
+    stock.remove(s);
+    for (final c in claims) {
+      for (final it in c.items) {
+        if (it.stockId == s.id) it.stockId = '';
+      }
+      c.stockTaken.removeWhere((_, u) => u.stockId == s.id);
+    }
+    changed();
+  }
+
+  /// Guarda a foto de um item do estoque e devolve o nome do arquivo.
+  Future<String> saveStockPhoto(StockItem s, Uint8List bytes) async {
+    final name = 'estoque_${s.id}_${newId()}.jpg';
+    await File('${photosDir.path}/$name').writeAsBytes(bytes, flush: true);
+    return name;
+  }
+
   void setStatus(Claim c, ClaimStatus s, {String? note}) {
     if (c.status == s) return;
     c.status = s;
@@ -295,6 +367,7 @@ class AppStore extends ChangeNotifier {
     settings.nextNumber++;
     copy.status = ClaimStatus.aberto;
     copy.photos = [];
+    copy.stockTaken = {};
     final newIds = <String, String>{};
     copy.items = c.items.map((e) {
       final n = e.copy();
@@ -322,6 +395,7 @@ class AppStore extends ChangeNotifier {
       if (await f.exists()) await f.delete();
     }
     claims.remove(c);
+    syncStock(c); // devolve as peças ao estoque
     entries.removeWhere((e) => e.claimId == c.id && isCrewEntry(e));
     changed();
   }

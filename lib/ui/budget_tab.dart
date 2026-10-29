@@ -8,6 +8,8 @@ import '../models.dart';
 import '../store.dart';
 import '../theme.dart';
 import 'contacts_page.dart' show editContact;
+import 'stock_page.dart';
+import '../stock.dart';
 import 'widgets.dart';
 
 class BudgetTab extends StatelessWidget {
@@ -27,7 +29,7 @@ class BudgetTab extends StatelessWidget {
       children: [
         FilledButton.icon(
           onPressed: () async {
-            final it = await editBudgetItem(context, null);
+            final it = await editBudgetItem(context, null, vehicle: c.vehicle);
             if (it != null) {
               c.items.add(it);
               store.touch(c);
@@ -96,10 +98,13 @@ class BudgetTab extends StatelessWidget {
                 item: it,
                 values: itemValues(it, s),
                 hasComplements: complementsFor(it).isNotEmpty,
+                stock: stockFor(store.stock, it),
+                onStock: () => showStockFor(context, c, it),
+                onMarket: () => openMarketSearch(context, it, c.vehicle),
                 onComplements: () => offerComplements(context, c, it,
                     alwaysShow: true),
                 onTap: () async {
-                  final edited = await editBudgetItem(context, it);
+                  final edited = await editBudgetItem(context, it, vehicle: c.vehicle);
                   if (edited != null) {
                     final becameReplace = it.op != ItemOp.troca &&
                         edited.op == ItemOp.troca;
@@ -259,7 +264,13 @@ class _ItemRow extends StatelessWidget {
     required this.onDelete,
     this.hasComplements = false,
     this.onComplements,
+    this.stock = const [],
+    this.onStock,
+    this.onMarket,
   });
+  final List<StockItem> stock;
+  final VoidCallback? onStock;
+  final VoidCallback? onMarket;
   final bool hasComplements;
   final VoidCallback? onComplements;
   final int index;
@@ -340,7 +351,7 @@ class _ItemRow extends StatelessWidget {
                         children: [
                           for (final d in opDetails(
                               it.op, it.labFlag, it.paintFlag,
-                              removeInstall: it.removeInstall,
+                              removeInstall: it.removeInstall, alsoRepair: it.alsoRepair,
                               perPiece: it.perPiece))
                             OpChip(d),
                         ],
@@ -350,6 +361,26 @@ class _ItemRow extends StatelessWidget {
                         Text(extra.join(' · '),
                             style: t.textTheme.bodySmall?.copyWith(
                                 color: t.colorScheme.onSurfaceVariant)),
+                      ],
+                      if (it.op == ItemOp.troca) ...[
+                        const SizedBox(height: 6),
+                        Wrap(spacing: 6, runSpacing: 4, children: [
+                          if (stock.isNotEmpty && onStock != null)
+                            LinkChip(
+                              icon: Icons.warehouse_outlined,
+                              color: Colors.green.shade700,
+                              label: it.stockId.isNotEmpty
+                                  ? 'Do estoque ✓'
+                                  : 'Tem no estoque (${num2(stock.fold(0.0, (a, s) => a + (s.qty > 0 ? s.qty : 0)))})',
+                              onTap: onStock!,
+                            ),
+                          if (onMarket != null)
+                            LinkChip(
+                              icon: Icons.shopping_cart_outlined,
+                              label: 'Mercado Livre',
+                              onTap: onMarket!,
+                            ),
+                        ]),
                       ],
                     ],
                   ),
@@ -436,9 +467,10 @@ class OpChip extends StatelessWidget {
 }
 
 /// Abre o editor de item. Retorna uma cópia editada (ou novo item).
-Future<BudgetItem?> editBudgetItem(BuildContext context, BudgetItem? original) {
+Future<BudgetItem?> editBudgetItem(BuildContext context, BudgetItem? original,
+    {Vehicle? vehicle}) {
   final wide = isWide(context);
-  final editor = _ItemEditor(original: original);
+  final editor = _ItemEditor(original: original, vehicle: vehicle);
   if (wide) {
     return showDialog<BudgetItem>(
       context: context,
@@ -452,8 +484,9 @@ Future<BudgetItem?> editBudgetItem(BuildContext context, BudgetItem? original) {
 }
 
 class _ItemEditor extends StatefulWidget {
-  const _ItemEditor({this.original});
+  const _ItemEditor({this.original, this.vehicle});
   final BudgetItem? original;
+  final Vehicle? vehicle;
 
   @override
   State<_ItemEditor> createState() => _ItemEditorState();
@@ -492,8 +525,87 @@ class _ItemEditorState extends State<_ItemEditor> {
     });
   }
 
+  /// Com troca: peça no estoque e busca no Mercado Livre.
+  Widget _replaceHelp(AppStore store) {
+    final t = Theme.of(context);
+    final matches = it.description.trim().isEmpty
+        ? const <StockItem>[]
+        : stockFor(store.stock, it);
+    final using = store.stockById(it.stockId);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final st in matches.take(3))
+            Card(
+              margin: const EdgeInsets.only(bottom: 6),
+              color: Colors.green.withValues(alpha: 0.08),
+              elevation: 0,
+              child: ListTile(
+                leading: StockThumb(item: st, size: 44),
+                title: Text('No estoque: ${st.name}',
+                    maxLines: 2, overflow: TextOverflow.ellipsis),
+                subtitle: Text([
+                  '${num2(st.qty)} ${st.unit}',
+                  if (st.budgetPrice > 0) money(st.budgetPrice),
+                  if (st.location.isNotEmpty) st.location,
+                ].join(' · ')),
+                trailing: using?.id == st.id
+                    ? TextButton(
+                        onPressed: () => setState(() {
+                          it.stockId = '';
+                          if (it.supplier == 'Estoque da oficina') {
+                            it.supplier = '';
+                          }
+                        }),
+                        child: const Text('Usando ✓'),
+                      )
+                    : FilledButton.tonal(
+                        onPressed: () => setState(() {
+                          it.stockId = st.id;
+                          if (st.budgetPrice > 0) it.price = st.budgetPrice;
+                          it.supplier = 'Estoque da oficina';
+                        }),
+                        child: const Text('Usar'),
+                      ),
+              ),
+            ),
+          if (widget.vehicle != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: it.description.trim().isEmpty
+                    ? null
+                    : () => openMarketSearch(context, it, widget.vehicle!),
+                icon: const Icon(Icons.shopping_cart_outlined, size: 18),
+                label: Text('Buscar no Mercado Livre',
+                    style: TextStyle(color: t.colorScheme.primary)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  bool get _selRI => it.perPiece ? it.doRepair && it.removeInstall : it.removeInstall;
+  bool get _selR => it.perPiece
+      ? it.doRepair && (!it.removeInstall || it.alsoRepair)
+      : (!it.removeInstall || it.alsoRepair);
+
+  /// R, R&I ou os dois (desmonta, recupera e monta).
+  void _setOps(bool r, bool ri) {
+    if (!it.perPiece && !r && !ri) r = true; // por horas: precisa de um
+    it.removeInstall = ri;
+    it.alsoRepair = r && ri;
+    if (it.perPiece) it.doRepair = r || ri;
+  }
+
   void _applyOp() {
-    if (_service || _replace) it.removeInstall = false;
+    if (_service || _replace) {
+      it.removeInstall = false;
+      it.alsoRepair = false;
+    }
     if (_service) {
       it.laborHours = 0;
       it.paintHours = 0;
@@ -546,7 +658,7 @@ class _ItemEditorState extends State<_ItemEditor> {
                     laborHours: it.laborHours,
                     paintHours: it.paintHours,
                     region: it.region,
-                    removeInstall: it.removeInstall,
+                    removeInstall: it.removeInstall, alsoRepair: it.alsoRepair,
                     perPiece: it.perPiece,
                     piecePrice: it.piecePrice,
                     doRepair: it.doRepair,
@@ -582,7 +694,7 @@ class _ItemEditorState extends State<_ItemEditor> {
             initial: it.description,
             catalog: store.catalog,
             label: _service ? 'Serviço' : 'Peça',
-            onText: (t) => it.description = t,
+            onText: (t) => setState(() => it.description = t),
             onPick: _fillFromCatalog,
           ),
           if (!_service) ...[
@@ -596,6 +708,7 @@ class _ItemEditorState extends State<_ItemEditor> {
               value: _replace,
               onChanged: (b) => setState(() => _replace = b),
             ),
+            if (_replace) _replaceHelp(store),
             const SizedBox(height: 4),
             Text('Cobrar a mão de obra', style: Theme.of(context).textTheme.labelLarge),
             const SizedBox(height: 6),
@@ -615,21 +728,9 @@ class _ItemEditorState extends State<_ItemEditor> {
                   setState(() => it.perPiece = sel.first),
             ),
             const SizedBox(height: 10),
-            if (!it.perPiece && !_replace)
-              Wrap(spacing: 8, runSpacing: 4, children: [
-                ChoiceChip(
-                  label: const Text('Reparo (R)'),
-                  selected: !it.removeInstall,
-                  onSelected: (_) => setState(() => it.removeInstall = false),
-                ),
-                ChoiceChip(
-                  label: const Text('Remoção e instalação (R&I)'),
-                  selected: it.removeInstall,
-                  onSelected: (_) => setState(() => it.removeInstall = true),
-                ),
-              ]),
-            if (it.perPiece) ...[
-              Text('O que é feito na peça', style: Theme.of(context).textTheme.bodySmall),
+            if (!_replace || it.perPiece) ...[
+              Text('O que é feito na peça',
+                  style: Theme.of(context).textTheme.bodySmall),
               const SizedBox(height: 4),
               Wrap(spacing: 8, runSpacing: 4, children: [
                 if (_replace)
@@ -639,32 +740,31 @@ class _ItemEditorState extends State<_ItemEditor> {
                     onSelected: (b) => setState(() => it.doRepair = b),
                   )
                 else ...[
-                  ChoiceChip(
-                    label: const Text('Reparo (R)'),
-                    selected: it.doRepair && !it.removeInstall,
-                    onSelected: (_) => setState(() {
-                      final on = it.doRepair && !it.removeInstall;
-                      it.doRepair = !on;
-                      it.removeInstall = false;
-                    }),
-                  ),
-                  ChoiceChip(
+                  FilterChip(
                     label: const Text('Remoção e instalação (R&I)'),
-                    selected: it.doRepair && it.removeInstall,
-                    onSelected: (_) => setState(() {
-                      final on = it.doRepair && it.removeInstall;
-                      it.doRepair = !on;
-                      it.removeInstall = !on;
-                    }),
+                    selected: _selRI,
+                    onSelected: (b) => setState(() => _setOps(_selR, b)),
+                  ),
+                  FilterChip(
+                    label: const Text('Reparo (R)'),
+                    selected: _selR,
+                    onSelected: (b) => setState(() => _setOps(b, _selRI)),
                   ),
                 ],
-                FilterChip(
-                  label: const Text('Pintura (P)'),
-                  selected: it.doPaint,
-                  onSelected: (b) => setState(() => it.doPaint = b),
-                ),
+                if (it.perPiece)
+                  FilterChip(
+                    label: const Text('Pintura (P)'),
+                    selected: it.doPaint,
+                    onSelected: (b) => setState(() => it.doPaint = b),
+                  ),
               ]),
+              if (!it.perPiece && !_replace) ...[
+                const SizedBox(height: 4),
+                Text('A pintura entra pelas horas de pintura.',
+                    style: Theme.of(context).textTheme.bodySmall),
+              ],
             ],
+          ],
           ],
           const SizedBox(height: 8),
           FieldGrid(maxColumns: 2, children: [
@@ -693,7 +793,9 @@ class _ItemEditorState extends State<_ItemEditor> {
                 label: _replace
                     ? 'Horas de mão de obra (tirar e colocar)'
                     : (it.removeInstall
-                        ? 'Horas de remoção e instalação'
+                        ? (it.alsoRepair
+                            ? 'Horas de R&I + reparo'
+                            : 'Horas de remoção e instalação')
                         : 'Horas de reparo'),
                 suffix: 'h',
                 value: it.laborHours,
@@ -775,7 +877,7 @@ class _ItemEditorState extends State<_ItemEditor> {
           const Divider(height: 24),
           Wrap(spacing: 4, runSpacing: 4, children: [
             for (final d in opDetails(it.op, it.labFlag, it.paintFlag,
-                removeInstall: it.removeInstall, perPiece: it.perPiece))
+                removeInstall: it.removeInstall, alsoRepair: it.alsoRepair, perPiece: it.perPiece))
               OpChip(d),
           ]),
           const SizedBox(height: 8),
@@ -852,7 +954,7 @@ class _CatalogAutocomplete extends StatelessWidget {
                     dense: true,
                     title: Text(o.description),
                     subtitle: Text([
-                      ...opDetails(o.op, o.labFlag, o.paintFlag, removeInstall: o.removeInstall, perPiece: o.perPiece),
+                      ...opDetails(o.op, o.labFlag, o.paintFlag, removeInstall: o.removeInstall, alsoRepair: o.alsoRepair, perPiece: o.perPiece),
                       if (o.perPiece && o.piecePrice > 0) 'M.O. ${money(o.piecePrice)}',
                       if (o.price > 0) money(o.price),
                     ].join(' · ')),
@@ -909,7 +1011,7 @@ Future<List<CatalogItem>> pickFromCatalog(
                                 b == true ? selected.add(e) : selected.remove(e)),
                             title: Text(e.description),
                             subtitle: Text([
-                              ...opDetails(e.op, e.labFlag, e.paintFlag, removeInstall: e.removeInstall, perPiece: e.perPiece),
+                              ...opDetails(e.op, e.labFlag, e.paintFlag, removeInstall: e.removeInstall, alsoRepair: e.alsoRepair, perPiece: e.perPiece),
                       if (e.perPiece && e.piecePrice > 0) 'M.O. ${money(e.piecePrice)}',
                               if (e.price > 0) money(e.price),
                             ].join(' · ')),

@@ -195,4 +195,26 @@ void main() {
     expect(back.doPaint, isTrue);
     expect(BudgetItem.fromJson(BudgetItem().toJson()).perPiece, isFalse);
   });
+
+  test('R&I, reparo e pintura juntos, nessa ordem', () {
+    expect(
+        opCode(ItemOp.reparo, 1, 2, removeInstall: true, alsoRepair: true),
+        'R&I / R / P');
+    expect(
+        opNames(ItemOp.reparo, 1, 2, removeInstall: true, alsoRepair: true),
+        'Remoção e instalação + reparo + pintura');
+    final it = BudgetItem(
+        op: ItemOp.reparo,
+        perPiece: true,
+        piecePrice: 400,
+        removeInstall: true,
+        alsoRepair: true,
+        doPaint: true);
+    expect(legendFor([it]).map((e) => e.$1), ['R&I', 'R', 'P']);
+    expect(
+        opDetails(it.op, it.labFlag, it.paintFlag,
+            removeInstall: true, alsoRepair: true, perPiece: true),
+        ['Remoção e instalação', 'Reparo', 'Pintura', 'Por peça']);
+    expect(BudgetItem.fromJson(it.toJson()).alsoRepair, isTrue);
+  });
 }

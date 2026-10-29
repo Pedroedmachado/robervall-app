@@ -478,7 +478,7 @@ class _ItemsTable extends StatelessWidget {
         ),
         child: Text(
           opCode(it.op, it.labFlag, it.paintFlag,
-              removeInstall: it.removeInstall),
+              removeInstall: it.removeInstall, alsoRepair: it.alsoRepair),
           softWrap: false,
           style: const TextStyle(
               color: brandSeed, fontWeight: FontWeight.w800, fontSize: 12),

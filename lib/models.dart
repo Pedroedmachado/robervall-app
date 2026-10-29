@@ -203,6 +203,12 @@ class BudgetItem {
   /// Mão de obra na peça é remoção e instalação (R&I), não reparo.
   bool removeInstall;
 
+  /// Com R&I: a peça também é reparada (desmonta, recupera e monta).
+  bool alsoRepair;
+
+  /// Peça que sai do estoque da oficina (vazio = comprar).
+  String stockId;
+
   /// Peça principal da qual este item é complemento (vazio = item normal).
   String parentId;
 
@@ -240,6 +246,8 @@ class BudgetItem {
     this.approved = true,
     this.note = '',
     this.removeInstall = false,
+    this.alsoRepair = false,
+    this.stockId = '',
     this.parentId = '',
     this.perPiece = false,
     this.piecePrice = 0,
@@ -266,6 +274,8 @@ class BudgetItem {
         'approved': approved,
         'note': note,
         'ri': removeInstall,
+        if (alsoRepair) 'rr': true,
+        if (stockId.isNotEmpty) 'stock': stockId,
         'parent': parentId,
         if (perPiece) ...{
           'pp': true,
@@ -293,6 +303,8 @@ class BudgetItem {
         approved: j['approved'] != false,
         note: _s(j['note']),
         removeInstall: j['ri'] == true,
+        alsoRepair: j['rr'] == true,
+        stockId: _s(j['stock']),
         parentId: _s(j['parent']),
         perPiece: j['pp'] == true,
         piecePrice: _d(j['ppv']),
@@ -392,6 +404,10 @@ class Claim {
   List<CrewMember> crew;
   List<TimelineEvent> timeline;
 
+  /// Quanto já saiu do estoque por item (id do item → uso), para devolver
+  /// se o orçamento reabrir ou o item sair.
+  Map<String, StockUse> stockTaken;
+
   Claim({
     String? id,
     this.number = '',
@@ -423,8 +439,10 @@ class Claim {
     Map<String, int>? damages,
     List<TimelineEvent>? timeline,
     List<CrewMember>? crew,
+    Map<String, StockUse>? stockTaken,
   })  : id = id ?? newId(),
         crew = crew ?? [],
+        stockTaken = stockTaken ?? {},
         vehicle = vehicle ?? Vehicle(),
         createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now(),
@@ -472,6 +490,10 @@ class Claim {
         'photos': photos.map((e) => e.toJson()).toList(),
         'damages': damages,
         'crew': crew.map((e) => e.toJson()).toList(),
+        if (stockTaken.isNotEmpty)
+          'stockTaken': {
+            for (final e in stockTaken.entries) e.key: e.value.toJson()
+          },
         'timeline': timeline.map((e) => e.toJson()).toList(),
       };
 
@@ -523,6 +545,13 @@ class Claim {
           CrewMember(role: OutsourcedService.pintura, contactId: _s(j['painter'])),
       ],
       timeline: list(j['timeline']).map(TimelineEvent.fromJson).toList(),
+      stockTaken: {
+        if (j['stockTaken'] is Map)
+          for (final e in (j['stockTaken'] as Map).entries)
+            if (e.value is Map)
+              '${e.key}':
+                  StockUse.fromJson(Map<String, dynamic>.from(e.value as Map)),
+      },
     );
   }
 }
@@ -604,6 +633,7 @@ class CatalogItem {
   double paintHours;
   String region;
   bool removeInstall;
+  bool alsoRepair;
   bool perPiece;
   double piecePrice;
   bool doRepair;
@@ -623,6 +653,7 @@ class CatalogItem {
     this.paintHours = 0,
     this.region = '',
     this.removeInstall = false,
+    this.alsoRepair = false,
     this.perPiece = false,
     this.piecePrice = 0,
     this.doRepair = true,
@@ -643,6 +674,7 @@ class CatalogItem {
         paintHours: paintHours,
         region: region,
         removeInstall: removeInstall,
+        alsoRepair: alsoRepair,
       );
 
   Map<String, dynamic> toJson() => {
@@ -656,6 +688,7 @@ class CatalogItem {
         'paintHours': paintHours,
         'region': region,
         'ri': removeInstall,
+        if (alsoRepair) 'rr': true,
         if (perPiece) ...{
           'pp': true,
           'ppv': piecePrice,
@@ -676,6 +709,7 @@ class CatalogItem {
         paintHours: _d(j['paintHours']),
         region: _s(j['region']),
         removeInstall: j['ri'] == true,
+        alsoRepair: j['rr'] == true,
         perPiece: j['pp'] == true,
         piecePrice: _d(j['ppv']),
         doRepair: j['pr'] != false,
@@ -794,11 +828,12 @@ const opLegend = <(String, String)>[
 
 /// Sigla da linha, ex.: "T / P", "R I / P", "R / P".
 String opCode(ItemOp op, double laborHours, double paintHours,
-    {bool removeInstall = false}) {
+    {bool removeInstall = false, bool alsoRepair = false}) {
   if (op == ItemOp.servico) return 'S';
   final parts = <String>[
     if (op == ItemOp.troca) 'T',
-    if (op != ItemOp.troca && laborHours > 0) removeInstall ? 'R&I' : 'R',
+    if (op != ItemOp.troca && laborHours > 0)
+      removeInstall ? (alsoRepair ? 'R&I / R' : 'R&I') : 'R',
     if (paintHours > 0) 'P',
   ];
   if (parts.isEmpty) return op == ItemOp.troca ? 'T' : (removeInstall ? 'R&I' : 'R');
@@ -810,7 +845,7 @@ List<(String, String)> legendFor(Iterable<BudgetItem> items) {
   final used = <String>{};
   for (final it in items) {
     used.addAll(opCode(it.op, it.labFlag, it.paintFlag,
-            removeInstall: it.removeInstall)
+            removeInstall: it.removeInstall, alsoRepair: it.alsoRepair)
         .split(' / '));
   }
   return [for (final e in opLegend) if (used.contains(e.$1)) e];
@@ -818,12 +853,14 @@ List<(String, String)> legendFor(Iterable<BudgetItem> items) {
 
 /// Nome das operações sem horas, ex.: "Troca + pintura".
 String opNames(ItemOp op, double laborHours, double paintHours,
-    {bool removeInstall = false}) {
+    {bool removeInstall = false, bool alsoRepair = false}) {
   if (op == ItemOp.servico) return 'Serviço';
   final parts = <String>[
     if (op == ItemOp.troca) 'Troca',
-    if (op != ItemOp.troca && laborHours > 0)
-      removeInstall ? 'Remoção e instalação' : 'Reparo',
+    if (op != ItemOp.troca && laborHours > 0 && removeInstall)
+      'Remoção e instalação',
+    if (op != ItemOp.troca && laborHours > 0 && (!removeInstall || alsoRepair))
+      'Reparo',
     if (paintHours > 0) 'Pintura',
   ];
   if (parts.isEmpty) return op == ItemOp.troca ? 'Troca' : 'Reparo';
@@ -838,10 +875,11 @@ String _h(double v) {
 
 /// Operações com horas, ex.: ["Troca", "Mão de obra 1 h", "Pintura 2 h"].
 List<String> opDetails(ItemOp op, double laborHours, double paintHours,
-    {bool removeInstall = false, bool perPiece = false}) {
+    {bool removeInstall = false, bool alsoRepair = false, bool perPiece = false}) {
   if (op == ItemOp.servico) return ['Serviço'];
   if (perPiece) {
-    final n = opNames(op, laborHours, paintHours, removeInstall: removeInstall);
+    final n = opNames(op, laborHours, paintHours,
+        removeInstall: removeInstall, alsoRepair: alsoRepair);
     return [...n.split(' + ').map((e) => e[0].toUpperCase() + e.substring(1)), 'Por peça'];
   }
   return [
@@ -850,7 +888,9 @@ List<String> opDetails(ItemOp op, double laborHours, double paintHours,
       op == ItemOp.troca
           ? 'Mão de obra ${_h(laborHours)}'
           : (removeInstall
-              ? 'Remoção e instalação ${_h(laborHours)}'
+              ? (alsoRepair
+                  ? 'R&I + reparo ${_h(laborHours)}'
+                  : 'Remoção e instalação ${_h(laborHours)}')
               : 'Reparo ${_h(laborHours)}'),
     if (paintHours > 0) 'Pintura ${_h(paintHours)}',
     if (op != ItemOp.troca && laborHours <= 0 && paintHours <= 0) 'Reparo',
@@ -902,6 +942,9 @@ List<BudgetItem> mergePartLines(List<BudgetItem> items) {
     }
     same.laborHours += it.laborHours;
     same.paintHours += it.paintHours;
+    if (same.removeInstall != it.removeInstall && same.op != ItemOp.troca) {
+      same.alsoRepair = true;
+    }
     same.removeInstall = same.removeInstall || it.removeInstall;
     if (same.op != ItemOp.troca) {
       same.op = opFor(
@@ -959,6 +1002,18 @@ enum OutsourcedService {
 
   /// Nome da função de quem faz (Pintor, Funileiro…).
   final String worker;
+}
+
+/// Saída de uma peça do estoque para um item do orçamento.
+class StockUse {
+  final String stockId;
+  final double qty;
+  const StockUse(this.stockId, this.qty);
+
+  Map<String, dynamic> toJson() => {'s': stockId, 'q': qty};
+
+  factory StockUse.fromJson(Map<String, dynamic> j) =>
+      StockUse(_s(j['s']), _d(j['q']));
 }
 
 /// Profissional escalado num carro: função, quem é e quanto custa.
