@@ -86,7 +86,16 @@ final _moneyRe = RegExp(r'(\d{1,3}(?:[.\s]\d{3})+|\d+)\s?[,.]\s?(\d{2})(?!\d)');
 final _dateRe = RegExp(r'(\d{2})\s?[/.-]\s?(\d{2})\s?[/.-]\s?(\d{2,4})');
 
 /// Corrige confusões comuns do OCR em trechos numéricos (O→0, I/l→1, S→5).
-String _fixDigits(String s) => s.replaceAllMapped(
+String _fixDigits(String s) {
+  var prev = '';
+  while (prev != s) {
+    prev = s;
+    s = _fixOnce(s);
+  }
+  return s;
+}
+
+String _fixOnce(String s) => s.replaceAllMapped(
       RegExp(r'(?<=[\d,.])[OoIlSB]|[OoIlSB](?=[\d,.]\d)'),
       (m) => const {
             'O': '0',
@@ -194,26 +203,35 @@ ReceiptData parseReceipt(List<String> rawLines) {
   final items = <ReceiptItem>[];
   final qtyLine = RegExp(
       r'^\s*(\d+(?:[,.]\d+)?)\s*([A-Z]{1,6})?\.?\s+.*?(\d[\d.\s]*[,.]\d{2})\s+.*?(\d[\d.\s]*[,.]\d{2})\s*$');
+  final sameLine = RegExp(
+      r'^(.*?[A-Z].*?)\s(\d+(?:[,.]\d+)?)\s*([A-Z]{1,6})?\.?\s+[\d.\s]*[,.]\d{2}\s+[\d.\s]*[,.]\d{2}\s*$');
   for (var i = 0; i < up.length; i++) {
     final l = _fixDigits(up[i]);
     if (l.contains('TOTAL') || l.contains('QTDE')) continue;
-    final m = qtyLine.firstMatch(l);
-    if (m == null) continue;
     final vals = _moneys(l);
     if (vals.length < 2) continue;
-    final qty = double.tryParse(m[1]!.replaceAll(',', '.')) ?? 1;
     final unit = vals[vals.length - 2], total = vals.last;
-    // confere: qtd × preço ≈ total
+    final m = qtyLine.firstMatch(l);
+    if (m != null) {
+      // linha só com números: a descrição está na linha de cima
+      final qty = double.tryParse(m[1]!.replaceAll(',', '.')) ?? 1;
+      if ((qty * unit - total).abs() > 0.05 * (total.abs() + 1)) continue;
+      var desc = '';
+      if (i > 0 && _moneys(up[i - 1]).isEmpty && !up[i - 1].contains('---')) {
+        desc = lines[i - 1];
+      }
+      items.add(ReceiptItem(
+          _cleanDesc(desc), qty, (m[2] ?? '').trim(), unit, total));
+      continue;
+    }
+    // tudo na mesma linha: "DESCRICAO  1 UN  300,00  300,00"
+    final same = sameLine.firstMatch(l);
+    if (same == null) continue;
+    final qty = double.tryParse(same[2]!.replaceAll(',', '.')) ?? 1;
     if ((qty * unit - total).abs() > 0.05 * (total.abs() + 1)) continue;
-    // descrição: linha anterior (se não for número) ou o começo desta
-    var desc = '';
-    if (i > 0 && _moneys(up[i - 1]).isEmpty && !up[i - 1].contains('---')) {
-      desc = lines[i - 1];
-    }
-    if (desc.isEmpty) {
-      desc = lines[i].split(RegExp(r'\s\d')).first;
-    }
-    items.add(ReceiptItem(_cleanDesc(desc), qty, (m[2] ?? '').trim(), unit, total));
+    final desc = lines[i].substring(0, same.start(2).clamp(0, lines[i].length));
+    items.add(ReceiptItem(
+        _cleanDesc(desc), qty, (same[3] ?? '').trim(), unit, total));
   }
   final sum = items.fold(0.0, (a, i) => a + i.total);
 
