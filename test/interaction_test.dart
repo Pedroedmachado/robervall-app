@@ -308,7 +308,7 @@ void main() {
     await tap(t, find.byTooltip('Capô'));
     expect(c.preDamages, {'capo': 1});
     expect(c.damages, isEmpty);
-    await tap(t, find.text('Avaria do sinistro'));
+    await tap(t, find.text('Avaria do sinistro', skipOffstage: false));
     await tap(t, find.byTooltip('Capô'));
     expect(c.damages, {'capo': 1});
     await t.dragUntilVisible(find.text('Registrar agora'),
