@@ -9,6 +9,8 @@ import 'package:path_provider/path_provider.dart';
 import 'models.dart';
 import 'finance.dart';
 import 'format.dart' show hideMoney, num2;
+import 'licensing.dart';
+import 'modules.dart';
 import 'seed.dart';
 import 'stock.dart';
 
@@ -23,6 +25,31 @@ class AppStore extends ChangeNotifier {
   final List<CatalogItem> catalog = [];
   final List<FinanceEntry> entries = [];
   final List<StockItem> stock = [];
+
+  /// Usuários da oficina (vazio = uso individual, acesso total).
+  final List<AppUser> users = [];
+
+  /// Campos do arquivo que esta versão não conhece: são guardados de volta
+  /// sem alteração (nada some ao gravar).
+  final Map<String, dynamic> _extra = {};
+
+  /// Licença conferida, código deste aparelho e módulos ligados aqui.
+  LicenseCheck license = const LicenseCheck(LicenseStatus.missing);
+  String deviceId = '';
+  Activation activation = Activation();
+  String _publicKey = productionPublicKey;
+
+  File get _licenseFile => File('${baseDir.path}/licenca.lic');
+  File get _activationFile => File('${baseDir.path}/modulos.json');
+
+  /// Usuário logado (null com até 1 usuário: entra direto).
+  AppUser? currentUser;
+
+  List<AppUser> get activeUsers => users.where((u) => u.active).toList();
+
+  /// Com mais de um usuário, o app pede login.
+  bool get needsLogin => activeUsers.length > 1 && currentUser == null;
+
   Timer? _saveTimer;
   bool _saving = false;
   bool _pendingSave = false;
@@ -32,7 +59,12 @@ class AppStore extends ChangeNotifier {
 
   /// Abre os dados. [dir] (ou a variável FUNILAR_DATA_DIR) troca a pasta,
   /// útil para testes.
-  static Future<AppStore> open({Directory? dir}) async {
+  static Future<AppStore> open({
+    Directory? dir,
+    @visibleForTesting License? assumeLicense,
+    @visibleForTesting String? publicKey,
+    @visibleForTesting String? device,
+  }) async {
     final env = Platform.environment['FUNILAR_DATA_DIR'];
     if (dir == null && env != null && env.isNotEmpty) dir = Directory(env);
     if (dir == null) {
@@ -58,7 +90,11 @@ class AppStore extends ChangeNotifier {
     final store = AppStore._(dir);
     await store.photosDir.create(recursive: true);
     await store._load();
-    hideMoney = store.settings.productionMode;
+    if (publicKey != null) store._publicKey = publicKey;
+    store.deviceId = device ?? await computeDeviceId(dir);
+    await store._loadLicensing(assumeLicense);
+    await store._migrateAccess();
+    store._applyAccess();
     // custos da equipe no formato novo (antes só existia o pintor)
     if (store.entries.any((e) => e.autoKey == painterAutoKey)) {
       for (final c in store.claims) {
@@ -86,7 +122,15 @@ class AppStore extends ChangeNotifier {
     await _write();
   }
 
+  static const _knownKeys = {
+    'app', 'version', 'savedAt', 'settings', 'claims', 'contacts',
+    'catalog', 'entries', 'stock', 'users',
+  };
+
   void _fromJson(Map<String, dynamic> j) {
+    _extra
+      ..clear()
+      ..addEntries(j.entries.where((e) => !_knownKeys.contains(e.key)));
     List<Map<String, dynamic>> list(Object? v) => v is List
         ? v.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
         : <Map<String, dynamic>>[];
@@ -113,9 +157,13 @@ class AppStore extends ChangeNotifier {
     stock
       ..clear()
       ..addAll(list(j['stock']).map(StockItem.fromJson));
+    users
+      ..clear()
+      ..addAll(list(j['users']).map(AppUser.fromJson));
   }
 
   Map<String, dynamic> toJson() => {
+        ..._extra,
         'app': 'funilar',
         'version': 1,
         'savedAt': DateTime.now().toIso8601String(),
@@ -125,9 +173,12 @@ class AppStore extends ChangeNotifier {
         'catalog': catalog.map((e) => e.toJson()).toList(),
         'entries': entries.map((e) => e.toJson()).toList(),
         'stock': stock.map((e) => e.toJson()).toList(),
+        'users': users.map((e) => e.toJson()).toList(),
       };
 
   Future<void> _write() async {
+    // sem licença válida: só consulta, nada é gravado
+    if (gate.readOnly) return;
     if (_saving) {
       _pendingSave = true;
       return;
@@ -208,6 +259,7 @@ class AppStore extends ChangeNotifier {
   // ---------------------------------------------------------------- sinistros
 
   Claim newClaim() {
+    gate.requirePerm(Perm.sinistroEditar);
     final c = Claim(
       number:
           '${settings.numberPrefix}-${settings.nextNumber.toString().padLeft(4, '0')}',
@@ -246,6 +298,8 @@ class AppStore extends ChangeNotifier {
   /// atualizado se o orçamento ou o valor mudar e removido se a pessoa sair
   /// da equipe ou o orçamento deixar de estar fechado.
   void syncCrewCosts(Claim c) {
+    // módulo desligado: congela (nada é criado nem apagado) até reativar
+    if (!gate.active(Mod.equipe) || !gate.active(Mod.financeiro)) return;
     final existing =
         entries.where((e) => e.claimId == c.id && isCrewEntry(e)).toList();
     final keep = <FinanceEntry>{};
@@ -294,6 +348,7 @@ class AppStore extends ChangeNotifier {
   /// Dá baixa no estoque das peças usadas quando o orçamento fecha, e
   /// devolve se ele reabrir, se o item sair ou trocar de peça.
   void syncStock(Claim c) {
+    if (!gate.active(Mod.estoque)) return; // congelado até reativar
     final want = <String, StockUse>{};
     if (isClosedStatus(c.status) && claims.contains(c)) {
       for (final it in c.items) {
@@ -322,6 +377,9 @@ class AppStore extends ChangeNotifier {
   /// Dá saída de um insumo do estoque para a O.S. (só o gestor libera).
   SupplyUse issueSupply(Claim c, StockItem s, double qty,
       {String itemId = '', String note = ''}) {
+    gate.require(Mod.producao);
+    gate.require(Mod.estoque);
+    gate.requireWrite();
     final u = SupplyUse(
       stockId: s.id,
       name: s.name,
@@ -341,16 +399,12 @@ class AppStore extends ChangeNotifier {
 
   /// Desfaz a saída do insumo (volta para o estoque).
   void returnSupply(Claim c, SupplyUse u) {
+    gate.require(Mod.producao);
+    gate.require(Mod.estoque);
+    gate.requireWrite();
     stockById(u.stockId)?.qty += u.qty;
     c.supplies.remove(u);
     touch(c);
-  }
-
-  /// Liga/desliga o modo produção (sem valores em R\$ na tela).
-  void setProductionMode(bool on) {
-    settings.productionMode = on;
-    hideMoney = on;
-    changed();
   }
 
   /// Sinistros que usam (ou reservam) uma peça do estoque.
@@ -359,12 +413,16 @@ class AppStore extends ChangeNotifier {
       .toList();
 
   void upsertStock(StockItem s) {
+    gate.require(Mod.estoque);
+    gate.requireWrite();
     if (!stock.contains(s)) stock.add(s);
     stock.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     changed();
   }
 
   Future<void> removeStock(StockItem s) async {
+    gate.require(Mod.estoque);
+    gate.requireWrite();
     stock.remove(s);
     for (final c in claims) {
       for (final it in c.items) {
@@ -377,6 +435,7 @@ class AppStore extends ChangeNotifier {
 
   /// Guarda a foto de um item do estoque e devolve o nome do arquivo.
   Future<String> saveStockPhoto(StockItem s, Uint8List bytes) async {
+    gate.require(Mod.estoque);
     final name = 'estoque_${s.id}_${newId()}.jpg';
     await File('${photosDir.path}/$name').writeAsBytes(bytes, flush: true);
     return name;
@@ -395,6 +454,7 @@ class AppStore extends ChangeNotifier {
   }
 
   Claim duplicate(Claim c) {
+    gate.requirePerm(Perm.sinistroEditar);
     final j = c.toJson();
     final copy = Claim.fromJson(j);
     copy.id = newId();
@@ -426,6 +486,7 @@ class AppStore extends ChangeNotifier {
   }
 
   Future<void> deleteClaim(Claim c) async {
+    gate.requirePerm(Perm.sinistroEditar);
     for (final p in c.photos) {
       final f = photoFile(p);
       if (await f.exists()) await f.delete();
@@ -461,6 +522,7 @@ class AppStore extends ChangeNotifier {
   // ---------------------------------------------------------------- contatos
 
   void upsertContact(Contact ct) {
+    gate.requireWrite();
     if (!contacts.contains(ct)) contacts.add(ct);
     // valor do funcionário mudou: atualiza os custos lançados
     for (final c in claims) {
@@ -471,6 +533,7 @@ class AppStore extends ChangeNotifier {
   }
 
   void removeContact(Contact ct) {
+    gate.requirePerm(Perm.cadastrosEditar);
     contacts.remove(ct);
     for (final c in claims) {
       if (c.crew.any((m) => m.contactId == ct.id)) {
@@ -523,6 +586,7 @@ class AppStore extends ChangeNotifier {
   // ---------------------------------------------------------------- catálogo
 
   void upsertCatalog(CatalogItem it) {
+    gate.requirePerm(Perm.orcamentoEditar);
     if (!catalog.contains(it)) catalog.add(it);
     catalog.sort((a, b) =>
         a.description.toLowerCase().compareTo(b.description.toLowerCase()));
@@ -530,6 +594,7 @@ class AppStore extends ChangeNotifier {
   }
 
   void removeCatalog(CatalogItem it) {
+    gate.requirePerm(Perm.orcamentoEditar);
     catalog.remove(it);
     changed();
   }
@@ -558,6 +623,7 @@ class AppStore extends ChangeNotifier {
 
   /// Restaura um backup .zip (substitui os dados atuais).
   Future<void> importBackup(Uint8List zipBytes) async {
+    gate.requirePerm(Perm.ajustes);
     final archive = ZipDecoder().decodeBytes(zipBytes);
     Map<String, dynamic>? data;
     for (final f in archive.files) {
@@ -589,12 +655,16 @@ class AppStore extends ChangeNotifier {
   // -------------------------------------------------------------- financeiro
 
   void upsertEntry(FinanceEntry e) {
+    gate.require(Mod.financeiro);
+    gate.requirePerm(Perm.financeiroEditar);
     if (!entries.contains(e)) entries.add(e);
     entries.sort((a, b) => b.date.compareTo(a.date));
     changed();
   }
 
   void removeEntry(FinanceEntry e) {
+    gate.require(Mod.financeiro);
+    gate.requirePerm(Perm.financeiroEditar);
     entries.remove(e);
     changed();
   }
@@ -602,4 +672,264 @@ class AppStore extends ChangeNotifier {
   // ------------------------------------------------------------- utilidades
 
   List<Claim> get openClaims => claims.where((c) => c.status.isOpen).toList();
+
+  // ------------------------------------------------- licença e módulos
+
+  Future<void> _loadLicensing(License? assume) async {
+    final act = await Activation.load(_activationFile, deviceId);
+    if (assume != null) {
+      license = LicenseCheck(LicenseStatus.valid, assume);
+    } else {
+      final text =
+          await _licenseFile.exists() ? await _licenseFile.readAsString() : null;
+      license = await verifyLicense(text,
+          deviceId: deviceId, lastSeen: act?.lastSeen, publicKey: _publicKey);
+    }
+    final licensed = license.ok ? license.license!.modules : <Mod>{};
+    if (act == null || act.tampered) {
+      // primeiro uso (ou arquivo mexido): liga tudo o que a licença autoriza
+      activation = Activation(enabled: {...licensed}, lastSeen: act?.lastSeen);
+      if (act?.tampered == true) {
+        activation.log.add(_logEntry('aviso', null,
+            'Arquivo de módulos alterado fora do app: voltou ao padrão da licença'));
+      }
+    } else {
+      activation = act;
+    }
+    // guarda a maior data vista (detecta relógio atrasado)
+    final now = DateTime.now();
+    if (license.ok &&
+        (activation.lastSeen == null || now.isAfter(activation.lastSeen!))) {
+      activation.lastSeen = now;
+    }
+    await activation.save(_activationFile, deviceId);
+  }
+
+  Map<String, dynamic> _logEntry(String action, Mod? m, String note) => {
+        'quando': DateTime.now().toIso8601String(),
+        'acao': action,
+        if (m != null) 'modulo': m.name,
+        'obs': note,
+      };
+
+  /// Aplica licença, ativação e usuário na checagem central.
+  void _applyAccess() {
+    final licensed = license.ok ? license.license!.modules : <Mod>{};
+    gate
+      ..licensed = {...licensed}
+      ..enabled = {...activation.enabled}
+      ..readOnly = !license.ok;
+    final act = activeUsers;
+    if (currentUser != null && !act.contains(currentUser)) currentUser = null;
+    if (act.length == 1) currentUser = act.single;
+    gate.user = currentUser;
+    gate.locked = needsLogin;
+    hideMoney = !gate.can(Perm.valoresVer);
+  }
+
+  /// Instala uma licença (texto colado ou arquivo). Só grava se for válida.
+  Future<LicenseCheck> installLicense(String text) async {
+    final check = await verifyLicense(text,
+        deviceId: deviceId,
+        lastSeen: activation.lastSeen,
+        publicKey: _publicKey);
+    if (!check.ok) return check;
+    final wasOk = license.ok;
+    final before = license.ok ? license.license!.modules : <Mod>{};
+    license = check;
+    await _licenseFile.writeAsString(text.trim(), flush: true);
+    // módulos novos na licença já entram ligados
+    final added = check.license!.modules.difference(before);
+    activation.enabled.addAll(added);
+    activation.lastSeen = DateTime.now();
+    activation.log.add(_logEntry('licenca', null,
+        'Licença ${check.license!.id} instalada (${check.license!.customer})'));
+    await activation.save(_activationFile, deviceId);
+    _applyAccess();
+    if (!wasOk) await _migrateAccess();
+    _reconcileAll();
+    changed();
+    return check;
+  }
+
+  /// Impacto de ligar/desligar um módulo (Master). Lista de bloqueios vazia
+  /// = pode confirmar.
+  ModuleImpact impactOf(Mod m, bool turnOn) {
+    final blocks = <String>[];
+    final notes = <String>[];
+    if (m == Mod.nucleo) {
+      blocks.add('O Núcleo não pode ser desligado.');
+    } else if (turnOn) {
+      if (!gate.licensed.contains(m)) {
+        blocks.add('A licença deste cliente não autoriza ${m.label}.');
+      }
+      for (final d in m.requires) {
+        if (!gate.active(d)) {
+          blocks.add('Ligue antes o módulo ${d.label} (é obrigatório para ${m.label}).');
+        }
+      }
+      for (final (d, why) in m.softRequires) {
+        if (!gate.active(d)) notes.add('Atenção: $why.');
+      }
+      notes.add('Os dados guardados de ${m.label} voltam a aparecer como estavam.');
+      if (m == Mod.estoque) {
+        notes.add('Baixas e devoluções pendentes serão acertadas agora.');
+      }
+      if (m == Mod.equipe || m == Mod.financeiro) {
+        notes.add('Custos da equipe pendentes serão lançados agora.');
+      }
+    } else {
+      for (final other in Mod.values) {
+        if (other.requires.contains(m) && gate.active(other)) {
+          blocks.add('${other.label} depende de ${m.label}: desligue ${other.label} antes.');
+        }
+        for (final (d, why) in other.softRequires) {
+          if (d == m && gate.active(other)) notes.add('${other.label}: $why.');
+        }
+      }
+      notes.addAll(m.offEffects);
+      notes.add('Nenhum dado é apagado: ${_dataSummary(m)}.');
+    }
+    return ModuleImpact(blocks, notes);
+  }
+
+  String _dataSummary(Mod m) {
+    int n(Iterable it) => it.length;
+    return switch (m) {
+      Mod.vistoria =>
+        '${n(claims.where((c) => c.damages.isNotEmpty || c.preDamages.isNotEmpty || !c.reception.isEmpty))} sinistros com vistoria e ${claims.fold(0, (a, c) => a + c.photos.length)} fotos ficam guardados',
+      Mod.financeiro => '${entries.length} lançamentos ficam guardados',
+      Mod.ocr => '${n(entries.where((e) => e.receiptFile.isNotEmpty))} notas anexadas ficam guardadas',
+      Mod.equipe => '${n(claims.where((c) => c.crew.isNotEmpty))} carros com equipe ficam guardados',
+      Mod.estoque => '${stock.length} itens do estoque ficam guardados',
+      Mod.producao =>
+        '${claims.fold(0, (a, c) => a + c.supplies.length)} saídas de insumo e as tarefas marcadas ficam guardadas',
+      Mod.integracoes => 'os valores FIPE já consultados continuam nos sinistros',
+      Mod.nucleo => '',
+    };
+  }
+
+  /// Liga/desliga um módulo. Só com sessão Master válida.
+  Future<void> setModuleEnabled(Mod m, bool on, MasterSession session) async {
+    if (!session.valid) throw AccessDenied('Acesso Master necessário.');
+    final impact = impactOf(m, on);
+    if (impact.blocks.isNotEmpty) throw AccessDenied(impact.blocks.join(' '));
+    on ? activation.enabled.add(m) : activation.enabled.remove(m);
+    activation.log.add(_logEntry(on ? 'ligou' : 'desligou', m, 'Master'));
+    await activation.save(_activationFile, deviceId);
+    _applyAccess();
+    if (on) _reconcileAll();
+    changed();
+  }
+
+  /// Reativação: acerta o que ficou congelado (custos e estoque).
+  void _reconcileAll() {
+    for (final c in claims) {
+      syncCrewCosts(c);
+      syncStock(c);
+    }
+  }
+
+  /// Confere a resposta do fornecedor ao desafio Master.
+  Future<MasterSession> openMaster(String challenge, String response) async {
+    final ok = await verifyMasterResponse(challenge, response, publicKey: _publicKey);
+    if (ok) {
+      activation.log.add(_logEntry('master', null, 'Acesso Master'));
+      await activation.save(_activationFile, deviceId);
+    }
+    return MasterSession._(ok);
+  }
+
+  // ---------------------------------------------------------------- usuários
+
+  /// Versões anteriores: o PIN do gestor vira o primeiro Administrador; o
+  /// modo produção vira um usuário Produção.
+  Future<void> _migrateAccess() async {
+    if (users.isNotEmpty || settings.managerPin.isEmpty) return;
+    final (h, salt) = await hashPin(settings.managerPin);
+    users.add(AppUser(
+        id: newId(), name: 'Gestor', role: Role.admin, pinHash: h, salt: salt));
+    if (settings.productionMode) {
+      users.add(AppUser(id: newId(), name: 'Produção', role: Role.producao));
+    }
+    settings.managerPin = '';
+    settings.productionMode = false;
+    changed();
+  }
+
+  Future<AppUser> saveUser(AppUser u, {String? newPin}) async {
+    gate.requirePerm(Perm.usuarios);
+    if (newPin != null) {
+      if (newPin.isEmpty) {
+        u.pinHash = '';
+        u.salt = '';
+      } else {
+        final (h, salt) = await hashPin(newPin);
+        u.pinHash = h;
+        u.salt = salt;
+      }
+    }
+    if (!users.contains(u)) users.add(u);
+    _checkAdmins();
+    _applyAccess();
+    changed();
+    return u;
+  }
+
+  void _checkAdmins() {
+    final admins =
+        users.where((x) => x.active && x.role == Role.admin && x.pinHash.isNotEmpty);
+    if (users.any((x) => x.active) && admins.isEmpty) {
+      throw AccessDenied(
+          'Precisa ficar pelo menos um Administrador ativo com PIN.');
+    }
+  }
+
+  /// Desativa (não apaga) um usuário.
+  void setUserActive(AppUser u, bool active) {
+    gate.requirePerm(Perm.usuarios);
+    final before = u.active;
+    u.active = active;
+    try {
+      _checkAdmins();
+    } catch (_) {
+      u.active = before;
+      rethrow;
+    }
+    if (currentUser == u && !active) currentUser = null;
+    _applyAccess();
+    changed();
+  }
+
+  Future<bool> login(AppUser u, String pin) async {
+    if (!u.active || !await checkPin(u, pin)) return false;
+    currentUser = u;
+    _applyAccess();
+    notifyListeners();
+    return true;
+  }
+
+  void logout() {
+    currentUser = null;
+    _applyAccess();
+    notifyListeners();
+  }
+
+  /// Autorização pontual de outro usuário (ex.: almoxarife libera insumo
+  /// no tablet da produção) sem trocar o usuário logado.
+  Future<bool> authorizeOnce(AppUser u, String pin, Perm p) async =>
+      u.active && u.can(p) && await checkPin(u, pin);
+}
+
+/// Resultado da análise de impacto.
+class ModuleImpact {
+  const ModuleImpact(this.blocks, this.notes);
+  final List<String> blocks;
+  final List<String> notes;
+}
+
+/// Sessão Master aberta com a resposta assinada do fornecedor.
+class MasterSession {
+  MasterSession._(this.valid);
+  final bool valid;
 }

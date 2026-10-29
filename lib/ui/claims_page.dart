@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../calc.dart';
 import '../format.dart';
 import '../models.dart';
+import '../modules.dart';
 import '../theme.dart';
 import 'claim_detail_page.dart';
 import 'widgets.dart';
@@ -10,8 +11,13 @@ import 'widgets.dart';
 Future<void> openClaim(BuildContext context, Claim c) => Navigator.of(context)
     .push(MaterialPageRoute(builder: (_) => ClaimDetailPage(claimId: c.id)));
 
-Future<void> createAndOpenClaim(BuildContext context) {
+Future<void> createAndOpenClaim(BuildContext context) async {
   final store = StoreScope.read(context);
+  if (!gate.can(Perm.sinistroEditar)) {
+    toast(context,
+        gate.readOnly ? 'Somente consulta (licença).' : 'Seu usuário não cria sinistros.');
+    return;
+  }
   final c = store.newClaim();
   return openClaim(context, c);
 }

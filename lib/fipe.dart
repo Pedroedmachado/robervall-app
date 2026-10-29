@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'modules.dart';
+
 import 'format.dart';
 
 /// Consulta pública da Tabela FIPE (marca, modelo, ano e valor).
@@ -45,6 +47,7 @@ class FipeClient {
   final _cache = <String, Object?>{};
 
   Future<Object?> _get(String path) async {
+    gate.require(Mod.integracoes); // módulo desligado: nenhum acesso à internet
     if (_cache.containsKey(path)) return _cache[path];
     final r = await http
         .get(Uri.parse('$_base/$path'))

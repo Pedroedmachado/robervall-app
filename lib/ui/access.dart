@@ -1,102 +1,80 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../modules.dart';
 import '../theme.dart';
 import 'widgets.dart';
 
-/// Pede o PIN do gestor quando o aparelho está no modo produção.
-/// No modo gestor libera direto.
-Future<bool> requireManager(BuildContext context, {String reason = ''}) async {
+/// Libera uma ação: se o usuário logado tem a permissão, segue; senão pede
+/// que alguém autorizado (gestor, almoxarife…) confirme com o PIN dele.
+Future<bool> authorize(BuildContext context, Perm p, {String reason = ''}) async {
   final store = StoreScope.read(context);
-  if (!store.settings.productionMode) return true;
-  final pin = store.settings.managerPin;
-  if (pin.isEmpty) return true;
-  final typed = await _askPin(context, 'PIN do gestor',
-      reason.isEmpty ? 'Só o gestor libera esta ação.' : reason);
-  if (typed == null) return false;
-  if (typed == pin) return true;
-  if (context.mounted) toast(context, 'PIN incorreto.');
-  return false;
-}
-
-/// Coloca o aparelho no modo produção (cria o PIN se ainda não existe).
-Future<void> enterProductionMode(BuildContext context) async {
-  final store = StoreScope.read(context);
-  if (store.settings.managerPin.isEmpty) {
-    final pin = await _askPin(context, 'Crie o PIN do gestor',
-        'Com ele você volta ao modo gestor e libera insumos. Use 4 a 8 números.',
-        create: true);
-    if (pin == null) return;
-    store.settings.managerPin = pin;
+  if (gate.readOnly) {
+    toast(context, 'Licença inválida ou ausente: somente consulta.');
+    return false;
   }
-  store.setProductionMode(true);
-  if (context.mounted) {
-    toast(context, 'Modo produção ligado: valores escondidos.');
+  if (gate.can(p)) return true;
+  final allowed = store.activeUsers.where((u) => u.can(p)).toList();
+  if (allowed.isEmpty) {
+    toast(context, 'Nenhum usuário tem permissão: ${p.label}.');
+    return false;
   }
-}
-
-/// Volta ao modo gestor (pede o PIN).
-Future<void> leaveProductionMode(BuildContext context) async {
-  final store = StoreScope.read(context);
-  if (!await requireManager(context,
-      reason: 'Digite o PIN para voltar ao modo gestor.')) {
-    return;
-  }
-  store.setProductionMode(false);
-}
-
-/// Troca o PIN (no modo gestor).
-Future<void> changeManagerPin(BuildContext context) async {
-  final store = StoreScope.read(context);
-  final pin = await _askPin(context, 'Novo PIN do gestor',
-      'Use 4 a 8 números.', create: true);
-  if (pin == null) return;
-  store.settings.managerPin = pin;
-  store.changed();
-  if (context.mounted) toast(context, 'PIN alterado.');
-}
-
-Future<String?> _askPin(BuildContext context, String title, String hint,
-    {bool create = false}) {
-  final ctl = TextEditingController();
-  return showDialog<String>(
+  var who = allowed.first;
+  final pinCtl = TextEditingController();
+  final ok = await showDialog<bool>(
     context: context,
-    builder: (ctx) {
-      void done() {
-        final v = ctl.text.trim();
-        if (create && (v.length < 4 || v.length > 8)) {
-          toast(ctx, 'O PIN precisa ter de 4 a 8 números.');
-          return;
-        }
-        Navigator.pop(ctx, v);
-      }
-
-      return AlertDialog(
-        title: Text(title),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text(hint),
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setS) => AlertDialog(
+        title: const Text('Autorização'),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text(reason.isEmpty ? 'Precisa de alguém com permissão: ${p.label}.' : reason),
           const SizedBox(height: 12),
-          TextField(
-            key: const ValueKey('pin'),
-            controller: ctl,
-            autofocus: true,
-            obscureText: true,
-            keyboardType: TextInputType.number,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(8),
+          DropdownButtonFormField<AppUser>(
+            initialValue: who,
+            decoration: const InputDecoration(labelText: 'Quem autoriza'),
+            items: [
+              for (final u in allowed)
+                DropdownMenuItem(value: u, child: Text('${u.name} · ${u.role.label}')),
             ],
-            decoration: const InputDecoration(labelText: 'PIN'),
-            onSubmitted: (_) => done(),
+            onChanged: (u) => setS(() => who = u ?? who),
           ),
+          const SizedBox(height: 12),
+          pinField(pinCtl, onDone: () => Navigator.pop(ctx, true)),
         ]),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancelar')),
-          FilledButton(onPressed: done, child: const Text('OK')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Autorizar')),
         ],
-      );
-    },
+      ),
+    ),
   );
+  if (ok != true) return false;
+  final good = await store.authorizeOnce(who, pinCtl.text.trim(), p);
+  if (!good && context.mounted) toast(context, 'PIN incorreto.');
+  return good;
+}
+
+/// Campo de PIN (só números, escondido).
+Widget pinField(TextEditingController ctl, {VoidCallback? onDone, String label = 'PIN'}) =>
+    TextField(
+      key: ValueKey('pin-$label'),
+      controller: ctl,
+      autofocus: true,
+      obscureText: true,
+      keyboardType: TextInputType.number,
+      inputFormatters: [
+        FilteringTextInputFormatter.digitsOnly,
+        LengthLimitingTextInputFormatter(8),
+      ],
+      decoration: InputDecoration(labelText: label),
+      onSubmitted: (_) => onDone?.call(),
+    );
+
+/// Mostra o erro de acesso (módulo desligado / sem permissão) sem quebrar.
+void runGuarded(BuildContext context, void Function() action) {
+  try {
+    action();
+  } on AccessDenied catch (e) {
+    toast(context, e.message);
+  }
 }

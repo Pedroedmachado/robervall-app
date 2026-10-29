@@ -7,7 +7,8 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models.dart';
 import '../theme.dart';
-import 'access.dart';
+import 'license_ui.dart';
+import 'users_ui.dart';
 import 'widgets.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -31,6 +32,7 @@ class SettingsPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  const LicenseCard(),
                   SectionCard(
                     title: 'Dados da oficina (saem no PDF)',
                     icon: Icons.store_outlined,
@@ -193,25 +195,26 @@ class SettingsPage extends StatelessWidget {
                     ],
                   ),
                   SectionCard(
-                    title: 'Modo produção (chão de fábrica)',
-                    icon: Icons.precision_manufacturing_outlined,
+                    title: 'Usuários e permissões',
+                    icon: Icons.groups_outlined,
                     children: [
-                      const Text(
-                          'Para o tablet ou celular da oficina: mostra só as ordens de serviço (tarefas, peças, insumos e equipe) e o estoque, sem nenhum valor em R\$. Para voltar e para liberar insumos, só com o PIN do gestor.'),
+                      Text(store.activeUsers.isEmpty
+                          ? 'Uso individual: sem login. Cadastre usuários (administrador, gestor, orçamentista, almoxarife, produção) para cada um ver só o que pode.'
+                          : '${store.activeUsers.length} usuário(s) ativo(s). Produção não vê valores; insumos só saem com quem tem permissão.'),
                       const SizedBox(height: 12),
                       Wrap(spacing: 8, runSpacing: 8, children: [
                         FilledButton.icon(
-                          onPressed: () => enterProductionMode(context),
-                          icon: const Icon(Icons.lock_outline),
-                          label: const Text('Entrar no modo produção'),
+                          onPressed: () => Navigator.of(context).push(
+                              MaterialPageRoute(builder: (_) => const UsersPage())),
+                          icon: const Icon(Icons.manage_accounts_outlined),
+                          label: const Text('Usuários'),
                         ),
-                        OutlinedButton.icon(
-                          onPressed: () => changeManagerPin(context),
-                          icon: const Icon(Icons.pin_outlined),
-                          label: Text(s.managerPin.isEmpty
-                              ? 'Criar PIN do gestor'
-                              : 'Trocar PIN do gestor'),
-                        ),
+                        if (store.activeUsers.length > 1)
+                          OutlinedButton.icon(
+                            onPressed: store.logout,
+                            icon: const Icon(Icons.logout),
+                            label: const Text('Trocar usuário'),
+                          ),
                       ]),
                     ],
                   ),

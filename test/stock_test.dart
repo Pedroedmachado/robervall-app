@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:funilar/licensing.dart';
 import 'package:funilar/models.dart';
 import 'package:funilar/pdf_report.dart';
 import 'package:funilar/stock.dart';
@@ -37,7 +38,7 @@ void main() {
   });
 
   test('baixa no estoque quando aprova e devolve quando reabre', () async {
-    final store = await AppStore.open(
+    final store = await AppStore.open(assumeLicense: License.full(), 
         dir: await Directory.systemTemp.createTemp('funilar_estoque'));
     final farol = StockItem(name: 'Farol esquerdo', qty: 3, cost: 200, price: 320);
     store.upsertStock(farol);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../complements.dart';
 import '../models.dart';
+import '../modules.dart';
 import '../seed.dart';
 import '../theme.dart';
 import 'budget_tab.dart' show addComplements;
@@ -27,7 +28,7 @@ class _DamageTabState extends State<DamageTab> {
     final store = StoreScope.of(context);
     final c = widget.claim;
     final t = Theme.of(context);
-    final production = store.settings.productionMode;
+    final production = !gate.can(Perm.orcamentoEditar);
 
     void cycle(CarRegion r) {
       final map = _pre ? c.preDamages : c.damages;

@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../format.dart';
 import '../models.dart';
+import '../modules.dart';
 import '../stock.dart';
 import '../theme.dart';
 import 'access.dart';
@@ -44,7 +45,7 @@ class _StockPageState extends State<StockPage> {
       appBar: AppBar(title: const Text('Estoque')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
-          if (!await requireManager(context,
+          if (!await authorize(context, Perm.estoqueEditar,
               reason: 'Só o gestor/almoxarife mexe no estoque.')) {
             return;
           }
@@ -146,7 +147,7 @@ class _StockPageState extends State<StockPage> {
                           ],
                         ),
                         onTap: () async {
-                          if (!await requireManager(context,
+                          if (!await authorize(context, Perm.estoqueEditar,
                               reason: 'Só o gestor/almoxarife mexe no estoque.')) {
                             return;
                           }

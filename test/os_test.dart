@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:funilar/licensing.dart';
 import 'package:funilar/finance.dart';
 import 'package:funilar/format.dart';
 import 'package:funilar/models.dart';
@@ -9,7 +10,7 @@ import 'package:funilar/store.dart';
 
 void main() {
   test('insumos saem do estoque e entram no custo real da O.S.', () async {
-    final store = await AppStore.open(
+    final store = await AppStore.open(assumeLicense: License.full(), 
         dir: await Directory.systemTemp.createTemp('funilar_os'));
     final lixa = StockItem(
         kind: StockKind.material, name: 'Lixa P320', qty: 50, unit: 'folha', cost: 2);
@@ -85,12 +86,10 @@ void main() {
     expect(back.claimId, 'x');
     expect(back.address, 'Prateleira A');
 
-    final store = await AppStore.open(
+    final store = await AppStore.open(assumeLicense: License.full(), 
         dir: await Directory.systemTemp.createTemp('funilar_modo'));
     expect(money(10), 'R\$ 10,00');
-    store.setProductionMode(true);
-    expect(money(10), 'R\$ •••');
-    store.setProductionMode(false);
+    expect(store.stock, isEmpty);
     expect(money(10), 'R\$ 10,00');
   });
 }

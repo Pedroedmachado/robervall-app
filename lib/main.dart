@@ -1,12 +1,43 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'modules.dart';
 import 'store.dart';
 import 'theme.dart';
 import 'ui/shell.dart';
 
+/// Mensagens globais (ex.: módulo desativado / sem permissão).
+final messengerKey = GlobalKey<ScaffoldMessengerState>();
+
+void _showDenied(AccessDenied e) {
+  messengerKey.currentState
+    ?..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(e.message)));
+}
+
+/// Qualquer tentativa barrada pela checagem central vira um aviso, nunca
+/// um erro: vale para botões, atalhos e chamadas em segundo plano.
+void installAccessGuard() {
+  final previous = FlutterError.onError;
+  FlutterError.onError = (details) {
+    final e = details.exception;
+    if (e is AccessDenied) return _showDenied(e);
+    previous?.call(details);
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    if (error is AccessDenied) {
+      _showDenied(error);
+      return true;
+    }
+    return false;
+  };
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  installAccessGuard();
   final store = await AppStore.open();
   runApp(FunilarApp(store: store));
 }
@@ -56,6 +87,7 @@ class _FunilarAppState extends State<FunilarApp>
           };
           return MaterialApp(
             title: 'Funilar',
+            scaffoldMessengerKey: messengerKey,
             debugShowCheckedModeBanner: false,
             theme: buildTheme(Brightness.light),
             darkTheme: buildTheme(Brightness.dark),

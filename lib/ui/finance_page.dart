@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../finance.dart';
 import '../format.dart';
 import '../models.dart';
+import '../modules.dart';
 import '../receipt_ocr.dart';
 import '../receipt_parser.dart';
 import '../theme.dart';
@@ -181,7 +182,9 @@ class _FinancePageState extends State<FinancePage> {
                   ),
             ],
         const SizedBox(height: 8),
+        if (gate.can(Perm.financeiroEditar))
         Wrap(spacing: 8, runSpacing: 8, children: [
+          if (gate.active(Mod.ocr))
           FilledButton.icon(
             onPressed: _readReceipt,
             icon: const Icon(Icons.document_scanner_outlined),
@@ -337,11 +340,13 @@ class _FinancePageState extends State<FinancePage> {
             icon: Icons.receipt_long_outlined,
             text:
                 'Lance aqui aluguel, luz, salários, peças compradas de fornecedores, materiais e outros gastos.',
-            action: FilledButton.icon(
-              onPressed: () => _newEntry(),
-              icon: const Icon(Icons.add),
-              label: const Text('Lançar gasto'),
-            ),
+            action: !gate.can(Perm.financeiroEditar)
+                ? null
+                : FilledButton.icon(
+                    onPressed: () => _newEntry(),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Lançar gasto'),
+                  ),
           );
         }
         return Column(children: [
@@ -391,6 +396,10 @@ class _FinancePageState extends State<FinancePage> {
       return;
     }
     final copy = FinanceEntry.fromJson(e.toJson());
+    if (!gate.can(Perm.financeiroEditar)) {
+      toast(context, 'Somente consulta.');
+      return;
+    }
     final r = await editFinanceEntry(context, copy, canDelete: true);
     if (r == null) return;
     final idx = store.entries.indexOf(e);
@@ -580,6 +589,10 @@ class ReceiptScan {
 /// Pede a foto da nota (câmera ou galeria), guarda junto dos lançamentos e,
 /// no celular, lê sozinho loja, data, nº da nota, itens, pagamento e total.
 Future<ReceiptScan?> scanReceiptPhoto(BuildContext context) async {
+  if (!gate.active(Mod.ocr)) {
+    toast(context, 'O módulo Leitura de nota está desativado.');
+    return null;
+  }
   final store = StoreScope.read(context);
   String? path;
   if (debugPickReceipt != null) {
@@ -721,7 +734,7 @@ Future<FinanceEntry?> editFinanceEntry(BuildContext context, FinanceEntry e,
                 file: File('${store.photosDir.path}/${e.receiptFile}')),
             const SizedBox(height: 8),
           ],
-          if (!e.isIncome) ...[
+          if (!e.isIncome && gate.active(Mod.ocr)) ...[
             Align(
               alignment: Alignment.centerLeft,
               child: OutlinedButton.icon(

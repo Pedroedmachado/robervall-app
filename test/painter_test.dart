@@ -1,13 +1,14 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:funilar/licensing.dart';
 import 'package:funilar/finance.dart';
 import 'package:funilar/models.dart';
 import 'package:funilar/store.dart';
 
 void main() {
   test('custo do pintor entra no financeiro quando o orçamento fecha', () async {
-    final store = await AppStore.open(
+    final store = await AppStore.open(assumeLicense: License.full(), 
         dir: await Directory.systemTemp.createTemp('funilar_pintor'));
     final pintor = Contact(
         kind: ContactKind.funcionario,
@@ -78,7 +79,7 @@ void main() {
   });
 
   test('equipe: pintor, funileiro e martelinho lançados juntos', () async {
-    final store = await AppStore.open(
+    final store = await AppStore.open(assumeLicense: License.full(), 
         dir: await Directory.systemTemp.createTemp('funilar_equipe'));
     final pintor = Contact(
         kind: ContactKind.funcionario, name: 'Luan', payType: PayType.porPeca, rate: 100);

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../format.dart';
 import '../models.dart';
+import '../modules.dart';
 import '../theme.dart';
 import 'fipe_dialog.dart';
 import 'widgets.dart';
@@ -216,7 +217,9 @@ class ClaimFormTab extends StatelessWidget {
                 SectionCard(
                   title: 'Veículo',
                   icon: Icons.directions_car_outlined,
-                  trailing: FilledButton.tonalIcon(
+                  trailing: !gate.allows(Mod.integracoes, Perm.sinistroEditar)
+                      ? null
+                      : FilledButton.tonalIcon(
                     onPressed: () async {
                       final res = await showFipeDialog(context);
                       if (res == null) return;

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
+import 'modules.dart';
 import 'receipt_parser.dart';
 
 /// O leitor funciona no Android e no iPhone.
@@ -10,6 +11,7 @@ bool get receiptOcrAvailable => Platform.isAndroid || Platform.isIOS;
 
 /// Lê a foto e devolve as linhas na ordem em que aparecem na nota.
 Future<List<String>> readReceiptLines(String imagePath) async {
+  gate.require(Mod.ocr);
   final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
   try {
     final result =

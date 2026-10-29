@@ -5,6 +5,7 @@ import '../complements.dart';
 import '../finance.dart';
 import '../format.dart';
 import '../models.dart';
+import '../modules.dart';
 import '../store.dart';
 import '../theme.dart';
 import 'contacts_page.dart' show editContact;
@@ -27,6 +28,7 @@ class BudgetTab extends StatelessWidget {
       spacing: 8,
       runSpacing: 8,
       children: [
+        if (gate.can(Perm.orcamentoEditar)) ...[
         FilledButton.icon(
           onPressed: () async {
             final it = await editBudgetItem(context, null, vehicle: c.vehicle);
@@ -50,6 +52,8 @@ class BudgetTab extends StatelessWidget {
           icon: const Icon(Icons.inventory_2_outlined),
           label: const Text('Do catálogo'),
         ),
+        ] else
+          const Text('Somente consulta.'),
       ],
     );
 
@@ -98,9 +102,15 @@ class BudgetTab extends StatelessWidget {
                 item: it,
                 values: itemValues(it, s),
                 hasComplements: complementsFor(it).isNotEmpty,
-                stock: stockFor(store.stock, it),
-                onStock: () => showStockFor(context, c, it),
-                onMarket: () => openMarketSearch(context, it, c.vehicle),
+                stock: gate.active(Mod.estoque)
+                    ? stockFor(store.stock, it)
+                    : const [],
+                onStock: gate.active(Mod.estoque)
+                    ? () => showStockFor(context, c, it)
+                    : null,
+                onMarket: gate.active(Mod.integracoes)
+                    ? () => openMarketSearch(context, it, c.vehicle)
+                    : null,
                 onComplements: () => offerComplements(context, c, it,
                     alwaysShow: true),
                 onTap: () async {
@@ -238,7 +248,7 @@ class BudgetTab extends StatelessWidget {
               SizedBox(
                   width: 340,
                   child: Column(children: [
-                    _CrewCard(claim: c),
+                    if (gate.active(Mod.equipe)) _CrewCard(claim: c),
                     summary,
                   ])),
             ],
@@ -247,7 +257,11 @@ class BudgetTab extends StatelessWidget {
       }
       return ListView(
         padding: const EdgeInsets.all(12),
-        children: [itemsCard, _CrewCard(claim: c), summary],
+        children: [
+          itemsCard,
+          if (gate.active(Mod.equipe)) _CrewCard(claim: c),
+          summary
+        ],
       );
     });
   }
@@ -362,7 +376,8 @@ class _ItemRow extends StatelessWidget {
                             style: t.textTheme.bodySmall?.copyWith(
                                 color: t.colorScheme.onSurfaceVariant)),
                       ],
-                      if (it.op == ItemOp.troca) ...[
+                      if (it.op == ItemOp.troca &&
+                          ((stock.isNotEmpty && onStock != null) || onMarket != null)) ...[
                         const SizedBox(height: 6),
                         Wrap(spacing: 6, runSpacing: 4, children: [
                           if (stock.isNotEmpty && onStock != null)
@@ -528,7 +543,7 @@ class _ItemEditorState extends State<_ItemEditor> {
   /// Com troca: peça no estoque e busca no Mercado Livre.
   Widget _replaceHelp(AppStore store) {
     final t = Theme.of(context);
-    final matches = it.description.trim().isEmpty
+    final matches = it.description.trim().isEmpty || !gate.active(Mod.estoque)
         ? const <StockItem>[]
         : stockFor(store.stock, it);
     final using = store.stockById(it.stockId);
@@ -571,7 +586,7 @@ class _ItemEditorState extends State<_ItemEditor> {
                       ),
               ),
             ),
-          if (widget.vehicle != null)
+          if (widget.vehicle != null && gate.active(Mod.integracoes))
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(

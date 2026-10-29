@@ -19,6 +19,8 @@ dependencies:
   http: ^1.2.2
   share_plus: ^10.1.4
   url_launcher: ^6.3.0
+  cryptography: ^2.7.0
+  crypto: ^3.0.3
   archive: any
   google_mlkit_text_recognition: any
 

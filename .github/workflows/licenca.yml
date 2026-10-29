@@ -1,0 +1,74 @@
+name: licenca
+
+# Emite licença do Funilar ou responde ao acesso Master, usando a chave
+# privada guardada no segredo FUNILAR_LICENCA_CHAVE (Settings > Secrets).
+on:
+  workflow_dispatch:
+    inputs:
+      acao:
+        description: 'emitir = nova licença · master = responder ao código Master'
+        type: choice
+        options: [emitir, master]
+        default: emitir
+      cliente:
+        description: 'Nome da oficina (emitir)'
+        default: ''
+      documento:
+        description: 'CNPJ/CPF (opcional)'
+        default: ''
+      modulos:
+        description: 'todos ou lista: vistoria,financeiro,ocr,equipe,estoque,producao,integracoes'
+        default: 'todos'
+      validade:
+        description: 'AAAA-MM-DD (vazio = sem vencimento)'
+        default: ''
+      aparelho:
+        description: 'Código do aparelho FN-XXXX-XXXX-XXXX (vazio = qualquer)'
+        default: ''
+      desafio:
+        description: 'Código Master mostrado no app (master)'
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  licenca:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Gerar
+        env:
+          FUNILAR_LICENCA_CHAVE: ${{ secrets.FUNILAR_LICENCA_CHAVE }}
+          ACAO: ${{ inputs.acao }}
+          CLIENTE: ${{ inputs.cliente }}
+          DOCUMENTO: ${{ inputs.documento }}
+          MODULOS: ${{ inputs.modulos }}
+          VALIDADE: ${{ inputs.validade }}
+          APARELHO: ${{ inputs.aparelho }}
+          DESAFIO: ${{ inputs.desafio }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$FUNILAR_LICENCA_CHAVE" ]; then
+            echo "Cadastre o segredo FUNILAR_LICENCA_CHAVE em Settings > Secrets and variables > Actions." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          if [ "$ACAO" = "master" ]; then
+            resp=$(dart run tool/licenca.dart master --desafio "$DESAFIO")
+            { echo "### Resposta Master"; echo; echo "Desafio: \`$DESAFIO\`"; echo; echo '```'; echo "$resp"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          else
+            dart run tool/licenca.dart emitir --cliente "$CLIENTE" --documento "$DOCUMENTO" \
+              --modulos "$MODULOS" --validade "$VALIDADE" --aparelho "$APARELHO" --saida licenca.lic
+            { echo "### Licença: $CLIENTE"; echo; echo "Copie o bloco abaixo e cole em Ajustes > Licença > Instalar licença."; echo; echo '```'; cat licenca.lic; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: inputs.acao == 'emitir'
+        with:
+          name: licenca
+          path: licenca.lic

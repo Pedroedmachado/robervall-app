@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:funilar/licensing.dart';
 import 'package:funilar/main.dart';
 import 'package:funilar/models.dart';
 import 'package:funilar/pdf_report.dart';
@@ -16,7 +17,7 @@ void main() {
 
   setUpAll(() async {
     final dir = await Directory.systemTemp.createTemp('funilar_test');
-    store = await AppStore.open(dir: dir);
+    store = await AppStore.open(assumeLicense: License.full(), dir: dir);
     claim = store.newClaim()
       ..type = ClaimType.seguradora
       ..status = ClaimStatus.aguardandoAprovacao
@@ -163,7 +164,7 @@ void main() {
   test('backup ida e volta', () async {
     final zip = await store.exportBackup();
     final dir = await Directory.systemTemp.createTemp('funilar_restore');
-    final other = await AppStore.open(dir: dir);
+    final other = await AppStore.open(assumeLicense: License.full(), dir: dir);
     await other.importBackup(zip);
     expect(other.claims.length, store.claims.length);
     expect(other.claims.first.items.length, store.claims.first.items.length);

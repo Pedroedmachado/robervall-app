@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
-import 'access.dart';
+import '../modules.dart';
+import 'license_ui.dart';
+import 'users_ui.dart';
 import 'catalog_page.dart';
 import 'claims_page.dart';
 import 'contacts_page.dart';
@@ -19,7 +21,7 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  int _index = 0;
+  int _page = 1; // começa em Sinistros quando o Painel não aparece
 
   static const _dest = [
     (Icons.space_dashboard_outlined, Icons.space_dashboard, 'Painel'),
@@ -31,14 +33,23 @@ class _AppShellState extends State<AppShell> {
     (Icons.settings_outlined, Icons.settings, 'Ajustes'),
   ];
 
-  void go(int i) => setState(() => _index = i);
+  bool _initDone = false;
 
-  /// No modo produção só aparecem Sinistros e Estoque (sem valores) e um
-  /// botão para o gestor destravar.
-  static const _productionPages = [1, 3];
+  /// Abas que este usuário vê, conforme os módulos ativos e o papel.
+  List<int> _visible() => [
+        if (gate.roleCan(Perm.valoresVer)) 0,
+        1,
+        if (gate.active(Mod.financeiro) && gate.roleCan(Perm.financeiroVer)) 2,
+        if (gate.active(Mod.estoque) && gate.roleCan(Perm.estoqueVer)) 3,
+        if (gate.roleCan(Perm.orcamentoEditar)) 4,
+        if (gate.roleCan(Perm.cadastrosEditar)) 5,
+        if (gate.roleCan(Perm.ajustes)) 6,
+      ];
 
-  Widget _page() {
-    switch (_index) {
+  void go(int page) => setState(() => _page = page);
+
+  Widget _pageWidget(int i) {
+    switch (i) {
       case 0:
         return DashboardPage(
             onOpenClaims: () => go(1), onOpenFinance: () => go(2));
@@ -60,108 +71,132 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
-    if (store.settings.productionMode) return _production(context);
+    if (store.needsLogin) return const LoginPage();
+    final visible = _visible();
+    if (!_initDone) {
+      _initDone = true;
+      _page = visible.first;
+    }
+    if (!visible.contains(_page)) _page = visible.contains(1) ? 1 : visible.first;
+    final sel = visible.indexOf(_page);
     final wide = isWide(context);
-    final page = KeyedSubtree(key: ValueKey(_index), child: _page());
+    final page = KeyedSubtree(key: ValueKey(_page), child: _pageWidget(_page));
+    final body = Column(children: [
+      const _AccessBar(),
+      Expanded(
+        child: MediaQuery.removePadding(
+            context: context,
+            removeTop: gate.readOnly || store.activeUsers.length > 1,
+            child: page),
+      ),
+    ]);
     if (!wide) {
       return Scaffold(
-        body: page,
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _index,
-          onDestinationSelected: go,
-          // 7 abas: em telas estreitas mostra o nome só da aba aberta
-          labelBehavior: MediaQuery.sizeOf(context).width < 480
-              ? NavigationDestinationLabelBehavior.onlyShowSelected
-              : NavigationDestinationLabelBehavior.alwaysShow,
-          destinations: [
-            for (final d in _dest)
-              NavigationDestination(
-                  icon: Icon(d.$1), selectedIcon: Icon(d.$2), label: d.$3),
-          ],
-        ),
+        body: body,
+        bottomNavigationBar: visible.length < 2
+            ? null
+            : NavigationBar(
+                selectedIndex: sel,
+                onDestinationSelected: (i) => go(visible[i]),
+                labelBehavior: MediaQuery.sizeOf(context).width < 480 &&
+                        visible.length > 4
+                    ? NavigationDestinationLabelBehavior.onlyShowSelected
+                    : NavigationDestinationLabelBehavior.alwaysShow,
+                destinations: [
+                  for (final i in visible)
+                    NavigationDestination(
+                        icon: Icon(_dest[i].$1),
+                        selectedIcon: Icon(_dest[i].$2),
+                        label: _dest[i].$3),
+                ],
+              ),
       );
     }
     final t = Theme.of(context);
     return Scaffold(
       body: Row(
         children: [
-          NavigationRail(
-            selectedIndex: _index,
-            onDestinationSelected: go,
-            extended: MediaQuery.sizeOf(context).width >= 1200,
-            minExtendedWidth: 200,
-            leading: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: _Logo(color: t.colorScheme.primary),
+          if (visible.length >= 2)
+            NavigationRail(
+              selectedIndex: sel,
+              onDestinationSelected: (i) => go(visible[i]),
+              extended: MediaQuery.sizeOf(context).width >= 1200,
+              minExtendedWidth: 200,
+              leading: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: _Logo(color: t.colorScheme.primary),
+              ),
+              destinations: [
+                for (final i in visible)
+                  NavigationRailDestination(
+                    icon: Icon(_dest[i].$1),
+                    selectedIcon: Icon(_dest[i].$2),
+                    label: Text(_dest[i].$3),
+                  ),
+              ],
             ),
-            destinations: [
-              for (final d in _dest)
-                NavigationRailDestination(
-                  icon: Icon(d.$1),
-                  selectedIcon: Icon(d.$2),
-                  label: Text(d.$3),
-                ),
-            ],
-          ),
-          const VerticalDivider(width: 1),
-          Expanded(child: page),
+          if (visible.length >= 2) const VerticalDivider(width: 1),
+          Expanded(child: body),
         ],
       ),
     );
   }
 }
 
-extension on _AppShellState {
-  Widget _production(BuildContext context) {
-    if (!_AppShellState._productionPages.contains(_index)) _index = 1;
-    final sel = _AppShellState._productionPages.indexOf(_index);
-    final page = KeyedSubtree(key: ValueKey('p$_index'), child: _page());
+/// Faixa do topo: licença inválida (só consulta) e usuário logado.
+class _AccessBar extends StatelessWidget {
+  const _AccessBar();
+
+  @override
+  Widget build(BuildContext context) {
+    final store = StoreScope.of(context);
     final t = Theme.of(context);
-    return Scaffold(
-      body: Column(children: [
-        Material(
-          color: t.colorScheme.tertiaryContainer,
-          child: SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              child: Row(children: [
-                Icon(Icons.precision_manufacturing_outlined,
-                    size: 18, color: t.colorScheme.onTertiaryContainer),
+    final multi = store.activeUsers.length > 1;
+    if (!gate.readOnly && !multi) return const SizedBox.shrink();
+    return Material(
+      color: gate.readOnly ? t.colorScheme.errorContainer : t.colorScheme.tertiaryContainer,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+          child: Column(children: [
+            if (gate.readOnly)
+              Row(children: [
+                Icon(Icons.lock_outline, size: 18, color: t.colorScheme.onErrorContainer),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text('Modo produção · sem valores',
+                  child: Text('${store.license.status.label} · somente consulta',
                       style: TextStyle(
-                          color: t.colorScheme.onTertiaryContainer,
+                          color: t.colorScheme.onErrorContainer,
                           fontWeight: FontWeight.w600)),
                 ),
-                TextButton.icon(
-                  onPressed: () => leaveProductionMode(context),
-                  icon: const Icon(Icons.lock_open, size: 18),
-                  label: const Text('Gestor'),
+                TextButton(
+                  onPressed: () => showInstallLicense(context),
+                  child: const Text('Instalar licença'),
                 ),
               ]),
-            ),
-          ),
+            if (multi)
+              Row(children: [
+                Icon(Icons.person_outline, size: 18, color: t.colorScheme.onTertiaryContainer),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${store.currentUser?.name ?? ''} · ${store.currentUser?.role.label ?? ''}${gate.can(Perm.valoresVer) ? '' : ' · sem valores'}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: t.colorScheme.onTertiaryContainer,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: store.logout,
+                  icon: const Icon(Icons.logout, size: 18),
+                  label: const Text('Trocar usuário'),
+                ),
+              ]),
+          ]),
         ),
-        Expanded(
-          child: MediaQuery.removePadding(
-              context: context, removeTop: true, child: page),
-        ),
-      ]),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: sel,
-        onDestinationSelected: (i) => go(_AppShellState._productionPages[i]),
-        destinations: const [
-          NavigationDestination(
-              icon: Icon(Icons.assignment_outlined),
-              selectedIcon: Icon(Icons.assignment),
-              label: 'Ordens de serviço'),
-          NavigationDestination(
-              icon: Icon(Icons.warehouse_outlined),
-              selectedIcon: Icon(Icons.warehouse),
-              label: 'Estoque'),
-        ],
       ),
     );
   }

@@ -4,6 +4,7 @@ import '../calc.dart';
 import '../finance.dart';
 import '../format.dart';
 import '../models.dart';
+import '../modules.dart';
 import '../theme.dart';
 import 'claims_page.dart';
 import 'widgets.dart';
@@ -69,6 +70,7 @@ class DashboardPage extends StatelessWidget {
       _Kpi('Fechado no mês', money(monthValue), Icons.trending_up,
           const Color(0xFF2E7D32),
           sub: '$monthCount ${monthCount == 1 ? 'serviço' : 'serviços'}'),
+      if (gate.allows(Mod.financeiro) && gate.roleCan(Perm.financeiroVer))
       _Kpi(
         fin.profit >= 0 ? 'Lucro do mês' : 'Prejuízo do mês',
         money(fin.profit),

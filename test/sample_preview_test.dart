@@ -5,12 +5,18 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:funilar/licensing.dart';
+import 'package:funilar/modules.dart';
+import 'package:funilar/format.dart' show hideMoney;
 import 'package:funilar/complements.dart';
 import 'package:funilar/models.dart';
 import 'package:funilar/pdf_report.dart';
 import 'package:funilar/receipt_parser.dart';
 import 'package:funilar/stock.dart';
 import 'package:funilar/ui/stock_page.dart';
+import 'package:funilar/ui/settings_page.dart';
+import 'package:funilar/ui/license_ui.dart';
+import 'package:funilar/ui/users_ui.dart';
 import 'package:funilar/ui/os_tab.dart';
 import 'package:funilar/ui/damage_tab.dart';
 import 'package:funilar/store.dart';
@@ -47,7 +53,7 @@ void main() {
     await loadFont('MaterialIcons',
         ['$root/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf']);
 
-    store = await AppStore.open(
+    store = await AppStore.open(assumeLicense: License.full(), 
         dir: await Directory.systemTemp.createTemp('funilar_sample'));
     store.settings
       ..shopName = 'Funilaria Exemplo'
@@ -323,8 +329,14 @@ void main() {
   for (final (name, prod) in [('os_gestor', false), ('os_producao', true)]) {
     testWidgets('captura $name', (tester) async {
       size(tester, const Size(420, 2300));
-      store.setProductionMode(prod);
-      addTearDown(() => store.setProductionMode(false));
+      if (prod) {
+        gate.user = AppUser(id: 'p', name: 'Zé', role: Role.producao);
+        hideMoney = true;
+      }
+      addTearDown(() {
+        gate.user = null;
+        hideMoney = false;
+      });
       await tester.pumpWidget(app(Scaffold(body: OsTab(claim: claim))));
       await tester.pumpAndSettle();
       await shot(tester, name);
@@ -337,6 +349,19 @@ void main() {
     await tester.pumpAndSettle();
     await shot(tester, 'avarias_entrada');
   }, skip: skip != null);
+
+  for (final (name, page) in [
+    ('ajustes_licenca', const SettingsPage()),
+    ('master_desafio', const MasterPage()),
+    ('usuarios', const UsersPage()),
+  ]) {
+    testWidgets('captura $name', (tester) async {
+      size(tester, const Size(420, 1400));
+      await tester.pumpWidget(app(page));
+      await tester.pumpAndSettle();
+      await shot(tester, name);
+    }, skip: skip != null);
+  }
 
   testWidgets('captura financeiro', (tester) async {
     size(tester, const Size(420, 2000));

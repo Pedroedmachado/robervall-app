@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../finance.dart';
 import '../format.dart';
 import '../models.dart';
+import '../modules.dart';
 import '../seed.dart';
 import '../stock.dart';
 import '../theme.dart';
@@ -21,7 +22,7 @@ class OsTab extends StatelessWidget {
     final store = StoreScope.of(context);
     final c = claim;
     final t = Theme.of(context);
-    final production = store.settings.productionMode;
+    final production = !gate.roleCan(Perm.valoresVer);
     final tasks = c.items.where((i) => i.approved).toList();
     final doneCount = tasks.where((i) => i.done).length;
     final parts = tasks.where((i) => i.op == ItemOp.troca).toList();
@@ -62,7 +63,9 @@ class OsTab extends StatelessWidget {
                 contentPadding: EdgeInsets.only(left: it.parentId.isEmpty ? 0 : 24),
                 controlAffinity: ListTileControlAffinity.leading,
                 value: it.done,
-                onChanged: (b) {
+                onChanged: !gate.can(Perm.osExecutar)
+                    ? null
+                    : (b) {
                   it.done = b ?? false;
                   if (it.done) {
                     c.timeline.add(TimelineEvent(text: 'Feito: ${it.description}'));
@@ -152,7 +155,10 @@ class OsTab extends StatelessWidget {
                     tooltip: 'Devolver ao estoque',
                     icon: const Icon(Icons.undo, size: 18),
                     onPressed: () async {
-                      if (!await requireManager(context)) return;
+                      if (!await authorize(context, Perm.insumoLiberar,
+                          reason: 'Devolver ao estoque precisa de gestor ou almoxarife.')) {
+                        return;
+                      }
                       store.returnSupply(c, u);
                     },
                   ),
@@ -204,7 +210,7 @@ class OsTab extends StatelessWidget {
       toast(context, 'Cadastre os insumos na aba Estoque primeiro.');
       return;
     }
-    if (!await requireManager(context,
+    if (!await authorize(context, Perm.insumoLiberar,
         reason: 'Só o gestor/almoxarife libera insumos.')) {
       return;
     }
@@ -269,7 +275,7 @@ class OsTab extends StatelessWidget {
               value: note,
               onChanged: (v) => note = v,
             ),
-            if (!store.settings.productionMode && s.cost > 0) ...[
+            if (gate.can(Perm.valoresVer) && s.cost > 0) ...[
               const SizedBox(height: 8),
               KeyValue('Custo', money(s.cost * qty), bold: true),
             ],

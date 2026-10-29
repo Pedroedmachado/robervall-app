@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:funilar/licensing.dart';
+import 'package:funilar/modules.dart';
 import 'package:funilar/format.dart';
 import 'package:funilar/main.dart';
 import 'package:funilar/models.dart';
@@ -10,18 +12,22 @@ import 'package:funilar/store.dart';
 import 'package:funilar/ui/damage_tab.dart';
 import 'package:funilar/ui/finance_page.dart';
 
+import 'test_keys.dart';
+
 /// Cada teste toca num botão das telas de sinistro/orçamento e confere
 /// se a ação realmente aconteceu nos dados e na tela.
 void main() {
   late AppStore store;
 
-  Future<void> start(WidgetTester tester, {Size size = const Size(390, 844)}) async {
+  Future<void> start(WidgetTester tester,
+      {Size size = const Size(390, 844), String? publicKey}) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     store = (await tester.runAsync(() async {
       final dir = await Directory.systemTemp.createTemp('funilar_it');
-      return AppStore.open(dir: dir);
+      return AppStore.open(
+          assumeLicense: License.full(), dir: dir, publicKey: publicKey);
     }))!;
     await tester.pumpWidget(FunilarApp(store: store));
     await tester.pumpAndSettle();
@@ -343,40 +349,103 @@ void main() {
     await settle(t);
   });
 
-  itest('modo produção: esconde valores e volta com PIN', (t) async {
+  itest('usuários: produção não vê valores e insumo pede autorização', (t) async {
     await start(t);
-    seed();
+    final c = seed();
+    c.items.add(BudgetItem(description: 'Porta', op: ItemOp.reparo, laborHours: 2));
+    store.upsertStock(StockItem(
+        kind: StockKind.material, name: 'Lixa P320', qty: 20, unit: 'folha', cost: 2));
+    await t.runAsync(() async {
+      await store.saveUser(AppUser(id: 'a', name: 'Dono', role: Role.admin), newPin: '4321');
+      await store.saveUser(AppUser(id: 'p', name: 'Zé', role: Role.producao), newPin: '');
+    });
+    store.logout();
     await settle(t);
-    await tap(t, nav('Ajustes'));
-    await t.dragUntilVisible(find.text('Entrar no modo produção'),
-        find.byType(ListView).first, const Offset(0, -300));
-    await t.pumpAndSettle();
-    await tap(t, find.text('Entrar no modo produção'));
-    await t.enterText(find.byKey(const ValueKey('pin')), '1234');
-    await tap(t, find.text('OK'));
-    expect(store.settings.productionMode, isTrue);
-    expect(store.settings.managerPin, '1234');
-    expect(find.text('Modo produção · sem valores'), findsOneWidget);
+
+    // login
+    expect(find.text('Quem está usando?'), findsOneWidget);
+    await t.runAsync(() async {
+      await t.tap(find.byKey(const ValueKey('login-Zé')));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
+    await settle(t);
+    expect(store.currentUser?.name, 'Zé');
+    expect(find.textContaining('sem valores'), findsOneWidget);
     expect(find.text('Financeiro'), findsNothing);
+    expect(find.text('Ajustes'), findsNothing);
     expect(money(100), 'R\$ •••');
 
-    // O.S. sem a aba de orçamento
+    // O.S. sem orçamento; insumo pede o PIN de quem pode liberar
     await tap(t, find.textContaining('Argo').first);
     expect(find.descendant(of: find.byType(TabBar), matching: find.textContaining('Orçamento')),
         findsNothing);
+    await tab(t, 'O.S.');
+    await tap(t, find.text('Liberar insumo'));
+    expect(find.text('Autorização'), findsOneWidget);
+    await t.enterText(find.byKey(const ValueKey('pin-PIN')), '4321');
+    await t.runAsync(() async {
+      await t.tap(find.text('Autorizar'));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await settle(t);
+    await tap(t, find.text('Salvar'));
+    expect(c.supplies.single.qty, 1);
+    expect(store.stock.single.qty, 19);
     await tap(t, find.byTooltip('Voltar'));
 
-    // PIN errado não destrava
-    await tap(t, find.text('Gestor'));
-    await t.enterText(find.byKey(const ValueKey('pin')), '0000');
-    await tap(t, find.text('OK'));
-    expect(store.settings.productionMode, isTrue);
+    // troca de usuário
+    await tap(t, find.text('Trocar usuário'));
+    await tap(t, find.byKey(const ValueKey('login-Dono')));
+    await t.enterText(find.byKey(const ValueKey('pin-PIN')), '4321');
+    await t.runAsync(() async {
+      await t.tap(find.text('Entrar'));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
     await settle(t);
-    await tap(t, find.text('Gestor'));
-    await t.enterText(find.byKey(const ValueKey('pin')), '1234');
-    await tap(t, find.text('OK'));
-    expect(store.settings.productionMode, isFalse);
+    expect(store.currentUser?.name, 'Dono');
     expect(money(100), 'R\$ 100,00');
+    await settle(t);
+  });
+
+  itest('Master: desliga módulo com análise de impacto e some da tela', (t) async {
+    await start(t, publicKey: testPub);
+    seed();
+    await settle(t);
+    await tap(t, nav('Ajustes'));
+    await tap(t, find.text('Acesso Master'));
+    final challenge = t.widget<SelectableText>(
+        find.byWidgetPredicate((w) => w is SelectableText && (w.data ?? '').startsWith('M-'))).data!;
+    final resp = (await t.runAsync(() => signMasterChallenge(challenge, testSeed)))!;
+    await t.enterText(find.byKey(const ValueKey('master-resposta')), resp);
+    await t.runAsync(() async {
+      await t.tap(find.text('Entrar'));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await settle(t);
+    expect(find.text('Módulos'), findsOneWidget);
+
+    // Estoque não desliga com a Produção ligada: mostra o motivo
+    await tap(t, find.descendant(of: find.byKey(const ValueKey('mod-estoque')), matching: find.byType(Switch)));
+    expect(find.text('Não é possível:'), findsOneWidget);
+    await tap(t, find.text('Cancelar'));
+    // desliga a Produção e depois o Estoque
+    await tap(t, find.descendant(of: find.byKey(const ValueKey('mod-producao')), matching: find.byType(Switch)));
+    expect(find.textContaining('Nenhum dado é apagado'), findsOneWidget);
+    await t.runAsync(() async {
+      await t.tap(find.widgetWithText(FilledButton, 'Desligar'));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
+    await settle(t);
+    await tap(t, find.descendant(of: find.byKey(const ValueKey('mod-estoque')), matching: find.byType(Switch)));
+    await t.runAsync(() async {
+      await t.tap(find.widgetWithText(FilledButton, 'Desligar'));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
+    await settle(t);
+    expect(gate.active(Mod.estoque), isFalse);
+    expect(gate.active(Mod.producao), isFalse);
+    await tap(t, find.byTooltip('Voltar'));
+    expect(find.text('Estoque'), findsNothing);
     await settle(t);
   });
 

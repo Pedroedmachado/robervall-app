@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../calc.dart';
 import '../format.dart';
 import '../models.dart';
+import '../modules.dart';
 import '../store.dart';
 import '../theme.dart';
 import 'budget_tab.dart';
@@ -63,25 +64,29 @@ class _ClaimDetailPageState extends State<ClaimDetailPage> {
     }
     final totals = computeTotals(c, store.settings);
     final wide = isWide(context);
-    final production = store.settings.productionMode;
+    final production = !gate.roleCan(Perm.valoresVer);
     final doneTasks = c.items.where((i) => i.approved && i.done).length;
     final allTasks = c.items.where((i) => i.approved).length;
     // modo produção: sem dados do cliente, sem orçamento e sem valores
     final tabs = <(IconData, String, Widget)>[
       if (!production)
         (Icons.description_outlined, 'Dados', ClaimFormTab(claim: c)),
-      (Icons.car_repair, 'Avarias (${c.damages.length})', DamageTab(claim: c)),
-      (Icons.photo_library_outlined, 'Fotos (${c.photos.length})',
-          PhotosTab(claim: c)),
+      if (gate.active(Mod.vistoria)) ...[
+        (Icons.car_repair, 'Avarias (${c.damages.length})', DamageTab(claim: c)),
+        (Icons.photo_library_outlined, 'Fotos (${c.photos.length})',
+            PhotosTab(claim: c)),
+      ],
       if (!production)
         (Icons.request_quote_outlined, 'Orçamento (${c.items.length})',
             BudgetTab(claim: c)),
-      (Icons.assignment_outlined, 'O.S. ($doneTasks/$allTasks)', OsTab(claim: c)),
+      if (gate.active(Mod.producao))
+        (Icons.assignment_outlined, 'O.S. ($doneTasks/$allTasks)',
+            OsTab(claim: c)),
       (Icons.timeline, 'Histórico', TimelineTab(claim: c)),
     ];
 
     return DefaultTabController(
-      key: ValueKey(production),
+      key: ValueKey('$production${tabs.length}'),
       length: tabs.length,
       child: Scaffold(
         appBar: AppBar(
@@ -104,7 +109,7 @@ class _ClaimDetailPageState extends State<ClaimDetailPage> {
             ],
           ),
           actions: [
-            if (!production) ...[
+            if (!production && gate.roleCan(Perm.sinistroEditar)) ...[
             IconButton(
               tooltip: 'Ver orçamento',
               icon: const Icon(Icons.receipt_long_outlined),
@@ -203,7 +208,12 @@ class _ClaimDetailPageState extends State<ClaimDetailPage> {
           children: [for (final (_, _, page) in tabs) page],
         ),
         bottomNavigationBar:
-            production ? null : _TotalBar(claim: c, totals: totals),
+            production
+                ? null
+                : _TotalBar(
+                    claim: c,
+                    totals: totals,
+                    budgetTab: tabs.indexWhere((e) => e.$2.startsWith('Orçamento'))),
       ),
     );
   }
@@ -278,8 +288,10 @@ Future<String?> _askText(BuildContext context, String title, String hint,
 }
 
 class _TotalBar extends StatelessWidget {
-  const _TotalBar({required this.claim, required this.totals});
+  const _TotalBar(
+      {required this.claim, required this.totals, required this.budgetTab});
   final Claim claim;
+  final int budgetTab;
   final BudgetTotals totals;
 
   @override
@@ -291,7 +303,7 @@ class _TotalBar extends StatelessWidget {
       color: t.colorScheme.surfaceContainer,
       child: InkWell(
         // toque no total leva para a aba Orçamento
-        onTap: () => DefaultTabController.of(context).animateTo(3),
+        onTap: () => DefaultTabController.of(context).animateTo(budgetTab),
         child: SafeArea(
         top: false,
         child: Padding(
