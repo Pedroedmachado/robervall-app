@@ -278,7 +278,7 @@ void main() {
   }
 
   testWidgets('captura orcamento_complementos', (tester) async {
-    size(tester, const Size(420, 2600));
+    size(tester, const Size(420, 3700));
     await tester.pumpWidget(app(Scaffold(body: BudgetTab(claim: claim))));
     await tester.pumpAndSettle();
     await shot(tester, 'orcamento_complementos');
