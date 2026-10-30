@@ -987,14 +987,14 @@ Widget _duplicatesCard(BuildContext ctx, AppStore store, StockItem s,
   final dups = findDuplicates(store.stock, s);
   if (dups.isEmpty) return const SizedBox(height: 4);
   final t = Theme.of(ctx);
-  return Container(
+  return Padding(
     key: const ValueKey('aviso-repetido'),
-    margin: const EdgeInsets.only(top: 10),
+    padding: const EdgeInsets.only(top: 10),
+    child: Material(
+    color: Colors.orange.withValues(alpha: 0.15),
+    borderRadius: BorderRadius.circular(10),
+    child: Padding(
     padding: const EdgeInsets.all(10),
-    decoration: BoxDecoration(
-      color: Colors.orange.withValues(alpha: 0.15),
-      borderRadius: BorderRadius.circular(10),
-    ),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const Text('Atenção: parece que esta peça já está cadastrada',
           style: TextStyle(fontWeight: FontWeight.w700, color: Colors.orange)),
@@ -1028,6 +1028,8 @@ Widget _duplicatesCard(BuildContext ctx, AppStore store, StockItem s,
         title: const Text('É outra peça, salvar mesmo assim'),
       ),
     ]),
+    ),
+    ),
   );
 }
 
