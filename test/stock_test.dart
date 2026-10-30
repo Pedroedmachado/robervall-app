@@ -181,7 +181,20 @@ void main() {
     expect(fitsVehicle(gol, Vehicle(brand: 'Volkswagen', model: 'Gol 1.0 MPI', year: '2014')), isTrue);
     expect(fitsVehicle(gol, Vehicle(brand: 'Volkswagen', model: 'Gol', year: '2019')), isFalse);
     expect(fitsVehicle(gol, Vehicle(brand: 'Fiat', model: 'Uno', year: '2014')), isFalse);
-    expect(fitsVehicle(StockItem(name: 'x'), Vehicle(model: 'Uno')), isTrue);
+    // sem aplicação cadastrada: não aparece em carro nenhum
+    expect(fitsVehicle(StockItem(name: 'x'), Vehicle(model: 'Uno')), isFalse);
+    // capô de Renegade não aparece na Meriva
+    final capo = StockItem(name: 'Capô', applications: [VehicleFit(make: 'Jeep', model: 'Renegade', yearFrom: 2016, yearTo: 2022)]);
+    expect(fitsVehicle(capo, Vehicle(brand: 'Chevrolet', model: 'Meriva Maxx 1.4', year: '2010')), isFalse);
+    expect(fitsVehicle(capo, Vehicle(brand: 'Jeep', model: 'Renegade Sport 1.8', year: '2018')), isTrue);
+    // "Ka" não confunde com "Kangoo"
+    expect(fitsVehicle(StockItem(name: 'x', applications: [VehicleFit(make: 'Ford', model: 'Ka')]),
+        Vehicle(brand: 'Renault', model: 'Kangoo')), isFalse);
+    // peça antiga com "Serve em" escrito à mão
+    expect(fitsVehicle(StockItem(name: 'x', fits: 'Gol G5 2009-2012'), Vehicle(model: 'Gol 1.0')), isTrue);
+    expect(fitsVehicle(StockItem(name: 'x', fits: 'Renegade'), Vehicle(model: 'Meriva')), isFalse);
+    // carro sem modelo: não sugere nada
+    expect(fitsVehicle(gol, Vehicle()), isFalse);
     final item = BudgetItem(description: 'Farol esquerdo', op: ItemOp.troca);
     gol.qty = 1;
     expect(stockFor(stock, item, Vehicle(brand: 'Fiat', model: 'Uno', year: '2014')), isEmpty);

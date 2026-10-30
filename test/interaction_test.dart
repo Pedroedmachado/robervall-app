@@ -337,6 +337,10 @@ void main() {
     await tap(t, find.text('Salvar'));
     expect(store.stock.single.name, 'Farol esquerdo');
     expect(find.text('Farol esquerdo'), findsOneWidget);
+    // só aparece no carro para o qual foi cadastrada
+    store.stock.single.applications.add(VehicleFit(make: 'Fiat', model: 'Argo'));
+    store.upsertStock(StockItem(name: 'Farol esquerdo', qty: 3,
+        applications: [VehicleFit(make: 'Jeep', model: 'Renegade')]));
 
     c.items.add(BudgetItem(description: 'Farol esquerdo', op: ItemOp.troca));
     store.changed();
@@ -347,13 +351,15 @@ void main() {
     expect(find.text('Mercado Livre'), findsOneWidget);
     await tap(t, find.text('Tem no estoque (1)'));
     await tap(t, find.widgetWithText(FilledButton, 'Usar'));
-    expect(c.items.single.stockId, store.stock.single.id);
+    expect(c.items.single.stockId,
+        store.stock.firstWhere((e) => e.applications.first.model == 'Argo').id);
     expect(c.items.single.price, 320);
     expect(find.text('Do estoque ✓'), findsOneWidget);
 
     store.setStatus(c, ClaimStatus.aprovado);
     await settle(t);
-    expect(store.stock.single.qty, 0);
+    expect(store.stock.firstWhere((e) => e.applications.first.model == 'Argo').qty, 0);
+    expect(store.stock.firstWhere((e) => e.applications.first.model == 'Renegade').qty, 3);
     await settle(t);
   });
 

@@ -415,27 +415,42 @@ bool _sameCar(VehicleFit a, VehicleFit b) {
   return (ma == mb || ma.startsWith(mb) || mb.startsWith(ma)) && _yearsOverlap(a, b);
 }
 
-/// A peça serve neste carro? (sem aplicação cadastrada: não dá para saber → serve)
+/// A peça serve neste carro? Só quando está cadastrada para ele: pela
+/// aplicação veicular (montadora, modelo e ano) ou, em peças antigas, pelo
+/// texto "Serve em". Sem nenhuma dessas informações, não aparece.
 bool fitsVehicle(StockItem s, Vehicle v) {
-  if (s.applications.isEmpty || v.model.trim().isEmpty) return true;
-  final year = int.tryParse(RegExp(r'\d{4}').firstMatch(v.year)?[0] ?? '');
-  final cm = _normModel(v.model);
-  for (final a in s.applications) {
-    if (v.brand.trim().isNotEmpty &&
-        a.make.trim().isNotEmpty &&
-        normMake(a.make) != normMake(v.brand)) {
-      continue;
-    }
-    final am = _normModel(a.model);
-    if (am.isEmpty || !(cm.contains(am) || am.contains(cm))) continue;
-    if (year != null &&
-        ((a.yearFrom != null && year < a.yearFrom!) ||
-            (a.yearTo != null && year > a.yearTo!))) {
-      continue;
-    }
-    return true;
+  final carWords = _words(v.model);
+  if (carWords.isEmpty) return false;
+  bool sameModel(String m) {
+    final w = _words(m);
+    if (w.isEmpty) return false;
+    // "Gol" serve no "Gol Trend 1.6"; "Ka" não serve no "Kangoo"
+    return w.every(carWords.contains) || carWords.every(w.contains);
   }
-  return false;
+
+  if (s.applications.isNotEmpty) {
+    final year = int.tryParse(RegExp(r'\d{4}').firstMatch(v.year)?[0] ?? '');
+    for (final a in s.applications) {
+      if (v.brand.trim().isNotEmpty &&
+          a.make.trim().isNotEmpty &&
+          normMake(a.make) != normMake(v.brand)) {
+        continue;
+      }
+      if (!sameModel(a.model)) continue;
+      if (year != null &&
+          ((a.yearFrom != null && year < a.yearFrom!) ||
+              (a.yearTo != null && year > a.yearTo!))) {
+        continue;
+      }
+      return true;
+    }
+    return false;
+  }
+  // peça antiga: "Serve em" escrito à mão (ex.: "Gol G5 2009-2012")
+  final fit = _words(s.fits);
+  if (fit.isEmpty) return false;
+  final base = _words(v.model.split(RegExp(r'\s+')).first);
+  return base.isNotEmpty && base.every(fit.contains);
 }
 
 /// Possíveis cadastros repetidos da mesma peça, com o motivo.
