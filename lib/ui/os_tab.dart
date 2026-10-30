@@ -249,6 +249,7 @@ class OsTab extends StatelessWidget {
     }
     if (!context.mounted) return;
     var stockId = materials.first.id;
+    var search = '';
     var qty = store.stockById(materials.first.id)?.unit == 'folha' ? 0.25 : 1.0;
     var piece = 0.25; // lixa em folha: tamanho do pedaço
     var pieces = 1.0;
@@ -286,25 +287,82 @@ class OsTab extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Picker<String>(
-              label: 'Insumo',
-              value: stockId,
-              values: [for (final m in materials) m.id],
-              labelOf: (id) {
-                final m = store.stockById(id)!;
-                return '${m.name} (${m.qtyLabel})';
-              },
-              onChanged: (id) => setS(() {
-                stockId = id;
-                if (store.stockById(id)?.unit == 'folha') {
-                  piece = 0.25;
-                  pieces = 1;
-                  qty = 0.25;
-                } else {
-                  qty = 1;
-                }
-              }),
+            TextField(
+              key: const ValueKey('busca-insumo'),
+              decoration: const InputDecoration(
+                labelText: 'Buscar insumo',
+                hintText: 'Nome, local ou código',
+                prefixIcon: Icon(Icons.search),
+              ),
+              onChanged: (v) => setS(() => search = v),
             ),
+            const SizedBox(height: 6),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 230),
+              child: () {
+                final q = search.trim().toLowerCase();
+                final found = materials
+                    .where((m) =>
+                        q.isEmpty ||
+                        m.name.toLowerCase().contains(q) ||
+                        m.address.toLowerCase().contains(q) ||
+                        m.sku.toLowerCase().contains(q) ||
+                        m.partNumber.toLowerCase().contains(q))
+                    .toList();
+                if (found.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.all(8),
+                    child: Text('Nenhum insumo com esse nome.'),
+                  );
+                }
+                return ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final m in found)
+                      Material(
+                        color: m.id == stockId
+                            ? Theme.of(ctx).colorScheme.secondaryContainer
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                        child: ListTile(
+                          key: ValueKey('insumo-${m.name}'),
+                          dense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 6),
+                          leading: StockThumb(item: m, size: 36),
+                          title: Text(m.name,
+                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                          subtitle: Text(
+                            [
+                              m.qtyLabel,
+                              if (m.address.isNotEmpty) '📍 ${m.address}',
+                            ].join(' · '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: m.qty <= 0 ? Colors.red.shade700 : null),
+                          ),
+                          trailing: m.id == stockId
+                              ? const Icon(Icons.check_circle)
+                              : null,
+                          onTap: () => setS(() {
+                            stockId = m.id;
+                            if (m.unit == 'folha') {
+                              piece = 0.25;
+                              pieces = 1;
+                              qty = 0.25;
+                            } else {
+                              qty = 1;
+                            }
+                          }),
+                        ),
+                      ),
+                  ],
+                );
+              }(),
+            ),
+            const SizedBox(height: 6),
+            Text('Selecionado: ${s.name}',
+                style: const TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 12),
             if (s.unit == 'folha') ...[
               Text('Tamanho do pedaço', style: Theme.of(ctx).textTheme.labelLarge),
