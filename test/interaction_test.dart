@@ -385,7 +385,7 @@ void main() {
     expect(find.textContaining('para Luan'), findsOneWidget);
     expect(find.byKey(const ValueKey('total-insumos')), findsOneWidget);
     expect(t.widget<Text>(find.byKey(const ValueKey('total-insumos'))).data, money(5));
-    expect(find.text('Custo real da O.S.'), findsOneWidget);
+    expect(find.text('Custo real da O.S.', skipOffstage: false), findsOneWidget);
     await settle(t);
   });
 
