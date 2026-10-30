@@ -10,6 +10,7 @@ import 'package:funilar/models.dart';
 import 'package:funilar/stock.dart';
 import 'package:funilar/store.dart';
 import 'package:funilar/team.dart';
+import 'package:funilar/ui/os_tab.dart';
 
 /// Teste geral do aplicativo: o ciclo inteiro de um carro (estoque, equipe,
 /// insumos, aprovação, conclusão, caixa, relatório da equipe, reabrir,
@@ -213,7 +214,7 @@ void main() {
       expect(b.contactsOf(ContactKind.funcionario).length, 2);
       expect(b.cash.length, 2); // lucro + energia
       expect(b.entries.where(isCrewEntry).length, 2);
-      expect(b.catalog.single.description, 'Para-lama');
+      expect(b.catalog.where((e) => e.description == 'Para-lama').single.price, 450);
       expect(b.settings.numberPrefix, 'OS');
       expect(b.settings.paintRate, 90);
       // reabrir não duplica lançamentos automáticos
@@ -286,12 +287,18 @@ void main() {
           description: 'Capô', op: ItemOp.reparo, perPiece: true, piecePrice: 350);
       store.upsertCatalog(p);
       store.upsertCatalog(c);
-      expect(store.catalog.map((e) => e.description), ['Capô', 'Para-choque']);
+      final names = store.catalog.map((e) => e.description).toList();
+      expect(names, containsAll(['Capô', 'Para-choque']));
+      final sorted = [...names]..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      expect(names, sorted); // sempre em ordem alfabética
       final back = CatalogItem.fromJson(c.toJson());
       expect(back.perPiece, isTrue);
       expect(back.piecePrice, 350);
+      final n = store.catalog.length;
       store.removeCatalog(p);
-      expect(store.catalog.single, c);
+      expect(store.catalog.length, n - 1);
+      expect(store.catalog, isNot(contains(p)));
+      expect(store.catalog, contains(c));
       store.dispose();
     });
   });
@@ -390,6 +397,9 @@ void main() {
       await tap(t, nav('Estoque'));
       expect(find.textContaining('Farol esquerdo', skipOffstage: false), findsWidgets);
       await tap(t, nav('Catálogo'));
+      await t.enterText(
+          find.widgetWithText(TextField, 'Buscar por descrição ou código'), 'para-lama');
+      await t.pumpAndSettle();
       expect(find.text('Para-lama'), findsOneWidget);
       await tap(t, nav('Cadastros'));
       for (final k in ContactKind.values) {
@@ -420,7 +430,13 @@ void main() {
     await tap(t, find.text('XYZ-9A99').first);
     await tab(t, 'O.S.');
     expect(s.lixa.qty, 40);
-    await tap(t, find.byTooltip('Devolver ao estoque'));
+    final back = find.byTooltip('Devolver ao estoque');
+    await t.dragUntilVisible(
+        back,
+        find.descendant(of: find.byType(OsTab), matching: find.byType(Scrollable)).first,
+        const Offset(0, -250));
+    await t.pumpAndSettle();
+    await tap(t, back);
     expect(s.claim.supplies, isEmpty);
     expect(s.lixa.qty, 50);
     expect(find.byTooltip('Devolver ao estoque'), findsNothing);
@@ -469,6 +485,9 @@ void main() {
     final it = store.catalog.firstWhere((e) => e.description == 'Retrovisor direito');
     expect(it.price, 320);
     expect(it.op, ItemOp.troca);
+    await t.enterText(
+        find.widgetWithText(TextField, 'Buscar por descrição ou código'), 'retrovisor');
+    await t.pumpAndSettle();
     expect(find.text('Retrovisor direito'), findsOneWidget);
   });
 
@@ -498,7 +517,7 @@ void main() {
     await tap(t, find.text('XYZ-9A99').first);
     await tap(t, find.byTooltip('Ver orçamento'));
     expect(find.text('M.O. (h)', skipOffstage: false), findsWidgets);
-    await t.pageBack();
+    Navigator.of(t.element(find.text('ORÇAMENTO'))).pop();
     await t.pumpAndSettle();
 
     await tab(t, 'Orçamento');
