@@ -1,0 +1,13 @@
+== teste do atualizador (Windows real)
+00:00 +0: loading D:/a/robervall-app/robervall-app/test/updater_windows_test.dart
+00:00 +0: troca os arquivos de uma instalação antiga e grava a versão
+saida: 
+erros: 
+log: 2026-10-30 21:35:07  Atualizando para v9.9.9 de=C:\Users\RUNNER~1\AppData\Local\Temp\funilar_update93802de2\novo para=C:\Users\RUNNER~1\AppData\Local\Temp\fn_instalado9b2d7d3b
+2026-10-30 21:35:10  robocopy tentativa 1: codigo 3
+2026-10-30 21:35:10  OK
+2026-10-30 21:35:10  sem reabrir (teste)
+
+00:04 +1: baixa e descompacta a última versão publicada
+00:17 +2: All tests passed!
+UPDATER_OK

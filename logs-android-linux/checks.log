@@ -1,0 +1,371 @@
+== flutter --version
+Flutter 3.47.9 • channel stable • https://github.com/flutter/flutter.git
+Framework • revision c197ca5199 (31 hours ago) • 2026-10-29 10:10:20 -0400
+Engine • hash 9e025265bef30b838c0c1b68cad19decf97048f2 (revision 89c39edfdf) (3 days ago) • 2026-10-27 19:51:20.000Z
+Tools • Dart 3.13.7 • DevTools 2.60.0
+== prepare
+AndroidManifest:
+    <uses-permission android:name="android.permission.INTERNET"/>
+        android:label="Funilar"
+Plataformas prontas.
+== pub get
+Resolving dependencies...
+Downloading packages...
+  code_assets 1.2.1 (2.1.0 available)
+  cross_file 0.3.5+5 (0.4.0 available)
+  hooks 2.0.2 (2.2.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  objective_c 9.5.0 (9.6.2 available)
+  petitparser 7.0.2 (7.1.0 available)
+  qr 3.0.3 (4.0.1 available)
+  record_use 0.6.0 (1.1.1 available)
+  share_plus 10.1.4 (13.3.1 available)
+  share_plus_platform_interface 5.0.2 (7.2.0 available)
+  test_api 0.7.12 (0.7.15 available)
+  vector_math 2.4.0 (2.4.4 available)
+  win32 5.15.0 (6.4.0 available)
+  xml 7.0.1 (7.1.0 available)
+Got dependencies!
+15 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+== analyze
+Analyzing robervall-app...                                      
+
+   info • Dangling library doc comment. Add a 'library' directive after the library comment • lib/format.dart:1:1 • dangling_library_doc_comments
+   info • Unnecessary braces in a string interpolation. Try removing the braces • lib/licensing.dart:137:21 • unnecessary_brace_in_string_interps
+warning • The name num2 is shown, but isn't used. Try removing the name from the list of shown members • lib/store.dart:12:38 • unused_shown_name
+warning • Unused import: '../models.dart'. Try removing the import directive • lib/ui/cash_page.dart:6:8 • unused_import
+   info • The import of 'dart:ui' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart'. Try removing the import directive • lib/ui/quote_preview_page.dart:2:8 • unnecessary_import
+warning • The ability to import 'BytesBuilder' indirectly is deprecated. Try importing 'BytesBuilder' directly • lib/updater.dart:196:17 • deprecated_export_use
+
+6 issues found. (ran in 9.7s)
+== test
+
+::group::✅ Passing tests
+✅ /home/runner/work/robervall-app/robervall-app/test/finance_test.dart: lucro = orçamentos fechados − gastos do mês
+✅ /home/runner/work/robervall-app/robervall-app/test/finance_test.dart: gasto fixo repete todo mês até a data final
+✅ /home/runner/work/robervall-app/robervall-app/test/finance_test.dart: ano soma os 12 meses
+✅ /home/runner/work/robervall-app/robervall-app/test/finance_test.dart: lançamento ida e volta em JSON
+✅ /home/runner/work/robervall-app/robervall-app/test/finance_test.dart: funcionários: salário, por peça e terceirizado
+✅ /home/runner/work/robervall-app/robervall-app/test/stock_test.dart: acha a peça do estoque pelo nome ou código, sem trocar o lado
+✅ /home/runner/work/robervall-app/robervall-app/test/stock_test.dart: baixa no estoque quando aprova e devolve quando reabre
+✅ /home/runner/work/robervall-app/robervall-app/test/stock_test.dart: nome do PDF é modelo e placa
+✅ /home/runner/work/robervall-app/robervall-app/test/stock_test.dart: busca no Mercado Livre usa tudo o que está cadastrado
+✅ /home/runner/work/robervall-app/robervall-app/test/stock_test.dart: embalagem: custo por unidade, rótulos e leitura do nome
+✅ /home/runner/work/robervall-app/robervall-app/test/stock_test.dart: lixa: folha em quartos e disco
+✅ /home/runner/work/robervall-app/robervall-app/test/stock_test.dart: peça: aplicação veicular, código OEM e cadastro repetido
+✅ /home/runner/work/robervall-app/robervall-app/test/cash_test.dart: orçamento concluído leva o lucro líquido para as entradas do caixa
+✅ /home/runner/work/robervall-app/robervall-app/test/cash_test.dart: entradas, saídas, previstos e saldo do período
+✅ /home/runner/work/robervall-app/robervall-app/test/os_test.dart: insumos saem do estoque e entram no custo real da O.S.
+✅ /home/runner/work/robervall-app/robervall-app/test/os_test.dart: endereço da peça e modo produção esconde valores
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: novo sinistro: digitar placa atualiza título e lista
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: novo sinistro vazio é descartado ao voltar
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: tipo de atendimento mostra seção da seguradora
+✅ /home/runner/work/robervall-app/robervall-app/test/licensing_test.dart: sem exigência de licença: abre completo e grava normalmente
+✅ /home/runner/work/robervall-app/robervall-app/test/licensing_test.dart: licença licença oficial confere com a chave pública do app
+✅ /home/runner/work/robervall-app/robervall-app/test/licensing_test.dart: licença rejeita licença adulterada, de outra chave, ilegível ou ausente
+✅ /home/runner/work/robervall-app/robervall-app/test/licensing_test.dart: licença vencida, de outro aparelho e relógio atrasado
+✅ /home/runner/work/robervall-app/robervall-app/test/licensing_test.dart: instalação e módulos sem licença: só consulta e nada é gravado
+✅ /home/runner/work/robervall-app/robervall-app/test/licensing_test.dart: instalação e módulos desligar e religar: bloqueio, persistência e dados intactos
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: status: aprovar pede nome e registra
+✅ /home/runner/work/robervall-app/robervall-app/test/licensing_test.dart: instalação e módulos só o Master liga/desliga: resposta errada é recusada
+✅ /home/runner/work/robervall-app/robervall-app/test/licensing_test.dart: instalação e módulos módulo fora da licença nunca liga, nem mexendo no arquivo
+✅ /home/runner/work/robervall-app/robervall-app/test/licensing_test.dart: instalação e módulos Integrações desligadas: o app não acessa a internet
+✅ /home/runner/work/robervall-app/robervall-app/test/licensing_test.dart: instalação e módulos campos desconhecidos do arquivo são preservados ao gravar
+✅ /home/runner/work/robervall-app/robervall-app/test/licensing_test.dart: usuários e permissões papéis, PIN com hash, login e autorização pontual
+✅ /home/runner/work/robervall-app/robervall-app/test/licensing_test.dart: usuários e permissões versão antiga: PIN do gestor vira Administrador e o modo produção vira usuário
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: duplicar e excluir
+::endgroup::
+::group::✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: orçamento: novo item, editar, aprovar, excluir e desfazer
+
+Warning: A call to tap() with finder "Found 1 widget with text "Trocar a peça": [
+  Text("Trocar a peça", dependencies: [DefaultSelectionStyle, DefaultTextStyle, MediaQuery, _ScrollableScope]),
+]" derived an Offset (Offset(157.0, 68.0)) that would not hit test on the specified widget.
+Maybe the widget is actually off-screen, or another widget is obscuring it, or the widget cannot receive pointer events.
+The finder corresponds to this RenderBox: RenderParagraph#f1f3b relayoutBoundary=up14
+The hit test result at that offset is: HitTestResult(HitTestEntry<HitTestTarget>#02daf(TextSpan(debugLabel: (((englishLike bodyLarge 2021).merge((blackMountainView bodyLarge).apply)).copyWith).copyWith, inherit: false, color: Color(alpha: 1.0000, red: 0.0902, green: 0.1098, blue: 0.1216, colorSpace: ColorSpace.sRGB), family: Roboto, size: 13.0, weight: 400, letterSpacing: 0.5, baseline: alphabetic, height: 1.5x, leadingDistribution: even, decoration: Color(alpha: 1.0000, red: 0.0902, green: 0.1098, blue: 0.1216, colorSpace: ColorSpace.sRGB) TextDecoration.none, "Farol esquerdo")), RenderParagraph#65644@Offset(125.0, 9.0), _RenderListTile#ec78f@Offset(125.0, 24.0), RenderPadding#b7dc8@Offset(141.0, 24.0), RenderPadding#6a358@Offset(141.0, 24.0), RenderSemanticsAnnotations#3dbaf@Offset(141.0, 24.0), RenderPointerListener#02881@Offset(141.0, 24.0), RenderSemanticsAnnotations#2c2fa@Offset(141.0, 24.0), RenderMouseRegion#47f31@Offset(141.0, 24.0), RenderSemanticsAnnotations#41a53@Offset(141.0, 24.0), RenderRepaintBoundary#cff94@Offset(141.0, 24.0), RenderIndexedSemantics#febdf@Offset(141.0, 24.0), RenderSliverList@(mainAxis: 24.0, crossAxis: 141.0), RenderSliverPadding@(mainAxis: 24.0, crossAxis: 141.0), RenderShrinkWrappingViewport#72960@Offset(141.0, 24.0), RenderIgnorePointer#61052@Offset(141.0, 24.0), RenderSemanticsAnnotations#726c0@Offset(141.0, 24.0), RenderPointerListener#9c792@Offset(141.0, 24.0), RenderSemanticsGestureHandler#c155b@Offset(141.0, 24.0), RenderPointerListener#13991@Offset(141.0, 24.0), _RenderScrollSemantics#bd863@Offset(141.0, 24.0), RenderClipRect#80b51@Offset(141.0, 24.0), RenderConstrainedBox#7085f@Offset(141.0, 24.0), _RenderInkFeatures#60103@Offset(141.0, 24.0), RenderCustomPaint#a0e33@Offset(141.0, 24.0), RenderPhysicalShape#59be5@Offset(141.0, 24.0), RenderPositionedBox#d2f8e@Offset(141.0, 24.0), RenderTapRegion#b0697@Offset(141.0, 24.0), RenderPositionedBox#2edc9@Offset(141.0, 24.0), RenderConstrainedBox#63074@Offset(141.0, 24.0), RenderPositionedBox#bdfaf@Offset(141.0, 24.0), _RenderLayoutBuilder#f075e@Offset(157.0, 68.0), _RenderDeferredLayoutBox#76baf@Offset(157.0, 68.0), _RenderTheater#7d7d6@Offset(157.0, 68.0), RenderAbsorbPointer#1f1b3@Offset(157.0, 68.0), RenderPointerListener#89600@Offset(157.0, 68.0), RenderSemanticsAnnotations#82f5a@Offset(157.0, 68.0), RenderSemanticsAnnotations#84bb8@Offset(157.0, 68.0), RenderSemanticsAnnotations#4636f@Offset(157.0, 68.0), RenderSemanticsAnnotations#3359e@Offset(157.0, 68.0), RenderTapRegionSurface#d007c@Offset(157.0, 68.0), RenderSemanticsAnnotations#c3ad9@Offset(157.0, 68.0), RenderSemanticsAnnotations#e9b4f@Offset(157.0, 68.0), HitTestEntry<HitTestTarget>#3b400(_ReusableRenderView#707a9), HitTestEntry<HitTestTarget>#f4ddb(<AutomatedTestWidgetsFlutterBinding>))
+#0      WidgetController._getElementPoint (package:flutter_test/src/controller.dart:2165:25)
+#1      WidgetController.getCenter (package:flutter_test/src/controller.dart:1947:12)
+#2      WidgetController.tap (package:flutter_test/src/controller.dart:1080:7)
+#3      main.tap (file:///home/runner/work/robervall-app/robervall-app/test/interaction_test.dart:43:18)
+<asynchronous suspension>
+#4      main.<anonymous closure> (file:///home/runner/work/robervall-app/robervall-app/test/interaction_test.dart:176:5)
+<asynchronous suspension>
+#5      main.itest.<anonymous closure> (file:///home/runner/work/robervall-app/robervall-app/test/interaction_test.dart:57:7)
+<asynchronous suspension>
+#6      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#7      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+To silence this warning, pass "warnIfMissed: false" to "tap()".
+To make this warning fatal, set WidgetController.hitTestWarningShouldBeFatal to true.
+
+::endgroup::
+::group::✅ Passing tests
+✅ /home/runner/work/robervall-app/robervall-app/test/receipt_test.dart: lê a nota da Art Color Tintas
+✅ /home/runner/work/robervall-app/robervall-app/test/receipt_test.dart: anexar nota num lançamento existente mantém o que não foi lido
+✅ /home/runner/work/robervall-app/robervall-app/test/receipt_test.dart: aguenta erros comuns do OCR (O no lugar de 0, colunas separadas)
+✅ /home/runner/work/robervall-app/robervall-app/test/receipt_test.dart: cupom de autopeças com "VALOR A PAGAR" vira fornecedor
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: orçamento: item cobrado por peça (sem horas)
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: estoque: insumo comprado em lata calcula o custo por ml
+✅ /home/runner/work/robervall-app/robervall-app/test/full_app_test.dart: ciclo completo de um carro orçamento → aprovado → concluído → caixa e equipe → reabrir → excluir
+✅ /home/runner/work/robervall-app/robervall-app/test/full_app_test.dart: ciclo completo de um carro tudo é gravado e volta igual ao abrir o app de novo
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: estoque: peça com aplicação e aviso de código repetido
+✅ /home/runner/work/robervall-app/robervall-app/test/full_app_test.dart: cadastros, catálogo e ajustes (dados) numeração, duplicar e excluir
+✅ /home/runner/work/robervall-app/robervall-app/test/full_app_test.dart: cadastros, catálogo e ajustes (dados) contatos: salvar, ordenar, lembrar do sinistro e remover da equipe
+✅ /home/runner/work/robervall-app/robervall-app/test/full_app_test.dart: cadastros, catálogo e ajustes (dados) catálogo: salvar em ordem e remover
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: estoque: peça nova ganha código interno e aplicação
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: estoque: cadastrar peça e usar no orçamento
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: item: R&I, reparo e pintura juntos
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: avarias: pré-existente separado do sinistro e checklist
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: O.S.: marcar tarefa e liberar insumo
+✅ /home/runner/work/robervall-app/robervall-app/test/full_app_test.dart: passa por todas as telas e sub-abas com dados (celular)
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: usuários: produção não vê valores e insumo pede autorização
+✅ /home/runner/work/robervall-app/robervall-app/test/full_app_test.dart: passa por todas as telas e sub-abas com dados (tablet)
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: orçamento: itens do catálogo, outros custos e desconto
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: avarias: marcar no carro e gerar itens
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: histórico: anotar acompanhamento
+✅ /home/runner/work/robervall-app/robervall-app/test/full_app_test.dart: passa por todas as telas e sub-abas com dados (computador)
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: total no rodapé leva à aba Orçamento
+✅ /home/runner/work/robervall-app/robervall-app/test/full_app_test.dart: O.S.: devolver insumo ao estoque pelo botão
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: lista: busca, filtro de status e ordenação
+✅ /home/runner/work/robervall-app/robervall-app/test/full_app_test.dart: caixa: abrir lançamento, excluir e desfazer
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: desktop: novo item em diálogo e PDF
+✅ /home/runner/work/robervall-app/robervall-app/test/full_app_test.dart: cadastros: novo cliente pela tela e busca
+✅ /home/runner/work/robervall-app/robervall-app/test/full_app_test.dart: catálogo: novo item pela tela
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: financeiro: caixa com entrada, saída e pagamento previsto
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: financeiro: lançar gasto fixo e ver o lucro
+✅ /home/runner/work/robervall-app/robervall-app/test/full_app_test.dart: ajustes: tema escuro, horas no orçamento e mão de obra por peça
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: financeiro: anexar foto da nota preenche o lançamento sozinho
+✅ /home/runner/work/robervall-app/robervall-app/test/painter_test.dart: custo do pintor entra no financeiro quando o orçamento fecha
+✅ /home/runner/work/robervall-app/robervall-app/test/painter_test.dart: equipe: pintor, funileiro e martelinho lançados juntos
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: financeiro: funcionário pago por peça e terceirizado
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: troca de porta oferece os complementos e apaga junto
+::endgroup::
+::group::⏭️ Skipped tests
+⏭️ /home/runner/work/robervall-app/robervall-app/test/updater_windows_test.dart: troca os arquivos de uma instalação antiga e grava a versão (skipped)
+Skip: só no Windows do CI (FUNILAR_ZIP)
+⏭️ /home/runner/work/robervall-app/robervall-app/test/updater_windows_test.dart: baixa e descompacta a última versão publicada (skipped)
+Skip: só no Windows do CI (FUNILAR_ZIP)
+::endgroup::
+::group::✅ Passing tests
+✅ /home/runner/work/robervall-app/robervall-app/test/interaction_test.dart: equipe do carro: pintor e martelinho com custo no financeiro
+✅ /home/runner/work/robervall-app/robervall-app/test/updater_test.dart: compara versões
+✅ /home/runner/work/robervall-app/robervall-app/test/updater_test.dart: lê a última versão do GitHub
+✅ /home/runner/work/robervall-app/robervall-app/test/updater_test.dart: script do Windows espera o app fechar, copia e reabre
+✅ /home/runner/work/robervall-app/robervall-app/test/team_test.dart: material e lucro gerado por funcionário no mês
+::endgroup::
+::group::⏭️ Skipped tests
+⏭️ /home/runner/work/robervall-app/robervall-app/test/sample_preview_test.dart: captura estoque (skipped)
+⏭️ /home/runner/work/robervall-app/robervall-app/test/sample_preview_test.dart: captura item R&I + R + P (skipped)
+⏭️ /home/runner/work/robervall-app/robervall-app/test/sample_preview_test.dart: captura os_gestor (skipped)
+⏭️ /home/runner/work/robervall-app/robervall-app/test/sample_preview_test.dart: captura os_producao (skipped)
+⏭️ /home/runner/work/robervall-app/robervall-app/test/sample_preview_test.dart: captura avarias_entrada (skipped)
+⏭️ /home/runner/work/robervall-app/robervall-app/test/sample_preview_test.dart: captura ajustes_licenca (skipped)
+⏭️ /home/runner/work/robervall-app/robervall-app/test/sample_preview_test.dart: captura master_desafio (skipped)
+⏭️ /home/runner/work/robervall-app/robervall-app/test/sample_preview_test.dart: captura usuarios (skipped)
+⏭️ /home/runner/work/robervall-app/robervall-app/test/sample_preview_test.dart: captura estoque_insumo (skipped)
+⏭️ /home/runner/work/robervall-app/robervall-app/test/sample_preview_test.dart: captura liberar_lixa (skipped)
+⏭️ /home/runner/work/robervall-app/robervall-app/test/sample_preview_test.dart: captura estoque_peca (skipped)
+⏭️ /home/runner/work/robervall-app/robervall-app/test/sample_preview_test.dart: captura financeiro (skipped)
+⏭️ /home/runner/work/robervall-app/robervall-app/test/sample_preview_test.dart: captura caixa_celular (skipped)
+⏭️ /home/runner/work/robervall-app/robervall-app/test/sample_preview_test.dart: captura lancamento_por_peca (skipped)
+⏭️ /home/runner/work/robervall-app/robervall-app/test/sample_preview_test.dart: captura lancamento_terceirizado (skipped)
+⏭️ /home/runner/work/robervall-app/robervall-app/test/sample_preview_test.dart: captura nota_lida (skipped)
+⏭️ /home/runner/work/robervall-app/robervall-app/test/sample_preview_test.dart: gera PDFs de exemplo (skipped)
+Skip: só no CI (SAMPLE_OUT)
+⏭️ /home/runner/work/robervall-app/robervall-app/test/sample_preview_test.dart: captura preview_desktop (skipped)
+⏭️ /home/runner/work/robervall-app/robervall-app/test/sample_preview_test.dart: captura preview_celular (skipped)
+⏭️ /home/runner/work/robervall-app/robervall-app/test/sample_preview_test.dart: captura orcamento_complementos (skipped)
+⏭️ /home/runner/work/robervall-app/robervall-app/test/sample_preview_test.dart: captura janela_complementos (skipped)
+⏭️ /home/runner/work/robervall-app/robervall-app/test/sample_preview_test.dart: captura cadastro_funcionario (skipped)
+::endgroup::
+::group::✅ Passing tests
+✅ /home/runner/work/robervall-app/robervall-app/test/calc_test.dart: valores de um item de troca com MO e pintura
+✅ /home/runner/work/robervall-app/robervall-app/test/calc_test.dart: reparo não cobra preço de peça
+✅ /home/runner/work/robervall-app/robervall-app/test/calc_test.dart: totais com franquia, desconto, itens não aprovados e FIPE
+✅ /home/runner/work/robervall-app/robervall-app/test/calc_test.dart: franquia maior que o total fica limitada
+✅ /home/runner/work/robervall-app/robervall-app/test/calc_test.dart: alerta de perda total
+✅ /home/runner/work/robervall-app/robervall-app/test/calc_test.dart: json ida e volta preserva o sinistro
+✅ /home/runner/work/robervall-app/robervall-app/test/calc_test.dart: formatação brasileira
+✅ /home/runner/work/robervall-app/robervall-app/test/calc_test.dart: peças da mesma descrição viram uma linha só
+✅ /home/runner/work/robervall-app/robervall-app/test/calc_test.dart: siglas das operações e legenda
+✅ /home/runner/work/robervall-app/robervall-app/test/calc_test.dart: mão de obra por peça: valor fechado, sem horas
+✅ /home/runner/work/robervall-app/robervall-app/test/calc_test.dart: R&I, reparo e pintura juntos, nessa ordem
+✅ /home/runner/work/robervall-app/robervall-app/test/complements_test.dart: reconhece a peça pelo nome
+✅ /home/runner/work/robervall-app/robervall-app/test/complements_test.dart: troca da porta traz vidro, máquina, forro, chicote, canaleta
+✅ /home/runner/work/robervall-app/robervall-app/test/complements_test.dart: pintura marca só o que precisa sair para pintar
+✅ /home/runner/work/robervall-app/robervall-app/test/complements_test.dart: complementos ficam logo abaixo da peça e não são juntados
+✅ /home/runner/work/robervall-app/robervall-app/test/ui_test.dart: navega por todas as telas (celular)
+::endgroup::
+::group::✅ /home/runner/work/robervall-app/robervall-app/test/ui_test.dart: navega por todas as telas (celular pequeno)
+
+Warning: A call to tap() with finder "Found 1 widget with text "Em reparo" (ignoring all but last): [
+  Text("Em reparo", inherit: true, color: Color(alpha: 1.0000, red: 0.2235, green: 0.2863, blue: 0.6706, colorSpace: ColorSpace.sRGB), size: 12.0, weight: 600, dependencies: [DefaultSelectionStyle, DefaultTextStyle, MediaQuery]),
+]" derived an Offset (Offset(82.1, 76.0)) that would not hit test on the specified widget.
+Maybe the widget is actually off-screen, or another widget is obscuring it, or the widget cannot receive pointer events.
+The finder corresponds to this RenderBox: RenderParagraph#c266f relayoutBoundary=up21
+The hit test result at that offset is: HitTestResult(_RenderColoredBox#e1b7a@Offset(82.1, 76.0), RenderConstrainedBox#54019@Offset(82.1, 76.0), RenderMouseRegion#83cd5@Offset(82.1, 76.0), RenderSemanticsAnnotations#ddb65@Offset(82.1, 76.0), _RenderSemanticsClipper#91ee5@Offset(82.1, 76.0), RenderPointerListener#f3293@Offset(82.1, 76.0), RenderSemanticsGestureHandler#8e0a4@Offset(82.1, 76.0), RenderExcludeSemantics#a8b8f@Offset(82.1, 76.0), RenderBlockSemantics#14bfe@Offset(82.1, 76.0), RenderIgnorePointer#4991f@Offset(82.1, 76.0), RenderSemanticsAnnotations#38ea7@Offset(82.1, 76.0), _RenderTheater#07a34@Offset(82.1, 76.0), RenderAbsorbPointer#feff4@Offset(82.1, 76.0), RenderPointerListener#e5a66@Offset(82.1, 76.0), RenderSemanticsAnnotations#665c8@Offset(82.1, 76.0), RenderSemanticsAnnotations#2097f@Offset(82.1, 76.0), RenderSemanticsAnnotations#3aae0@Offset(82.1, 76.0), RenderSemanticsAnnotations#eda79@Offset(82.1, 76.0), RenderTapRegionSurface#daa46@Offset(82.1, 76.0), RenderSemanticsAnnotations#496ff@Offset(82.1, 76.0), RenderSemanticsAnnotations#2ce35@Offset(82.1, 76.0), HitTestEntry<HitTestTarget>#7bbf3(_ReusableRenderView#ea6fd), HitTestEntry<HitTestTarget>#90ad1(<AutomatedTestWidgetsFlutterBinding>))
+#0      WidgetController._getElementPoint (package:flutter_test/src/controller.dart:2165:25)
+#1      WidgetController.getCenter (package:flutter_test/src/controller.dart:1947:12)
+#2      WidgetController.tap (package:flutter_test/src/controller.dart:1080:7)
+#3      main.<anonymous closure> (file:///home/runner/work/robervall-app/robervall-app/test/ui_test.dart:142:20)
+<asynchronous suspension>
+#4      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#5      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+#6      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+To silence this warning, pass "warnIfMissed: false" to "tap()".
+To make this warning fatal, set WidgetController.hitTestWarningShouldBeFatal to true.
+
+::endgroup::
+::group::✅ /home/runner/work/robervall-app/robervall-app/test/ui_test.dart: navega por todas as telas (desktop)
+
+Warning: A call to tap() with finder "Found 1 widget with icon "IconData(U+0E16A)" (ignoring all but first): [
+  Icon(IconData(U+0E16A), dependencies: [Directionality, IconTheme]),
+]" derived an Offset (Offset(1325.7, 686.0)) that would not hit test on the specified widget.
+Maybe the widget is actually off-screen, or another widget is obscuring it, or the widget cannot receive pointer events.
+The finder corresponds to this RenderBox: RenderSemanticsAnnotations#5f370 relayoutBoundary=up38
+The hit test result at that offset is: HitTestResult(_RenderColoredBox#c7fe4@Offset(1325.7, 686.0), RenderConstrainedBox#5894a@Offset(1325.7, 686.0), RenderMouseRegion#e37fc@Offset(1325.7, 686.0), RenderSemanticsAnnotations#1c5aa@Offset(1325.7, 686.0), RenderPointerListener#991a9@Offset(1325.7, 686.0), RenderSemanticsGestureHandler#0c662@Offset(1325.7, 686.0), RenderExcludeSemantics#113a4@Offset(1325.7, 686.0), RenderBlockSemantics#2bc3e@Offset(1325.7, 686.0), RenderIgnorePointer#91934@Offset(1325.7, 686.0), RenderSemanticsAnnotations#ed2c9@Offset(1325.7, 686.0), _RenderTheater#5279c@Offset(1325.7, 686.0), RenderAbsorbPointer#c7b7b@Offset(1325.7, 686.0), RenderPointerListener#157e1@Offset(1325.7, 686.0), RenderSemanticsAnnotations#2f72a@Offset(1325.7, 686.0), RenderSemanticsAnnotations#e0027@Offset(1325.7, 686.0), RenderSemanticsAnnotations#78ea3@Offset(1325.7, 686.0), RenderSemanticsAnnotations#25856@Offset(1325.7, 686.0), RenderTapRegionSurface#a660e@Offset(1325.7, 686.0), RenderSemanticsAnnotations#3f055@Offset(1325.7, 686.0), RenderSemanticsAnnotations#914fd@Offset(1325.7, 686.0), HitTestEntry<HitTestTarget>#fc0cc(_ReusableRenderView#ea6fd), HitTestEntry<HitTestTarget>#38e47(<AutomatedTestWidgetsFlutterBinding>))
+#0      WidgetController._getElementPoint (package:flutter_test/src/controller.dart:2165:25)
+#1      WidgetController.getCenter (package:flutter_test/src/controller.dart:1947:12)
+#2      WidgetController.tap (package:flutter_test/src/controller.dart:1080:7)
+#3      main.<anonymous closure> (file:///home/runner/work/robervall-app/robervall-app/test/ui_test.dart:127:20)
+<asynchronous suspension>
+#4      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#5      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+#6      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+To silence this warning, pass "warnIfMissed: false" to "tap()".
+To make this warning fatal, set WidgetController.hitTestWarningShouldBeFatal to true.
+
+::endgroup::
+::group::✅ /home/runner/work/robervall-app/robervall-app/test/ui_test.dart: gera o PDF do orçamento e da vistoria
+Helvetica-Bold has no Unicode support see https://github.com/DavBfr/dart_pdf/wiki/Fonts-Management
+Helvetica has no Unicode support see https://github.com/DavBfr/dart_pdf/wiki/Fonts-Management
+Helvetica-Bold has no Unicode support see https://github.com/DavBfr/dart_pdf/wiki/Fonts-Management
+Helvetica has no Unicode support see https://github.com/DavBfr/dart_pdf/wiki/Fonts-Management
+::endgroup::
+::group::✅ Passing tests
+✅ /home/runner/work/robervall-app/robervall-app/test/ui_test.dart: backup ida e volta
+::endgroup::
+
+🎉 98 tests passed, 24 skipped.
+== cobertura
+   0.0%      0/16     lib/receipt_ocr.dart
+   0.8%      1/121    lib/ui/fipe_dialog.dart
+   1.3%      2/154    lib/ui/license_ui.dart
+  11.1%      4/36     lib/fipe.dart
+  18.9%     28/148    lib/ui/photos_tab.dart
+  29.4%     20/68     lib/ui/update_ui.dart
+  29.4%     35/119    lib/ui/users_ui.dart
+  40.0%     34/85     lib/updater.dart
+  42.4%     25/59     lib/main.dart
+  55.7%     97/174    lib/ui/settings_page.dart
+  57.5%    115/200    lib/ui/claim_form_tab.dart
+  60.9%     56/92     lib/modules.dart
+  68.8%    130/189    lib/ui/contacts_page.dart
+  72.0%    375/521    lib/ui/finance_page.dart
+  72.7%    104/143    lib/ui/catalog_page.dart
+  74.3%    474/638    lib/ui/stock_page.dart
+  77.5%     31/40     lib/ui/access.dart
+  81.7%    263/322    lib/pdf_report.dart
+  85.1%    114/134    lib/licensing.dart
+  85.7%    696/812    lib/ui/budget_tab.dart
+  87.2%    319/366    lib/ui/quote_preview_page.dart
+  87.6%    254/290    lib/ui/os_tab.dart
+  89.4%    555/621    lib/store.dart
+  91.1%     92/101    lib/ui/shell.dart
+  91.4%    235/257    lib/ui/cash_page.dart
+  92.2%    165/179    lib/ui/claims_page.dart
+  92.5%    135/146    lib/finance.dart
+  93.2%    232/249    lib/ui/damage_tab.dart
+  93.9%     31/33     lib/seed.dart
+  94.0%    219/233    lib/ui/widgets.dart
+  94.9%    150/158    lib/ui/claim_detail_page.dart
+  95.7%    178/186    lib/receipt_parser.dart
+  96.7%     89/92     lib/ui/team_page.dart
+  97.5%    232/238    lib/stock.dart
+  97.8%    568/581    lib/models.dart
+  98.1%    153/156    lib/ui/dashboard_page.dart
+  98.2%     55/56     lib/ui/timeline_tab.dart
+  99.5%    181/182    lib/complements.dart
+ 100.0%     31/31     lib/theme.dart
+ 100.0%     37/37     lib/market.dart
+ 100.0%     38/38     lib/format.dart
+ 100.0%     56/56     lib/calc.dart
+ 100.0%     58/58     lib/cash.dart
+ 100.0%     65/65     lib/team.dart
+TOTAL  79.4%  (6732 de 8480 linhas)
+== exemplos visuais
+
+::group::✅ Passing tests
+✅ captura estoque
+✅ captura item R&I + R + P
+✅ captura os_gestor
+✅ captura os_producao
+✅ captura avarias_entrada
+✅ captura ajustes_licenca
+✅ captura master_desafio
+✅ captura usuarios
+✅ captura estoque_insumo
+✅ captura liberar_lixa
+✅ captura estoque_peca
+✅ captura financeiro
+✅ captura caixa_celular
+✅ captura lancamento_por_peca
+✅ captura lancamento_terceirizado
+✅ captura nota_lida
+::endgroup::
+::group::✅ gera PDFs de exemplo
+Helvetica-Bold has no Unicode support see https://github.com/DavBfr/dart_pdf/wiki/Fonts-Management
+Helvetica has no Unicode support see https://github.com/DavBfr/dart_pdf/wiki/Fonts-Management
+Helvetica-Bold has no Unicode support see https://github.com/DavBfr/dart_pdf/wiki/Fonts-Management
+Helvetica has no Unicode support see https://github.com/DavBfr/dart_pdf/wiki/Fonts-Management
+::endgroup::
+::group::✅ Passing tests
+✅ captura preview_desktop
+✅ captura preview_celular
+✅ captura orcamento_complementos
+✅ captura janela_complementos
+✅ captura cadastro_funcionario
+::endgroup::
+
+🎉 22 tests passed.
+total 3512
+drwxr-xr-x 2 runner runner   4096 Oct 30 21:31 .
+drwxr-xr-x 3 runner runner   4096 Oct 30 21:30 ..
+-rw-r--r-- 1 runner runner 101459 Oct 30 21:31 ajustes_licenca.png
+-rw-r--r-- 1 runner runner 143787 Oct 30 21:31 avarias_entrada.png
+-rw-r--r-- 1 runner runner  52042 Oct 30 21:31 cadastro_funcionario.png
+-rw-r--r-- 1 runner runner 129503 Oct 30 21:31 caixa_celular.png
+-rw-r--r-- 1 runner runner  92800 Oct 30 21:31 estoque_celular.png
+-rw-r--r-- 1 runner runner 112384 Oct 30 21:31 estoque_insumo.png
+-rw-r--r-- 1 runner runner 158297 Oct 30 21:31 estoque_peca.png
+-rw-r--r-- 1 runner runner 203549 Oct 30 21:31 financeiro_celular.png
+-rw-r--r-- 1 runner runner  81228 Oct 30 21:31 item_ri_r_p.png
+-rw-r--r-- 1 runner runner  71316 Oct 30 21:31 janela_complementos.png
+-rw-r--r-- 1 runner runner  75996 Oct 30 21:31 lancamento_por_peca.png
+-rw-r--r-- 1 runner runner  74415 Oct 30 21:31 lancamento_terceirizado.png
+-rw-r--r-- 1 runner runner 270318 Oct 30 21:31 liberar_lixa.png
+-rw-r--r-- 1 runner runner  42203 Oct 30 21:31 master_desafio.png
+-rw-r--r-- 1 runner runner 109106 Oct 30 21:31 nota_lida.png
+-rw-r--r-- 1 runner runner 113594 Oct 30 21:31 orcamento-exemplo-1.png
+-rw-r--r-- 1 runner runner  83573 Oct 30 21:31 orcamento-exemplo-2.png
+-rw-r--r-- 1 runner runner  12291 Oct 30 21:31 orcamento-exemplo.pdf
+-rw-r--r-- 1 runner runner 368318 Oct 30 21:31 orcamento_complementos.png
+-rw-r--r-- 1 runner runner 175083 Oct 30 21:31 os_gestor.png
+-rw-r--r-- 1 runner runner 163571 Oct 30 21:31 os_producao.png
+-rw-r--r-- 1 runner runner 309982 Oct 30 21:31 preview_celular.png
+-rw-r--r-- 1 runner runner 349088 Oct 30 21:31 preview_desktop.png
+-rw-r--r-- 1 runner runner 100933 Oct 30 21:31 usuarios.png
+-rw-r--r-- 1 runner runner  91527 Oct 30 21:31 vistoria-exemplo-1.png
+-rw-r--r-- 1 runner runner  43979 Oct 30 21:31 vistoria-exemplo-2.png
+-rw-r--r-- 1 runner runner  10108 Oct 30 21:31 vistoria-exemplo.pdf
