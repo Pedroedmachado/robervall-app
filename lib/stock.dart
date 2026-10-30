@@ -45,6 +45,15 @@ class StockItem {
   /// Peça de cliente: sinistro do carro dono da peça.
   String claimId;
 
+  /// Peças: código interno (P-0001), marca/fabricante da peça, código do
+  /// fabricante, condição e os carros em que serve. [partNumber] é o código
+  /// OEM (número original da montadora).
+  String sku;
+  String mfrBrand;
+  String mfrCode;
+  String condition; // original, genuina, paralela, usada ('' = não informado)
+  List<VehicleFit> applications;
+
   /// Foto (arquivo na pasta de fotos).
   String photo;
 
@@ -68,7 +77,18 @@ class StockItem {
     this.notes = '',
     this.photo = '',
     this.claimId = '',
-  }) : id = id ?? newId();
+    this.sku = '',
+    this.mfrBrand = '',
+    this.mfrCode = '',
+    this.condition = '',
+    List<VehicleFit>? applications,
+  })  : id = id ?? newId(),
+        applications = applications ?? [];
+
+  /// Resumo da aplicação: "VW Gol 2013–2016 · Fiat Uno 2010–2014".
+  String get applicationLabel => applications.isEmpty
+      ? fits
+      : applications.map((a) => a.label).join(' · ');
 
   /// "Corredor 1 · Prateleira B5 · Nicho 3" (ou o texto livre).
   String get address {
@@ -127,6 +147,12 @@ class StockItem {
         'notes': notes,
         'photo': photo,
         if (claimId.isNotEmpty) 'claim': claimId,
+        if (sku.isNotEmpty) 'sku': sku,
+        if (mfrBrand.isNotEmpty) 'mfrBrand': mfrBrand,
+        if (mfrCode.isNotEmpty) 'mfrCode': mfrCode,
+        if (condition.isNotEmpty) 'condition': condition,
+        if (applications.isNotEmpty)
+          'apps': applications.map((a) => a.toJson()).toList(),
       };
 
   factory StockItem.fromJson(Map<String, dynamic> j) {
@@ -156,6 +182,14 @@ class StockItem {
       notes: s(j['notes']),
       photo: s(j['photo']),
       claimId: s(j['claim']),
+      sku: s(j['sku']),
+      mfrBrand: s(j['mfrBrand']),
+      mfrCode: s(j['mfrCode']),
+      condition: s(j['condition']),
+      applications: [
+        for (final a in (j['apps'] as List? ?? const []))
+          if (a is Map) VehicleFit.fromJson(Map<String, dynamic>.from(a))
+      ],
     );
   }
 }
@@ -216,11 +250,15 @@ bool stockMatchesItem(StockItem s, BudgetItem it) {
 }
 
 /// Peças do estoque que servem para o item (com saldo, ou a já escolhida).
-List<StockItem> stockFor(List<StockItem> stock, BudgetItem it) {
+List<StockItem> stockFor(List<StockItem> stock, BudgetItem it,
+    [Vehicle? vehicle]) {
   if (it.op != ItemOp.troca) return const [];
   return stock
       .where((s) =>
-          s.id == it.stockId || (s.qty > 0 && stockMatchesItem(s, it)))
+          s.id == it.stockId ||
+          (s.qty > 0 &&
+              stockMatchesItem(s, it) &&
+              (vehicle == null || fitsVehicle(s, vehicle))))
       .toList()
     ..sort((a, b) => b.qty.compareTo(a.qty));
 }
@@ -275,4 +313,164 @@ String qtyText(double q, String unit) {
   }
   if (unit == 'disco') return '${num2(q)} ${q == 1 ? 'disco' : 'discos'}';
   return '${num2(q)} $unit';
+}
+
+
+// ------------------------------------------------- aplicação veicular
+
+/// Carro em que a peça serve.
+class VehicleFit {
+  String make; // montadora
+  String model;
+  int? yearFrom;
+  int? yearTo;
+  String engine; // motorização (1.0, 1.6 16V, 2.0 TSI…)
+  String version; // versão (Trend, Comfortline, LTZ…)
+
+  VehicleFit({
+    this.make = '',
+    this.model = '',
+    this.yearFrom,
+    this.yearTo,
+    this.engine = '',
+    this.version = '',
+  });
+
+  String get years {
+    if (yearFrom == null && yearTo == null) return '';
+    if (yearFrom != null && yearTo != null) {
+      return yearFrom == yearTo ? '$yearFrom' : '$yearFrom–$yearTo';
+    }
+    return yearFrom != null ? 'de $yearFrom em diante' : 'até $yearTo';
+  }
+
+  String get label => [make, model, engine, version, years]
+      .where((e) => e.trim().isNotEmpty)
+      .join(' ');
+
+  bool get isEmpty => make.trim().isEmpty && model.trim().isEmpty;
+
+  Map<String, dynamic> toJson() => {
+        'make': make,
+        'model': model,
+        if (yearFrom != null) 'from': yearFrom,
+        if (yearTo != null) 'to': yearTo,
+        if (engine.isNotEmpty) 'engine': engine,
+        if (version.isNotEmpty) 'version': version,
+      };
+
+  factory VehicleFit.fromJson(Map<String, dynamic> j) => VehicleFit(
+        make: '${j['make'] ?? ''}',
+        model: '${j['model'] ?? ''}',
+        yearFrom: (j['from'] as num?)?.toInt(),
+        yearTo: (j['to'] as num?)?.toInt(),
+        engine: '${j['engine'] ?? ''}',
+        version: '${j['version'] ?? ''}',
+      );
+}
+
+/// Montadoras mais comuns (para escolher em vez de digitar).
+const commonMakes = [
+  'Chevrolet', 'Fiat', 'Ford', 'Honda', 'Hyundai', 'Jeep', 'Nissan',
+  'Peugeot', 'Citroën', 'Renault', 'Toyota', 'Volkswagen', 'Mitsubishi',
+  'Kia', 'BMW', 'Mercedes-Benz', 'Audi', 'Caoa Chery', 'BYD', 'GWM',
+];
+
+const _makeAliases = {
+  'vw': 'volkswagen', 'volks': 'volkswagen', 'gm': 'chevrolet',
+  'chevy': 'chevrolet', 'mercedes': 'mercedes-benz', 'mb': 'mercedes-benz',
+  'citroen': 'citroën', 'chery': 'caoa chery', 'great wall': 'gwm',
+};
+
+/// Montadora sem variação de escrita ("VW" = "Volkswagen").
+String normMake(String m) {
+  final t = m.trim().toLowerCase();
+  return _makeAliases[t] ?? t;
+}
+
+/// Nome oficial da montadora quando é uma das comuns.
+String canonicalMake(String m) {
+  final n = normMake(m);
+  for (final c in commonMakes) {
+    if (c.toLowerCase() == n) return c;
+  }
+  return m.trim();
+}
+
+/// Código sem espaço, ponto ou traço, em maiúsculas ("5u0-941.005" = "5U0941005").
+String normCode(String c) => c.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+
+String _normModel(String m) => _norm(m).replaceAll(' ', '');
+
+bool _yearsOverlap(VehicleFit a, VehicleFit b) {
+  final a1 = a.yearFrom ?? 0, a2 = a.yearTo ?? 9999;
+  final b1 = b.yearFrom ?? 0, b2 = b.yearTo ?? 9999;
+  return a1 <= b2 && b1 <= a2;
+}
+
+bool _sameCar(VehicleFit a, VehicleFit b) {
+  if (normMake(a.make) != normMake(b.make)) return false;
+  final ma = _normModel(a.model), mb = _normModel(b.model);
+  if (ma.isEmpty || mb.isEmpty) return false;
+  return (ma == mb || ma.startsWith(mb) || mb.startsWith(ma)) && _yearsOverlap(a, b);
+}
+
+/// A peça serve neste carro? (sem aplicação cadastrada: não dá para saber → serve)
+bool fitsVehicle(StockItem s, Vehicle v) {
+  if (s.applications.isEmpty || v.model.trim().isEmpty) return true;
+  final year = int.tryParse(RegExp(r'\d{4}').firstMatch(v.year)?[0] ?? '');
+  final cm = _normModel(v.model);
+  for (final a in s.applications) {
+    if (v.brand.trim().isNotEmpty &&
+        a.make.trim().isNotEmpty &&
+        normMake(a.make) != normMake(v.brand)) {
+      continue;
+    }
+    final am = _normModel(a.model);
+    if (am.isEmpty || !(cm.contains(am) || am.contains(cm))) continue;
+    if (year != null &&
+        ((a.yearFrom != null && year < a.yearFrom!) ||
+            (a.yearTo != null && year > a.yearTo!))) {
+      continue;
+    }
+    return true;
+  }
+  return false;
+}
+
+/// Possíveis cadastros repetidos da mesma peça, com o motivo.
+List<(StockItem, String)> findDuplicates(List<StockItem> stock, StockItem s) {
+  if (s.kind != StockKind.peca) return const [];
+  final out = <(StockItem, String)>[];
+  final oem = normCode(s.partNumber);
+  final mfr = normCode(s.mfrCode);
+  final words = _words(s.name);
+  for (final o in stock) {
+    if (o.id == s.id || o.kind != StockKind.peca) continue;
+    if (oem.isNotEmpty && oem == normCode(o.partNumber)) {
+      out.add((o, 'mesmo código OEM'));
+    } else if (mfr.isNotEmpty &&
+        mfr == normCode(o.mfrCode) &&
+        normMake(s.mfrBrand) == normMake(o.mfrBrand)) {
+      out.add((o, 'mesmo código do fabricante'));
+    } else if (words.isNotEmpty &&
+        _words(o.name).length == words.length &&
+        _words(o.name).every(words.contains) &&
+        (s.applications.isEmpty ||
+            o.applications.isEmpty ||
+            s.applications.any((a) => o.applications.any((b) => _sameCar(a, b))))) {
+      out.add((o, 'mesmo nome e mesmo carro'));
+    }
+  }
+  return out;
+}
+
+/// Próximo código interno: P-0001, P-0002…
+String nextSku(List<StockItem> stock) {
+  var max = 0;
+  for (final s in stock) {
+    final m = RegExp(r'^P-(\d+)$').firstMatch(s.sku);
+    if (m != null) max = [max, int.parse(m[1]!)].reduce((a, b) => a > b ? a : b);
+  }
+  return 'P-${(max + 1).toString().padLeft(4, '0')}';
 }

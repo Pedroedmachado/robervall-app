@@ -9,6 +9,7 @@ import '../format.dart';
 import '../models.dart';
 import '../modules.dart';
 import '../stock.dart';
+import '../store.dart';
 import '../theme.dart';
 import 'access.dart';
 import 'widgets.dart';
@@ -36,7 +37,10 @@ class _StockPageState extends State<StockPage> {
             (q.isEmpty ||
                 e.name.toLowerCase().contains(q) ||
                 e.partNumber.toLowerCase().contains(q) ||
-                e.fits.toLowerCase().contains(q) ||
+                e.applicationLabel.toLowerCase().contains(q) ||
+                (normCode(q).isNotEmpty && normCode(e.partNumber).contains(normCode(q))) ||
+                e.mfrCode.toLowerCase().contains(q) ||
+                e.sku.toLowerCase().contains(q) ||
                 e.address.toLowerCase().contains(q)))
         .toList();
     final value = store.stock.fold(0.0, (a, e) => a + e.stockValue);
@@ -120,8 +124,9 @@ class _StockPageState extends State<StockPage> {
                         subtitle: Text(
                           [
                             s.kind.label,
-                            if (s.partNumber.isNotEmpty) s.partNumber,
-                            if (s.fits.isNotEmpty) s.fits,
+                            if (s.partNumber.isNotEmpty) 'OEM ${s.partNumber}',
+                            if (s.sku.isNotEmpty) s.sku,
+                            if (s.applicationLabel.isNotEmpty) s.applicationLabel,
                             if (s.kind == StockKind.cliente)
                               'carro ${store.claimById(s.claimId)?.number ?? '—'}${store.claimById(s.claimId)?.vehicle.plate.isNotEmpty == true ? ' · ${store.claimById(s.claimId)!.vehicle.plate}' : ''}',
                             if (s.address.isNotEmpty) '📍 ${s.address}',
@@ -255,6 +260,7 @@ Future<Uint8List?> _pickPhoto(BuildContext context) async {
 Future<StockItem?> editStockItem(BuildContext context, StockItem s,
     {bool canDelete = false}) {
   final store = StoreScope.read(context);
+  var allowDup = false; // "é outra peça, salvar mesmo assim"
   return showFormDialog<StockItem>(
     context: context,
     title: s.name.isEmpty ? 'Novo no estoque' : 'Editar estoque',
@@ -264,6 +270,13 @@ Future<StockItem?> editStockItem(BuildContext context, StockItem s,
         return null;
       }
       s.name = s.name.trim();
+      if (s.kind == StockKind.peca) {
+        final err = _checkPart(store.stock, s, allowDup);
+        if (err != null) {
+          toast(context, err);
+          return null;
+        }
+      }
       if (s.kind == StockKind.material && s.hasPack) {
         s.syncPackCost();
       }
@@ -323,6 +336,9 @@ Future<StockItem?> editStockItem(BuildContext context, StockItem s,
           ),
         ]),
         const SizedBox(height: 12),
+        if (s.kind == StockKind.peca)
+          _section(ctx, '1. Identificação',
+              'Código interno ${s.sku.isEmpty ? nextSku(store.stock) : s.sku} (gerado sozinho). Use o nome padrão: peça + posição.'),
         BoundField(
           label: switch (s.kind) {
             StockKind.peca => 'Peça (ex.: Farol esquerdo)',
@@ -330,9 +346,11 @@ Future<StockItem?> editStockItem(BuildContext context, StockItem s,
             StockKind.cliente => 'Peça do cliente (ex.: Para-choque retirado)',
           },
           value: s.name,
+          suggestions: s.kind == StockKind.peca ? _partNames(store) : const [],
           onChanged: (t) {
             final was = s.isSandpaper;
             s.name = t;
+            if (s.kind == StockKind.peca) setS(() {}); // confere repetidos
             if (!was && s.isSandpaper && s.kind == StockKind.material && s.unit == 'un') {
               s.unit = 'folha';
             }
@@ -358,20 +376,85 @@ Future<StockItem?> editStockItem(BuildContext context, StockItem s,
           const SizedBox(height: 12),
         ],
         if (s.kind == StockKind.peca) ...[
+          _sidesRow(ctx, s, setS),
+          const SizedBox(height: 16),
+          _section(ctx, '2. Códigos',
+              'O código OEM é o número original da montadora: é ele que evita cadastrar a mesma peça duas vezes.'),
           BoundField(
-            label: 'Serve em (carro / ano)',
-            hint: 'Ex.: Gol G5 2009-2012',
-            value: s.fits,
-            onChanged: (t) => s.fits = t,
-          ),
-          const SizedBox(height: 12),
-          BoundField(
-            label: 'Código da peça (opcional)',
+            label: 'Código OEM / referência original',
+            hint: 'Ex.: 5U0941005',
             value: s.partNumber,
             capitalization: TextCapitalization.characters,
-            onChanged: (t) => s.partNumber = t,
+            onChanged: (t) => setS(() => s.partNumber = t),
           ),
           const SizedBox(height: 12),
+          Row(children: [
+            Expanded(
+              child: BoundField(
+                label: 'Marca da peça',
+                hint: 'Ex.: Arteb, Valeo',
+                value: s.mfrBrand,
+                capitalization: TextCapitalization.words,
+                suggestions: _partBrands(store),
+                onChanged: (t) => setS(() => s.mfrBrand = t),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: BoundField(
+                label: 'Código do fabricante',
+                value: s.mfrCode,
+                capitalization: TextCapitalization.characters,
+                onChanged: (t) => setS(() => s.mfrCode = t),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 8),
+          Wrap(spacing: 6, runSpacing: 4, children: [
+            for (final (v, label) in const [
+              ('original', 'Original (montadora)'),
+              ('genuina', 'Genuína'),
+              ('paralela', 'Paralela'),
+              ('usada', 'Usada'),
+            ])
+              ChoiceChip(
+                label: Text(label),
+                selected: s.condition == v,
+                onSelected: (_) =>
+                    setS(() => s.condition = s.condition == v ? '' : v),
+              ),
+          ]),
+          _duplicatesCard(ctx, store, s, canDelete, allowDup,
+              (b) => setS(() => allowDup = b)),
+          const SizedBox(height: 16),
+          _section(ctx, '3. Aplicação veicular',
+              'Em quais carros a peça serve. O orçamento só sugere a peça para esses carros.'),
+          if (s.applications.isEmpty && s.fits.trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text('Anotado antes: "${s.fits}"',
+                  style: Theme.of(ctx).textTheme.bodySmall),
+            ),
+          for (final (i, f) in s.applications.indexed)
+            _FitEditor(
+              key: ObjectKey(f),
+              fit: f,
+              index: i,
+              onChanged: () => setS(() {}),
+              onRemove: () => setS(() => s.applications.remove(f)),
+            ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => setS(() => s.applications.add(VehicleFit())),
+              icon: const Icon(Icons.add),
+              label: Text(s.applications.isEmpty
+                  ? 'Adicionar veículo'
+                  : 'Adicionar outro veículo'),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _section(ctx, '4. Estoque e preço', ''),
         ],
         if (s.kind == StockKind.material)
           _SupplyUnits(item: s, setS: setS)
@@ -472,7 +555,7 @@ Future<StockItem?> editStockItem(BuildContext context, StockItem s,
 /// Peças do estoque que servem para o item: escolher usar ou não.
 Future<void> showStockFor(BuildContext context, Claim c, BudgetItem it) async {
   final store = StoreScope.read(context);
-  final matches = stockFor(store.stock, it);
+  final matches = stockFor(store.stock, it, c.vehicle);
   await showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
@@ -499,7 +582,7 @@ Future<void> showStockFor(BuildContext context, Claim c, BudgetItem it) async {
                 title: Text(s.name),
                 subtitle: Text([
                   '${s.qtyLabel} em estoque',
-                  if (s.fits.isNotEmpty) s.fits,
+                  if (s.applicationLabel.isNotEmpty) s.applicationLabel,
                   if (s.address.isNotEmpty) '📍 ${s.address}',
                   if (s.budgetPrice > 0) money(s.budgetPrice),
                 ].join(' · ')),
@@ -795,6 +878,262 @@ class _SupplyUnits extends StatelessWidget {
         ),
         const SizedBox(height: 12),
       ],
+    );
+  }
+}
+
+
+Widget _section(BuildContext ctx, String title, String hint) => Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: Theme.of(ctx).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800)),
+        if (hint.isNotEmpty) Text(hint, style: Theme.of(ctx).textTheme.bodySmall),
+      ]),
+    );
+
+List<String> _partNames(AppStore store) => {
+      for (final c in store.catalog)
+        if (c.op != ItemOp.servico) c.description,
+      for (final s in store.stock)
+        if (s.kind == StockKind.peca) s.name,
+    }.toList();
+
+List<String> _partBrands(AppStore store) => {
+      'Original', 'Arteb', 'Valeo', 'Magneti Marelli', 'Fitam', 'Orgus',
+      'Cofap', 'Bosch', 'DPK', 'Hella', 'Metagal', 'Pelegrin', 'TYC',
+      for (final s in store.stock)
+        if (s.mfrBrand.trim().isNotEmpty) s.mfrBrand.trim(),
+    }.toList();
+
+const _sideGroups = [
+  ['dianteiro', 'dianteira', 'traseiro', 'traseira'],
+  ['esquerdo', 'esquerda', 'direito', 'direita'],
+];
+
+/// Troca/põe a posição no nome ("Farol" + Dianteiro + Esquerdo).
+String withSide(String name, String word) {
+  final group = _sideGroups.firstWhere((g) => g.contains(word));
+  final parts = name.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+  final had = parts.any((w) => group.contains(w.toLowerCase()));
+  final firstWord = parts.isEmpty ? '' : parts.first.toLowerCase();
+  final feminine = firstWord.endsWith('a') || const {'grade', 'tampa', 'porta', 'lanterna', 'coluna', 'caixa', 'longarina', 'soleira', 'maçaneta'}.contains(firstWord);
+  final base = word.replaceAll(RegExp(r'[oa]$'), '');
+  final w = feminine ? '${base}a' : '${base}o';
+  final cleaned = parts.where((p) => !group.contains(p.toLowerCase())).toList();
+  if (had && parts.any((p) => p.toLowerCase() == w)) return cleaned.join(' '); // desmarcar
+  // dianteiro/traseiro antes de esquerdo/direito
+  if (_sideGroups.first.contains(word)) {
+    final i = cleaned.indexWhere((p) => _sideGroups[1].contains(p.toLowerCase()));
+    if (i >= 0) {
+      cleaned.insert(i, w);
+      return cleaned.join(' ');
+    }
+  }
+  return [...cleaned, w].join(' ');
+}
+
+Widget _sidesRow(BuildContext ctx, StockItem s, StateSetter setS) {
+  final words = s.name.toLowerCase().split(RegExp(r'\s+'));
+  bool has(String a, String b) => words.contains(a) || words.contains(b);
+  Widget chip(String label, String word, String fem) => FilterChip(
+        label: Text(label),
+        selected: has(word, fem),
+        onSelected: (_) {
+          FocusScope.of(ctx).unfocus();
+          setS(() => s.name = withSide(s.name, word));
+        },
+      );
+  return Padding(
+    padding: const EdgeInsets.only(top: 6),
+    child: Wrap(spacing: 6, runSpacing: 4, children: [
+      chip('Dianteiro', 'dianteiro', 'dianteira'),
+      chip('Traseiro', 'traseiro', 'traseira'),
+      chip('Esquerdo', 'esquerdo', 'esquerda'),
+      chip('Direito', 'direito', 'direita'),
+    ]),
+  );
+}
+
+/// Bloqueia código repetido (a não ser que a pessoa confirme) e confere anos.
+String? _checkPart(List<StockItem> stock, StockItem s, bool allowDup) {
+  s.applications.removeWhere((a) => a.isEmpty);
+  final now = DateTime.now().year + 1;
+  for (final a in s.applications) {
+    a.make = canonicalMake(a.make);
+    a.model = a.model.trim();
+    for (final y in [a.yearFrom, a.yearTo]) {
+      if (y != null && (y < 1950 || y > now)) {
+        return 'Ano inválido em ${a.label}: use 4 dígitos (1950 a $now).';
+      }
+    }
+    if (a.yearFrom != null && a.yearTo != null && a.yearFrom! > a.yearTo!) {
+      return 'Em ${a.make} ${a.model}, o ano "de" é maior que o "até".';
+    }
+  }
+  s.partNumber = s.partNumber.trim().toUpperCase();
+  s.mfrCode = s.mfrCode.trim().toUpperCase();
+  s.mfrBrand = s.mfrBrand.trim();
+  final strong = findDuplicates(stock, s).where((d) => !d.$2.startsWith('mesmo nome'));
+  if (strong.isNotEmpty && !allowDup) {
+    final d = strong.first;
+    return 'Já existe: ${d.$1.name} (${d.$1.sku.isEmpty ? 'sem código' : d.$1.sku}) com ${d.$2}. Some na existente ou marque "É outra peça".';
+  }
+  if (s.sku.isEmpty) s.sku = nextSku(stock);
+  return null;
+}
+
+Widget _duplicatesCard(BuildContext ctx, AppStore store, StockItem s,
+    bool editing, bool allowDup, ValueChanged<bool> setAllow) {
+  final dups = findDuplicates(store.stock, s);
+  if (dups.isEmpty) return const SizedBox(height: 4);
+  final t = Theme.of(ctx);
+  return Container(
+    key: const ValueKey('aviso-repetido'),
+    margin: const EdgeInsets.only(top: 10),
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: Colors.orange.withValues(alpha: 0.15),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Atenção: parece que esta peça já está cadastrada',
+          style: TextStyle(fontWeight: FontWeight.w700, color: Colors.orange)),
+      for (final (o, why) in dups.take(3))
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Row(children: [
+            StockThumb(item: o, size: 36),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                  '${o.name} · ${o.sku.isEmpty ? '' : '${o.sku} · '}${o.qtyLabel}\n$why${o.applicationLabel.isEmpty ? '' : ' · ${o.applicationLabel}'}',
+                  style: t.textTheme.bodySmall),
+            ),
+            if (!editing)
+              TextButton(
+                onPressed: () {
+                  o.qty += s.qty;
+                  Navigator.pop(ctx, o);
+                },
+                child: Text('Somar ${num2(s.qty)}'),
+              ),
+          ]),
+        ),
+      CheckboxListTile(
+        contentPadding: EdgeInsets.zero,
+        dense: true,
+        controlAffinity: ListTileControlAffinity.leading,
+        value: allowDup,
+        onChanged: (b) => setAllow(b ?? false),
+        title: const Text('É outra peça, salvar mesmo assim'),
+      ),
+    ]),
+  );
+}
+
+/// Um carro da aplicação: montadora, modelo, anos, motor e versão.
+class _FitEditor extends StatelessWidget {
+  const _FitEditor({
+    super.key,
+    required this.fit,
+    required this.index,
+    required this.onChanged,
+    required this.onRemove,
+  });
+  final VehicleFit fit;
+  final int index;
+  final VoidCallback onChanged;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    int? year(String v) => int.tryParse(v.trim());
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(10, 4, 4, 10),
+      decoration: BoxDecoration(
+        border: Border.all(color: t.colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(children: [
+        Row(children: [
+          Expanded(
+            child: Text('Veículo ${index + 1}',
+                style: t.textTheme.labelLarge),
+          ),
+          IconButton(
+            tooltip: 'Tirar veículo',
+            icon: const Icon(Icons.close, size: 18),
+            onPressed: onRemove,
+          ),
+        ]),
+        Row(children: [
+          Expanded(
+            child: BoundField(
+              label: 'Montadora',
+              value: fit.make,
+              capitalization: TextCapitalization.words,
+              suggestions: commonMakes,
+              onChanged: (v) => fit.make = v,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: BoundField(
+              label: 'Modelo',
+              hint: 'Ex.: Gol',
+              value: fit.model,
+              capitalization: TextCapitalization.words,
+              onChanged: (v) {
+                fit.model = v;
+                onChanged();
+              },
+            ),
+          ),
+        ]),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(
+            child: BoundField(
+              label: 'Ano de',
+              value: fit.yearFrom?.toString() ?? '',
+              keyboard: TextInputType.number,
+              onChanged: (v) => fit.yearFrom = year(v),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: BoundField(
+              label: 'Ano até',
+              value: fit.yearTo?.toString() ?? '',
+              keyboard: TextInputType.number,
+              onChanged: (v) => fit.yearTo = year(v),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(
+            child: BoundField(
+              label: 'Motorização',
+              hint: 'Ex.: 1.0, 1.6 16V',
+              value: fit.engine,
+              onChanged: (v) => fit.engine = v,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: BoundField(
+              label: 'Versão',
+              hint: 'Ex.: Trend',
+              value: fit.version,
+              capitalization: TextCapitalization.words,
+              onChanged: (v) => fit.version = v,
+            ),
+          ),
+        ]),
+      ]),
     );
   }
 }

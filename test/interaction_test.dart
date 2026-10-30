@@ -273,6 +273,60 @@ void main() {
     await settle(t);
   });
 
+  itest('estoque: peça com aplicação e aviso de código repetido', (t) async {
+    await start(t);
+    store.upsertStock(StockItem(name: 'Farol esquerdo', partNumber: '5U0941005', qty: 1, sku: 'P-0001'));
+    await settle(t);
+    await tap(t, nav('Estoque'));
+    await tap(t, find.text('Adicionar'));
+    expect(find.text('1. Identificação'), findsOneWidget);
+    await type(t, field('Peça (ex.: Farol esquerdo)'), 'Farol');
+    await tap(t, find.widgetWithText(FilterChip, 'Esquerdo'));
+    await t.pumpAndSettle();
+    // mesmo OEM escrito com traço: avisa e não deixa salvar
+    await type(t, field('Código OEM / referência original'), '5u0-941-005');
+    await t.pumpAndSettle();
+    expect(find.byKey(const ValueKey('aviso-repetido')), findsOneWidget);
+    expect(find.textContaining('mesmo código OEM'), findsOneWidget);
+    await tap(t, find.text('Adicionar veículo'));
+    await type(t, field('Montadora'), 'vw');
+    await type(t, field('Modelo'), 'Gol');
+    await type(t, field('Ano de'), '2013');
+    await type(t, field('Ano até'), '2016');
+    await tap(t, find.text('Salvar'));
+    expect(store.stock.length, 1); // bloqueado
+    // somar na existente em vez de duplicar
+    await tap(t, find.text('Somar 1'));
+    expect(store.stock.length, 1);
+    expect(store.stock.single.qty, 2);
+    await settle(t);
+  });
+
+  itest('estoque: peça nova ganha código interno e aplicação', (t) async {
+    await start(t);
+    await tap(t, nav('Estoque'));
+    await tap(t, find.text('Adicionar'));
+    await type(t, field('Peça (ex.: Farol esquerdo)'), 'Lanterna traseira');
+    await tap(t, find.widgetWithText(FilterChip, 'Direito'));
+    await type(t, field('Código OEM / referência original'), '5U6945112');
+    await tap(t, find.text('Adicionar veículo'));
+    await type(t, field('Montadora'), 'vw');
+    await type(t, field('Modelo'), 'Gol');
+    await type(t, field('Ano de'), '2016');
+    await type(t, field('Ano até'), '2013');
+    await tap(t, find.text('Salvar'));
+    expect(store.stock, isEmpty); // ano "de" maior que "até"
+    await type(t, field('Ano de'), '2013');
+    await type(t, field('Ano até'), '2016');
+    await tap(t, find.text('Salvar'));
+    final p = store.stock.single;
+    expect(p.name, 'Lanterna traseira direita');
+    expect(p.sku, 'P-0001');
+    expect(p.applications.single.make, 'Volkswagen');
+    expect(p.applications.single.label, 'Volkswagen Gol 2013–2016');
+    await settle(t);
+  });
+
   itest('estoque: cadastrar peça e usar no orçamento', (t) async {
     await start(t);
     final c = seed();

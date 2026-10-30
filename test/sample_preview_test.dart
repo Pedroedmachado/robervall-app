@@ -403,6 +403,37 @@ void main() {
     await shot(tester, 'liberar_lixa');
   }, skip: skip != null);
 
+  testWidgets('captura estoque_peca', (tester) async {
+    size(tester, const Size(420, 2300));
+    final nova = StockItem(
+        name: 'Farol esquerdo',
+        partNumber: '5u0-941-005',
+        mfrBrand: 'Arteb',
+        mfrCode: 'AR-1234',
+        condition: 'paralela',
+        qty: 1,
+        cost: 280,
+        price: 390,
+        applications: [
+          VehicleFit(make: 'Volkswagen', model: 'Gol', yearFrom: 2013, yearTo: 2016, engine: '1.0', version: 'Trend'),
+          VehicleFit(make: 'Volkswagen', model: 'Voyage', yearFrom: 2013, yearTo: 2016),
+        ]);
+    store.stock.firstWhere((e) => e.name == 'Farol esquerdo').partNumber = '5U0941005';
+    await tester.pumpWidget(app(Builder(
+      builder: (context) => Scaffold(
+        body: Center(
+          child: FilledButton(
+            onPressed: () => editStockItem(context, nova),
+            child: const Text('abrir'),
+          ),
+        ),
+      ),
+    )));
+    await tester.tap(find.text('abrir'));
+    await tester.pumpAndSettle();
+    await shot(tester, 'estoque_peca');
+  }, skip: skip != null);
+
   testWidgets('captura financeiro', (tester) async {
     size(tester, const Size(420, 2000));
     await tester.pumpWidget(app(const FinancePage()));

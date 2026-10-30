@@ -103,7 +103,7 @@ class BudgetTab extends StatelessWidget {
                 values: itemValues(it, s),
                 hasComplements: complementsFor(it).isNotEmpty,
                 stock: gate.active(Mod.estoque)
-                    ? stockFor(store.stock, it)
+                    ? stockFor(store.stock, it, c.vehicle)
                     : const [],
                 onStock: gate.active(Mod.estoque)
                     ? () => showStockFor(context, c, it)
@@ -545,7 +545,7 @@ class _ItemEditorState extends State<_ItemEditor> {
     final t = Theme.of(context);
     final matches = it.description.trim().isEmpty || !gate.active(Mod.estoque)
         ? const <StockItem>[]
-        : stockFor(store.stock, it);
+        : stockFor(store.stock, it, widget.vehicle);
     final using = store.stockById(it.stockId);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),

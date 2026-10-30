@@ -130,4 +130,55 @@ void main() {
     expect(StockItem(kind: StockKind.material, name: 'Thinner', unit: 'ml').isSandpaper, isFalse);
     expect(StockItem(kind: StockKind.material, name: 'Disco 6 pol', unit: 'disco', qty: 1).qtyLabel, '1 disco');
   });
+
+  test('peça: aplicação veicular, código OEM e cadastro repetido', () {
+    final gol = StockItem(
+        name: 'Farol esquerdo',
+        partNumber: '5U0-941.005',
+        sku: 'P-0007',
+        applications: [VehicleFit(make: 'VW', model: 'Gol', yearFrom: 2013, yearTo: 2016, engine: '1.0')]);
+    final stock = [gol];
+    // mesmo OEM escrito diferente
+    expect(findDuplicates(stock, StockItem(name: 'Farol', partNumber: '5u0941005')).single.$2,
+        'mesmo código OEM');
+    // mesmo nome e carro com anos que se cruzam
+    expect(findDuplicates(stock, StockItem(name: 'Farol esq', applications: [
+      VehicleFit(make: 'Volkswagen', model: 'gol', yearFrom: 2015, yearTo: 2018)
+    ])).single.$2, 'mesmo nome e mesmo carro');
+    // mesmo nome, carro diferente: não é repetido
+    expect(findDuplicates(stock, StockItem(name: 'Farol esquerdo', applications: [
+      VehicleFit(make: 'Fiat', model: 'Uno', yearFrom: 2010, yearTo: 2014)
+    ])), isEmpty);
+    // lado diferente: não é repetido
+    expect(findDuplicates(stock, StockItem(name: 'Farol direito')), isEmpty);
+    // insumo não entra na conferência
+    expect(findDuplicates(stock, StockItem(kind: StockKind.material, name: 'Farol esquerdo')), isEmpty);
+
+    expect(nextSku(stock), 'P-0008');
+    expect(nextSku([]), 'P-0001');
+    expect(canonicalMake('vw'), 'Volkswagen');
+    expect(canonicalMake('GM'), 'Chevrolet');
+    expect(gol.applications.single.label, 'VW Gol 1.0 2013–2016');
+
+    // serve no carro do sinistro?
+    expect(fitsVehicle(gol, Vehicle(brand: 'Volkswagen', model: 'Gol 1.0 MPI', year: '2014')), isTrue);
+    expect(fitsVehicle(gol, Vehicle(brand: 'Volkswagen', model: 'Gol', year: '2019')), isFalse);
+    expect(fitsVehicle(gol, Vehicle(brand: 'Fiat', model: 'Uno', year: '2014')), isFalse);
+    expect(fitsVehicle(StockItem(name: 'x'), Vehicle(model: 'Uno')), isTrue);
+    final item = BudgetItem(description: 'Farol esquerdo', op: ItemOp.troca);
+    gol.qty = 1;
+    expect(stockFor(stock, item, Vehicle(brand: 'Fiat', model: 'Uno', year: '2014')), isEmpty);
+    expect(stockFor(stock, item, Vehicle(brand: 'VW', model: 'Gol', year: '2014')), [gol]);
+
+    final back = StockItem.fromJson(gol.toJson());
+    expect(back.applications.single.yearTo, 2016);
+    expect(back.sku, 'P-0007');
+
+    // posição no nome
+    expect(withSide('Farol', 'esquerdo'), 'Farol esquerdo');
+    expect(withSide('Farol esquerdo', 'dianteiro'), 'Farol dianteiro esquerdo');
+    expect(withSide('Porta traseira', 'direito'), 'Porta traseira direita');
+    expect(withSide('Porta dianteira direita', 'traseiro'), 'Porta traseira direita');
+    expect(withSide('Farol esquerdo', 'esquerdo'), 'Farol');
+  });
 }
