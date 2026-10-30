@@ -678,6 +678,9 @@ void main() {
     await tap(t, find.text('OK'));
     expect(store.cash.where((e) => e.planned).length, 2);
     expect(store.cash.where((e) => !e.planned && !e.isIn).length, 2);
+    // sub-aba Equipe
+    await tap(t, find.descendant(of: find.byType(TabBar), matching: find.text('Equipe')));
+    expect(find.text('Equipe no período'), findsOneWidget);
     await settle(t);
   });
 

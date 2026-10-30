@@ -12,6 +12,7 @@ import '../receipt_parser.dart';
 import '../theme.dart';
 import 'cash_page.dart';
 import 'claims_page.dart';
+import 'team_page.dart';
 import 'widgets.dart';
 
 enum _View {
@@ -278,13 +279,14 @@ class _FinancePageState extends State<FinancePage> {
       );
 
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
       appBar: AppBar(
         title: const Text('Financeiro'),
         bottom: const TabBar(tabs: [
           Tab(text: 'Vendas', icon: Icon(Icons.request_quote_outlined)),
           Tab(text: 'Caixa', icon: Icon(Icons.point_of_sale_outlined)),
+          Tab(text: 'Equipe', icon: Icon(Icons.engineering_outlined)),
         ]),
         actions: [
           Padding(
@@ -310,6 +312,7 @@ class _FinancePageState extends State<FinancePage> {
       body: TabBarView(children: [
         vendas,
         CashView(period: _period, header: periodBar),
+        TeamView(period: _period, header: periodBar),
       ]),
     ),
     );
