@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../format.dart';
+import '../market.dart';
 import '../models.dart';
 import '../modules.dart';
 import '../stock.dart';
@@ -622,28 +623,96 @@ Future<void> showStockFor(BuildContext context, Claim c, BudgetItem it) async {
   );
 }
 
-/// Endereço da busca da peça no Mercado Livre (peça + modelo + ano).
-Uri marketSearchUri(BudgetItem it, Vehicle v) {
-  final words = [it.description, v.model, v.year]
-      .join(' ')
-      .toLowerCase()
-      .replaceAll(RegExp(r'[^\wÀ-ÿ ]'), ' ')
-      .split(RegExp(r'\s+'))
-      .where((w) => w.isNotEmpty)
-      .toList();
-  return Uri.parse(
-      'https://lista.mercadolivre.com.br/${Uri.encodeComponent(words.join('-')).replaceAll('%2D', '-')}');
-}
+/// Endereço da busca com tudo o que está cadastrado (carro + peça).
+Uri marketSearchUri(BudgetItem it, Vehicle v) =>
+    marketUri(marketQuery(marketTerms(it, v)));
 
-Future<void> openMarketSearch(
-    BuildContext context, BudgetItem it, Vehicle v) async {
-  final uri = marketSearchUri(it, v);
+Future<void> _launch(BuildContext context, Uri uri) async {
   try {
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && context.mounted) toast(context, 'Não consegui abrir o navegador.');
   } catch (e) {
     if (context.mounted) toast(context, 'Não consegui abrir o navegador: $e');
   }
+}
+
+/// Mostra os termos da busca (todos ligados) para conferir e buscar.
+Future<void> openMarketSearch(
+    BuildContext context, BudgetItem it, Vehicle v) async {
+  final terms = marketTerms(it, v);
+  final ctl = TextEditingController(text: marketQuery(terms));
+  final oem = it.partNumber.trim();
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setS) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+              16, 0, 16, 16 + MediaQuery.viewInsetsOf(ctx).bottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Buscar no Mercado Livre',
+                  style: Theme.of(ctx).textTheme.titleMedium),
+              const SizedBox(height: 4),
+              Text('Montado com o carro do sinistro e a peça. Desmarque o que quiser deixar de fora.',
+                  style: Theme.of(ctx).textTheme.bodySmall),
+              const SizedBox(height: 10),
+              Wrap(spacing: 6, runSpacing: 4, children: [
+                for (final t in terms)
+                  FilterChip(
+                    key: ValueKey('ml-${t.key}'),
+                    label: Text('${t.label}: ${t.value}'),
+                    selected: t.on,
+                    onSelected: (b) => setS(() {
+                      t.on = b;
+                      ctl.text = marketQuery(terms);
+                    }),
+                  ),
+              ]),
+              const SizedBox(height: 12),
+              TextField(
+                key: const ValueKey('ml-busca'),
+                controller: ctl,
+                decoration: const InputDecoration(
+                    labelText: 'O que vai ser buscado',
+                    prefixIcon: Icon(Icons.search)),
+                onSubmitted: (q) {
+                  Navigator.pop(ctx);
+                  _launch(context, marketUri(q));
+                },
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: ctl.text.trim().isEmpty
+                    ? null
+                    : () {
+                        Navigator.pop(ctx);
+                        _launch(context, marketUri(ctl.text));
+                      },
+                icon: const Icon(Icons.shopping_cart_outlined),
+                label: const Text('Buscar'),
+              ),
+              if (oem.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _launch(context, marketUri(oem));
+                  },
+                  icon: const Icon(Icons.qr_code_2),
+                  label: Text('Buscar só pelo código $oem'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 /// Etiquetas pequenas e clicáveis (estoque, Mercado Livre) na linha do item.

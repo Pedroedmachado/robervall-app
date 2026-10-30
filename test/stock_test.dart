@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:funilar/licensing.dart';
 import 'package:funilar/format.dart';
+import 'package:funilar/market.dart';
 import 'package:funilar/models.dart';
 import 'package:funilar/pdf_report.dart';
 import 'package:funilar/stock.dart';
@@ -86,12 +87,28 @@ void main() {
     expect(pdfFileName(c), 'Onix 1.0-Turbo ABC-1D23.pdf');
   });
 
-  test('busca no Mercado Livre usa peça, modelo e ano', () {
-    final v = Vehicle(model: 'Gol 1.0', year: '2019');
-    final u = marketSearchUri(
-        BudgetItem(description: 'Farol esquerdo', op: ItemOp.troca), v);
-    expect(u.toString(),
-        'https://lista.mercadolivre.com.br/farol-esquerdo-gol-1-0-2019');
+  test('busca no Mercado Livre usa tudo o que está cadastrado', () {
+    expect(splitModel('Gol 1.0 Mi Total Flex 8V 4p'), ('Gol', '1.0 8V', ''));
+    expect(splitModel('Onix Hatch 1.0 Turbo LTZ Aut.'), ('Onix Hatch', '1.0 Turbo', 'LTZ'));
+    expect(splitModel('Uno'), ('Uno', '', ''));
+    final v = Vehicle(brand: 'Volkswagen', model: 'Gol Trend 1.6 Mi Total Flex 8V 4p', year: '2014 Gasolina');
+    final it = BudgetItem(
+        description: 'Farol dianteiro esquerdo',
+        op: ItemOp.troca,
+        origin: PartOrigin.original,
+        partNumber: '5U0941005');
+    final terms = marketTerms(it, v);
+    expect(terms.map((t) => t.key), ['peca', 'marca', 'modelo', 'motor', 'ano', 'origem']);
+    expect(marketQuery(terms),
+        'Farol dianteiro esquerdo Volkswagen Gol Trend 1.6 8V 2014 original');
+    expect(marketSearchUri(it, v).toString(),
+        'https://lista.mercadolivre.com.br/farol-dianteiro-esquerdo-volkswagen-gol-trend-1.6-8v-2014-original');
+    terms.firstWhere((t) => t.key == 'marca').on = false;
+    expect(marketQuery(terms), isNot(contains('Volkswagen')));
+    expect(marketUri('5U0-941.005').toString(), 'https://lista.mercadolivre.com.br/5u0-941.005');
+    final onix = marketTerms(BudgetItem(description: 'Para-choque dianteiro', op: ItemOp.troca),
+        Vehicle(brand: 'Chevrolet', model: 'Onix 1.0 Turbo LTZ', year: '2021'));
+    expect(onix.firstWhere((t) => t.key == 'versao').value, 'LTZ');
   });
 
   test('embalagem: custo por unidade, rótulos e leitura do nome', () {
