@@ -40,7 +40,8 @@ jobs:
             echo "== prepare"; bash tool/prepare_platforms.sh
             echo "== pub get"; flutter pub get
             echo "== analyze"; flutter analyze --no-fatal-infos --no-fatal-warnings || echo "ANALYZE_FAILED"
-            echo "== test"; flutter test || echo "TEST_FAILED"
+            echo "== test"; flutter test --coverage || echo "TEST_FAILED"
+            echo "== cobertura"; bash tool/coverage.sh | tee ci/coverage.txt
           } 2>&1 | tee ci/checks.log
           {
             echo "== exemplos visuais"
