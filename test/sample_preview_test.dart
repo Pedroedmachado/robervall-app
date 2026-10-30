@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:funilar/cash.dart';
 import 'package:funilar/licensing.dart';
 import 'package:funilar/modules.dart';
 import 'package:funilar/format.dart' show hideMoney;
@@ -439,6 +440,27 @@ void main() {
     await tester.pumpWidget(app(const FinancePage()));
     await tester.pumpAndSettle();
     await shot(tester, 'financeiro_celular');
+  }, skip: skip != null);
+
+  testWidgets('captura caixa_celular', (tester) async {
+    size(tester, const Size(420, 2000));
+    final now = DateTime.now();
+    DateTime d(int day) => DateTime(now.year, now.month, day);
+    store.cash.addAll([
+      CashEntry(isIn: true, amount: 3500, date: d(3), category: 'Recebimento de cliente', description: 'Recebido do cliente Maria', method: CashMethod.pix),
+      CashEntry(isIn: true, amount: 4800, date: d(8), category: 'Seguradora', description: 'Seguradora Exemplo - FN-0001', method: CashMethod.transferencia),
+      CashEntry(isIn: false, amount: 180, date: d(10), category: 'Energia', description: 'Conta de luz', method: CashMethod.boleto),
+      CashEntry(isIn: false, amount: 95, date: d(12), category: 'Água', description: 'Conta de água', method: CashMethod.boleto),
+      CashEntry(isIn: false, amount: 120, date: d(15), category: 'Internet / telefone', description: 'Internet', method: CashMethod.debito),
+      CashEntry(isIn: false, amount: 1800, date: DateTime(now.year, now.month, now.day + 5), planned: true, category: 'Aluguel', description: 'Aluguel do galpão'),
+      CashEntry(isIn: true, amount: 2500, date: DateTime(now.year, now.month, now.day + 12), planned: true, category: 'Seguradora', description: 'Seguradora - FN-0003'),
+    ]);
+    addTearDown(store.cash.clear);
+    await tester.pumpWidget(app(const FinancePage()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Caixa'));
+    await tester.pumpAndSettle();
+    await shot(tester, 'caixa_celular');
   }, skip: skip != null);
 
   for (final (name, entry) in [
