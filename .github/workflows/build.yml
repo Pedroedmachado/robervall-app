@@ -91,6 +91,8 @@ jobs:
           if [ -d build/windows/x64/runner/Release ]; then
             mkdir -p out
             powershell -Command "Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath out/Funilar-windows-x64.zip"
+            echo "== teste do atualizador (Windows real)" > ci/updater-test.log
+            FUNILAR_ZIP="$(pwd -W)/out/Funilar-windows-x64.zip" flutter test test/updater_windows_test.dart -r expanded >> ci/updater-test.log 2>&1 && echo UPDATER_OK >> ci/updater-test.log || echo UPDATER_FAILED >> ci/updater-test.log
           fi
           exit $status
       - uses: actions/upload-artifact@v4

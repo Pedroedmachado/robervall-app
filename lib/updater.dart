@@ -75,49 +75,54 @@ String? assetForPlatform() {
 }
 
 /// Script que espera o app fechar, troca os arquivos e abre de novo.
+/// Usa robocopy (tenta de novo se algum arquivo ainda estiver em uso) e
+/// grava um log em %TEMP%\funilar-atualizacao.log.
 String windowsSwapScript({
   required int pid,
   required String from,
   required String to,
   required String tag,
+  bool relaunch = true,
 }) {
   String q(String s) => "'${s.replaceAll("'", "''")}'";
+  String plain(String s) => s.replaceAll("'", '').replaceAll('"', '');
+  final reopen = relaunch
+      ? "Start-Process (Join-Path ${q(to)} 'funilar.exe')"
+      : "Log 'sem reabrir (teste)'";
   return '''
-\$ErrorActionPreference = 'SilentlyContinue'
-try { Wait-Process -Id $pid -Timeout 60 } catch {}
-Start-Sleep -Milliseconds 700
-\$ok = \$true
-try {
-  Copy-Item -Path (Join-Path ${q(from)} '*') -Destination ${q(to)} -Recurse -Force -ErrorAction Stop
-  Set-Content -Path (Join-Path ${q(to)} 'versao.txt') -Value ${q(tag)}
-} catch { \$ok = \$false }
-Remove-Item ${q(from)} -Recurse -Force
-if (-not \$ok) {
-  Add-Type -AssemblyName PresentationFramework
-  [System.Windows.MessageBox]::Show('Não consegui trocar os arquivos do Funilar (pasta protegida?). Rode o atualizador pelo PowerShell.', 'Funilar') | Out-Null
+\$log = Join-Path \$env:TEMP 'funilar-atualizacao.log'
+function Log(\$m) { Add-Content -Path \$log -Value ("{0:yyyy-MM-dd HH:mm:ss}  {1}" -f (Get-Date), \$m) }
+Log "Atualizando para ${plain(tag)} de=${plain(from)} para=${plain(to)}"
+try { Wait-Process -Id $pid -Timeout 60 -ErrorAction SilentlyContinue } catch {}
+Start-Sleep -Milliseconds 800
+\$ok = \$false
+for (\$i = 1; \$i -le 5 -and -not \$ok; \$i++) {
+  & robocopy ${q(from)} ${q(to)} /E /R:3 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
+  \$code = \$LASTEXITCODE
+  Log "robocopy tentativa \$(\$i): codigo \$(\$code)"
+  if (\$code -lt 8) { \$ok = \$true } else { Start-Sleep -Seconds 2 }
 }
-Start-Process (Join-Path ${q(to)} 'funilar.exe')
+if (\$ok) {
+  Set-Content -Path (Join-Path ${q(to)} 'versao.txt') -Value ${q(tag)}
+  Remove-Item ${q(from)} -Recurse -Force -ErrorAction SilentlyContinue
+  Log 'OK'
+} else {
+  Log 'FALHOU'
+  Add-Type -AssemblyName PresentationFramework
+  [System.Windows.MessageBox]::Show("Não consegui trocar os arquivos do Funilar. Veja o log em \$log ou rode o atualizador pelo PowerShell.", 'Funilar') | Out-Null
+}
+$reopen
 ''';
 }
 
-/// Windows: baixa o .zip, descompacta numa pasta temporária e deixa o
-/// script pronto. Depois disso o app só precisa fechar ([launchSwapAndExit]).
-Future<File> prepareWindowsUpdate(
-  ReleaseInfo rel, {
-  void Function(double progress)? onProgress,
-}) async {
-  final a = rel.asset('Funilar-windows-x64.zip');
-  if (a == null) throw StateError('Esta versão não tem o arquivo do Windows.');
-  final bytes = await _download(a.$1, a.$2, onProgress);
-  final tmp = await Directory.systemTemp.createTemp('funilar_update');
-  final files = Directory('${tmp.path}${Platform.pathSeparator}novo');
-  await files.create();
+/// Descompacta o .zip do Windows. Devolve true se tem o funilar.exe.
+Future<bool> extractWindowsZip(List<int> bytes, Directory into) async {
   final zip = ZipDecoder().decodeBytes(bytes);
   var hasExe = false;
   for (final f in zip.files) {
     final name = f.name.replaceAll('\\', '/');
-    if (name.contains('..')) continue;
-    final out = '${files.path}/$name';
+    if (name.contains('..') || name.startsWith('/')) continue;
+    final out = '${into.path}/$name';
     if (f.isFile) {
       await File(out).create(recursive: true);
       await File(out).writeAsBytes(f.content as List<int>, flush: true);
@@ -126,14 +131,44 @@ Future<File> prepareWindowsUpdate(
       await Directory(out).create(recursive: true);
     }
   }
-  if (!hasExe) throw StateError('O arquivo baixado não tem o funilar.exe.');
-  final installDir = File(Platform.resolvedExecutable).parent.path;
+  return hasExe;
+}
+
+/// Windows: baixa o .zip, descompacta numa pasta temporária e deixa o
+/// script pronto. Depois disso o app só precisa fechar.
+Future<File> prepareWindowsUpdate(
+  ReleaseInfo rel, {
+  void Function(double progress)? onProgress,
+  List<int>? zipBytes,
+  String? installDir,
+  int? waitPid,
+  bool relaunch = true,
+}) async {
+  List<int> bytes;
+  if (zipBytes != null) {
+    bytes = zipBytes;
+  } else {
+    final a = rel.asset('Funilar-windows-x64.zip');
+    if (a == null) throw StateError('Esta versão não tem o arquivo do Windows.');
+    bytes = await downloadAsset(a.$1, a.$2, onProgress);
+  }
+  final tmp = await Directory.systemTemp.createTemp('funilar_update');
+  final files = Directory('${tmp.path}${Platform.pathSeparator}novo');
+  await files.create();
+  if (!await extractWindowsZip(bytes, files)) {
+    throw StateError('O arquivo baixado não tem o funilar.exe.');
+  }
+  final to = installDir ?? File(Platform.resolvedExecutable).parent.path;
   final script = File('${tmp.path}${Platform.pathSeparator}trocar.ps1');
   // BOM: o PowerShell do Windows lê acentos certo
   await script.writeAsBytes([
     0xEF, 0xBB, 0xBF,
     ...utf8.encode(windowsSwapScript(
-        pid: pid, from: files.path, to: installDir, tag: rel.tag)),
+        pid: waitPid ?? pid,
+        from: files.path,
+        to: to,
+        tag: rel.tag,
+        relaunch: relaunch)),
   ]);
   return script;
 }
@@ -147,7 +182,7 @@ Future<void> launchSwapScript(File script) async {
   );
 }
 
-Future<List<int>> _download(
+Future<List<int>> downloadAsset(
     String url, int size, void Function(double)? onProgress) async {
   final client = http.Client();
   try {

@@ -39,7 +39,10 @@ void main() {
     final s = windowsSwapScript(
         pid: 4242, from: r"C:\Temp\novo", to: r"C:\Users\Zé d'Oficina\Funilar", tag: 'v1.0.60');
     expect(s, contains('Wait-Process -Id 4242'));
-    expect(s, contains(r"Copy-Item -Path (Join-Path 'C:\Temp\novo' '*')"));
+    expect(s, contains(r"robocopy 'C:\Temp\novo' 'C:\Users\Zé d''Oficina\Funilar' /E"));
+    expect(s, contains('funilar-atualizacao.log'));
+    expect(windowsSwapScript(pid: 1, from: 'a', to: 'b', tag: 't', relaunch: false),
+        isNot(contains('Start-Process')));
     expect(s, contains(r"'C:\Users\Zé d''Oficina\Funilar'"));
     expect(s, contains("'v1.0.60'"));
     expect(s, contains('funilar.exe'));
