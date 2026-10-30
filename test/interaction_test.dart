@@ -645,6 +645,42 @@ void main() {
     await settle(t);
   });
 
+  itest('financeiro: caixa com entrada, saída e pagamento previsto', (t) async {
+    await start(t);
+    seed();
+    await settle(t);
+    await tap(t, nav('Financeiro'));
+    expect(find.text('Consolidado'), findsOneWidget); // Vendas: fluxo virou Consolidado
+    await tap(t, find.descendant(of: find.byType(TabBar), matching: find.text('Caixa')));
+    expect(find.text('Caixa do período'), findsOneWidget);
+
+    await tap(t, find.text('Entrada'));
+    await type(t, field('Valor'), '2000');
+    await tap(t, find.widgetWithText(ChoiceChip, 'Dinheiro'));
+    await tap(t, find.text('Salvar'));
+    await tap(t, find.text('Saída'));
+    await tap(t, find.widgetWithText(ChoiceChip, 'Energia'));
+    await type(t, field('Valor'), '300');
+    await tap(t, find.text('Salvar'));
+    expect(store.cash.length, 2);
+    expect(find.text(money(1700)), findsWidgets); // saldo
+
+    await tap(t, find.text('Pagamento previsto'));
+    await tap(t, find.widgetWithText(ChoiceChip, 'Aluguel'));
+    await type(t, field('Valor'), '1200');
+    await type(t, field('Repetir por quantos meses'), '3');
+    await tap(t, find.text('Salvar'));
+    expect(store.cash.where((e) => e.planned).length, 3);
+    expect(find.textContaining('Pagar em'), findsWidgets);
+
+    // pagou: confirma e vira saída do caixa
+    await tap(t, find.byTooltip('Paguei').first);
+    await tap(t, find.text('OK'));
+    expect(store.cash.where((e) => e.planned).length, 2);
+    expect(store.cash.where((e) => !e.planned && !e.isIn).length, 2);
+    await settle(t);
+  });
+
   itest('financeiro: lançar gasto fixo e ver o lucro', (t) async {
     await start(t);
     final c = seed();

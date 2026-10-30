@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'models.dart';
+import 'cash.dart';
 import 'finance.dart';
 import 'format.dart' show hideMoney, num2;
 import 'licensing.dart';
@@ -25,6 +26,9 @@ class AppStore extends ChangeNotifier {
   final List<CatalogItem> catalog = [];
   final List<FinanceEntry> entries = [];
   final List<StockItem> stock = [];
+
+  /// Caixa: entradas e saídas de dinheiro (e os previstos).
+  final List<CashEntry> cash = [];
 
   /// Usuários da oficina (vazio = uso individual, acesso total).
   final List<AppUser> users = [];
@@ -126,7 +130,7 @@ class AppStore extends ChangeNotifier {
 
   static const _knownKeys = {
     'app', 'version', 'savedAt', 'settings', 'claims', 'contacts',
-    'catalog', 'entries', 'stock', 'users',
+    'catalog', 'entries', 'stock', 'users', 'cash',
   };
 
   void _fromJson(Map<String, dynamic> j) {
@@ -162,6 +166,9 @@ class AppStore extends ChangeNotifier {
     users
       ..clear()
       ..addAll(list(j['users']).map(AppUser.fromJson));
+    cash
+      ..clear()
+      ..addAll(list(j['cash']).map(CashEntry.fromJson));
   }
 
   Map<String, dynamic> toJson() => {
@@ -176,6 +183,7 @@ class AppStore extends ChangeNotifier {
         'entries': entries.map((e) => e.toJson()).toList(),
         'stock': stock.map((e) => e.toJson()).toList(),
         'users': users.map((e) => e.toJson()).toList(),
+        'cash': cash.map((e) => e.toJson()).toList(),
       };
 
   Future<void> _write() async {
@@ -284,6 +292,7 @@ class AppStore extends ChangeNotifier {
     c.updatedAt = DateTime.now();
     syncCrewCosts(c);
     syncStock(c);
+    syncCashProfit(c);
     changed();
   }
 
@@ -411,6 +420,63 @@ class AppStore extends ChangeNotifier {
     touch(c);
   }
 
+  /// Orçamento concluído: o lucro líquido (aprovado − custos) vai para as
+  /// entradas do Caixa e acompanha mudanças de custo; sai se reabrir.
+  void syncCashProfit(Claim c) {
+    if (!gate.active(Mod.financeiro)) return; // congelado até reativar
+    final id = 'lucro-${c.id}';
+    final existing = cash.where((e) => e.id == id).toList();
+    final done = (c.status == ClaimStatus.concluido ||
+            c.status == ClaimStatus.entregue) &&
+        claims.contains(c);
+    if (!done) {
+      cash.removeWhere(existing.contains);
+      return;
+    }
+    final j = jobCost(c, settings,
+        entries: entries, contactById: contactById, stockById: stockById);
+    final e = existing.isNotEmpty
+        ? existing.first
+        : CashEntry(id: id, autoKey: cashProfitKey);
+    e
+      ..isIn = true
+      ..planned = false
+      ..date = c.concludedAt ?? DateTime.now()
+      ..amount = j.profit
+      ..category = 'Lucro de orçamento'
+      ..method = CashMethod.outro
+      ..claimId = c.id
+      ..contact = c.customerName
+      ..description =
+          '${j.profit >= 0 ? 'Lucro líquido' : 'Prejuízo'} ${c.number}${c.vehicle.plate.isEmpty ? '' : ' · ${c.vehicle.plate}'}';
+    if (existing.isEmpty) cash.add(e);
+  }
+
+  void upsertCash(CashEntry e) {
+    gate.require(Mod.financeiro);
+    gate.requirePerm(Perm.financeiroEditar);
+    if (!cash.contains(e)) cash.add(e);
+    cash.sort((a, b) => b.date.compareTo(a.date));
+    changed();
+  }
+
+  void removeCash(CashEntry e) {
+    gate.require(Mod.financeiro);
+    gate.requirePerm(Perm.financeiroEditar);
+    cash.remove(e);
+    changed();
+  }
+
+  /// Previsto que aconteceu: vira lançamento do caixa na data informada.
+  void confirmPlanned(CashEntry e, {DateTime? on}) {
+    gate.require(Mod.financeiro);
+    gate.requirePerm(Perm.financeiroEditar);
+    e
+      ..planned = false
+      ..date = on ?? DateTime.now();
+    changed();
+  }
+
   /// Sinistros que usam (ou reservam) uma peça do estoque.
   List<Claim> claimsUsingStock(StockItem s) => claims
       .where((c) => c.items.any((i) => i.stockId == s.id))
@@ -450,6 +516,10 @@ class AppStore extends ChangeNotifier {
     c.status = s;
     // orçamento fechado: a data de aprovação é a data da receita
     if (isClosedStatus(s) && c.approvedAt == null) c.approvedAt = DateTime.now();
+    // concluído/entregue: o lucro do orçamento entra no Caixa nessa data
+    final done = s == ClaimStatus.concluido || s == ClaimStatus.entregue;
+    if (done && c.concludedAt == null) c.concludedAt = DateTime.now();
+    if (!done) c.concludedAt = null;
     c.timeline.add(TimelineEvent(
       text: 'Status: ${s.label}${note == null || note.isEmpty ? '' : ' — $note'}',
       isStatus: true,
@@ -498,6 +568,7 @@ class AppStore extends ChangeNotifier {
     claims.remove(c);
     syncStock(c); // devolve as peças ao estoque
     entries.removeWhere((e) => e.claimId == c.id && isCrewEntry(e));
+    cash.removeWhere((e) => e.claimId == c.id && e.autoKey == cashProfitKey);
     changed();
   }
 
@@ -530,7 +601,10 @@ class AppStore extends ChangeNotifier {
     if (!contacts.contains(ct)) contacts.add(ct);
     // valor do funcionário mudou: atualiza os custos lançados
     for (final c in claims) {
-      if (c.crew.any((m) => m.contactId == ct.id)) syncCrewCosts(c);
+      if (c.crew.any((m) => m.contactId == ct.id)) {
+        syncCrewCosts(c);
+        syncCashProfit(c);
+      }
     }
     contacts.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     changed();
@@ -663,6 +737,7 @@ class AppStore extends ChangeNotifier {
     gate.requirePerm(Perm.financeiroEditar);
     if (!entries.contains(e)) entries.add(e);
     entries.sort((a, b) => b.date.compareTo(a.date));
+    _resyncProfit(e.claimId);
     changed();
   }
 
@@ -670,7 +745,14 @@ class AppStore extends ChangeNotifier {
     gate.require(Mod.financeiro);
     gate.requirePerm(Perm.financeiroEditar);
     entries.remove(e);
+    _resyncProfit(e.claimId);
     changed();
+  }
+
+  /// Gasto do carro mudou: atualiza o lucro dele no Caixa.
+  void _resyncProfit(String claimId) {
+    final c = claimById(claimId);
+    if (c != null) syncCashProfit(c);
   }
 
   // ------------------------------------------------------------- utilidades
@@ -849,6 +931,7 @@ class AppStore extends ChangeNotifier {
     for (final c in claims) {
       syncCrewCosts(c);
       syncStock(c);
+      syncCashProfit(c);
     }
   }
 

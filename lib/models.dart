@@ -402,6 +402,7 @@ class Claim {
 
   String approvedBy;
   DateTime? approvedAt;
+  DateTime? concludedAt; // quando ficou concluído (vai para o Caixa)
   String notes;
 
   List<BudgetItem> items;
@@ -450,6 +451,7 @@ class Claim {
     this.extraCosts = 0,
     this.approvedBy = '',
     this.approvedAt,
+    this.concludedAt,
     this.notes = '',
     List<BudgetItem>? items,
     List<ClaimPhoto>? photos,
@@ -508,6 +510,7 @@ class Claim {
         'extraCosts': extraCosts,
         'approvedBy': approvedBy,
         'approvedAt': approvedAt?.toIso8601String(),
+        if (concludedAt != null) 'concludedAt': concludedAt!.toIso8601String(),
         'notes': notes,
         'items': items.map((e) => e.toJson()).toList(),
         'photos': photos.map((e) => e.toJson()).toList(),
@@ -561,6 +564,7 @@ class Claim {
       extraCosts: _d(j['extraCosts']),
       approvedBy: _s(j['approvedBy']),
       approvedAt: _dt(j['approvedAt']),
+      concludedAt: _dt(j['concludedAt']),
       notes: _s(j['notes']),
       items: list(j['items']).map(BudgetItem.fromJson).toList(),
       photos: list(j['photos']).map(ClaimPhoto.fromJson).toList(),

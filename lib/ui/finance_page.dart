@@ -10,13 +10,14 @@ import '../modules.dart';
 import '../receipt_ocr.dart';
 import '../receipt_parser.dart';
 import '../theme.dart';
+import 'cash_page.dart';
 import 'claims_page.dart';
 import 'widgets.dart';
 
 enum _View {
-  flow('Fluxo de caixa'),
+  flow('Consolidado'),
   expenses('Gastos'),
-  income('Receitas');
+  income('Vendas');
 
   const _View(this.label);
   final String label;
@@ -198,7 +199,7 @@ class _FinancePageState extends State<FinancePage> {
           OutlinedButton.icon(
             onPressed: () => _newEntry(income: true),
             icon: const Icon(Icons.add_circle_outline),
-            label: const Text('Lançar receita'),
+            label: const Text('Lançar venda'),
           ),
         ]),
       ],
@@ -233,36 +234,7 @@ class _FinancePageState extends State<FinancePage> {
 
     final list = _buildList(context, sum);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Financeiro'),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment(value: false, label: Text('Mês')),
-                ButtonSegment(value: true, label: Text('Ano')),
-              ],
-              selected: {_period.isYear},
-              showSelectedIcon: false,
-              onSelectionChanged: (s) => setState(() {
-                final y = _period.start.year;
-                final now = DateTime.now();
-                _period = s.first
-                    ? Period.year(y)
-                    : Period.month(y, y == now.year ? now.month : 1);
-              }),
-            ),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _newEntry(),
-        icon: const Icon(Icons.add),
-        label: const Text('Lançar'),
-      ),
-      body: ListView(
+    final vendas = ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
         children: [
           Center(
@@ -303,7 +275,43 @@ class _FinancePageState extends State<FinancePage> {
             ),
           ),
         ],
+      );
+
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+      appBar: AppBar(
+        title: const Text('Financeiro'),
+        bottom: const TabBar(tabs: [
+          Tab(text: 'Vendas', icon: Icon(Icons.request_quote_outlined)),
+          Tab(text: 'Caixa', icon: Icon(Icons.point_of_sale_outlined)),
+        ]),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(value: false, label: Text('Mês')),
+                ButtonSegment(value: true, label: Text('Ano')),
+              ],
+              selected: {_period.isYear},
+              showSelectedIcon: false,
+              onSelectionChanged: (s) => setState(() {
+                final y = _period.start.year;
+                final now = DateTime.now();
+                _period = s.first
+                    ? Period.year(y)
+                    : Period.month(y, y == now.year ? now.month : 1);
+              }),
+            ),
+          ),
+        ],
       ),
+      body: TabBarView(children: [
+        vendas,
+        CashView(period: _period, header: periodBar),
+      ]),
+    ),
     );
   }
 
