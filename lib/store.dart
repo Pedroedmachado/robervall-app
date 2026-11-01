@@ -1,3 +1,4 @@
+import 'edition.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -74,10 +75,10 @@ class AppStore extends ChangeNotifier {
     if (dir == null && env != null && env.isNotEmpty) dir = Directory(env);
     if (dir == null) {
       final support = (await getApplicationSupportDirectory()).path;
-      dir = Directory('$support/funilar');
+      dir = Directory('$support/${appEdition.package}');
       // migra os dados da versão com o nome antigo, se existirem
       // (o ID antigo era br.com.robervall, então a pasta-mãe também mudou)
-      if (!await dir.exists()) {
+      if (appEdition == Edition.completo && !await dir.exists()) {
         for (final old in [
           Directory('$support/robervall'),
           Directory('${support.replaceAll('funilar', 'robervall')}/robervall'),
@@ -173,7 +174,7 @@ class AppStore extends ChangeNotifier {
 
   Map<String, dynamic> toJson() => {
         ..._extra,
-        'app': 'funilar',
+        'app': edition.package,
         'version': 1,
         'savedAt': DateTime.now().toIso8601String(),
         'settings': settings.toJson(),
@@ -713,7 +714,7 @@ class AppStore extends ChangeNotifier {
     }
     // aceita também backups do nome antigo do app (Robervall)
     if (data == null ||
-        (data['app'] != 'funilar' && data['app'] != 'robervall')) {
+        !backupAppIds.contains(data['app'])) {
       throw const FormatException('Arquivo não é um backup do Funilar.');
     }
     for (final f in archive.files) {
@@ -768,13 +769,18 @@ class AppStore extends ChangeNotifier {
 
   Future<void> _loadLicensing(License? assume) async {
     if (!_enforceLicense && assume == null) {
-      license = LicenseCheck(LicenseStatus.valid,
-          License.full(customer: settings.shopName.isEmpty ? 'Funilar' : settings.shopName));
+      license = LicenseCheck(
+          LicenseStatus.valid,
+          License(
+              id: 'interna',
+              customer: settings.shopName.isEmpty ? edition.title : settings.shopName,
+              modules: edition.modules,
+              issued: DateTime(2026)));
       final act = await Activation.load(_activationFile, deviceId);
       activation = act ?? Activation();
       if (act?.tampered == true) activation = Activation(log: act!.log);
-      // versão completa: todos os módulos ligados
-      activation.enabled = Mod.values.toSet();
+      // os módulos deste sistema (no Funilar completo, todos)
+      activation.enabled = edition.modules.toSet();
       activation.lastSeen = DateTime.now();
       await activation.save(_activationFile, deviceId);
       return;

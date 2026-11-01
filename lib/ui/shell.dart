@@ -1,3 +1,4 @@
+import '../edition.dart';
 import 'package:flutter/material.dart';
 
 import '../modules.dart';
@@ -23,9 +24,9 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _page = 1; // começa em Sinistros quando o Painel não aparece
 
-  static const _dest = [
+  static List<(IconData, IconData, String)> get _dest => [
     (Icons.space_dashboard_outlined, Icons.space_dashboard, 'Painel'),
-    (Icons.car_crash_outlined, Icons.car_crash, 'Sinistros'),
+    (Icons.car_crash_outlined, Icons.car_crash, edition.claimsLabel),
     (Icons.account_balance_wallet_outlined, Icons.account_balance_wallet, 'Financeiro'),
     (Icons.warehouse_outlined, Icons.warehouse, 'Estoque'),
     (Icons.inventory_2_outlined, Icons.inventory_2, 'Catálogo'),
@@ -36,15 +37,20 @@ class _AppShellState extends State<AppShell> {
   bool _initDone = false;
 
   /// Abas que este usuário vê, conforme os módulos ativos e o papel.
-  List<int> _visible() => [
-        if (gate.roleCan(Perm.valoresVer)) 0,
-        1,
-        if (gate.active(Mod.financeiro) && gate.roleCan(Perm.financeiroVer)) 2,
-        if (gate.active(Mod.estoque) && gate.roleCan(Perm.estoqueVer)) 3,
-        if (gate.roleCan(Perm.orcamentoEditar)) 4,
-        if (gate.roleCan(Perm.cadastrosEditar)) 5,
-        if (gate.roleCan(Perm.ajustes)) 6,
-      ];
+  List<int> _visible() {
+    final all = [
+      if (gate.roleCan(Perm.valoresVer)) 0,
+      1,
+      if (gate.active(Mod.financeiro) && gate.roleCan(Perm.financeiroVer)) 2,
+      if (gate.active(Mod.estoque) && gate.roleCan(Perm.estoqueVer)) 3,
+      if (gate.roleCan(Perm.orcamentoEditar)) 4,
+      if (gate.roleCan(Perm.cadastrosEditar)) 5,
+      if (gate.roleCan(Perm.ajustes)) 6,
+    ];
+    // só as páginas deste sistema (Orçamentação, Cadastros, Gestão…)
+    final mine = all.where((i) => edition.pages.contains(AppPage.values[i])).toList();
+    return mine.isEmpty ? [edition.pages.contains(AppPage.cadastros) ? 5 : 1] : mine;
+  }
 
   void go(int page) => setState(() => _page = page);
 
@@ -216,8 +222,8 @@ class _Logo extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       alignment: Alignment.center,
-      child: const Text(
-        'F',
+      child: Text(
+        edition.title.split(' ').last[0],
         style: TextStyle(
             color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900),
       ),

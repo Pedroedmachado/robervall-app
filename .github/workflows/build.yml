@@ -17,6 +17,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Nome do sistema
+        shell: bash
+        run: cat tool/app.env >> "$GITHUB_ENV"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -54,10 +57,10 @@ jobs:
           flutter build linux --release --dart-define=FUNILAR_VERSION=v1.0.${{ github.run_number }} 2>&1 | tee ci/linux.log || status=$((status+2))
           echo "$status" > ci/android-linux.status
           if [ -f build/app/outputs/flutter-apk/app-release.apk ]; then
-            mkdir -p out && cp build/app/outputs/flutter-apk/app-release.apk out/Funilar-android.apk
+            mkdir -p out && cp build/app/outputs/flutter-apk/app-release.apk out/${APP_ASSET}-android.apk
           fi
           if [ -d build/linux/x64/release/bundle ]; then
-            mkdir -p out && tar -C build/linux/x64/release -czf out/Funilar-linux-x64.tar.gz bundle
+            mkdir -p out && tar -C build/linux/x64/release -czf out/${APP_ASSET}-linux-x64.tar.gz bundle
           fi
           exit $status
       - uses: actions/upload-artifact@v4
@@ -76,6 +79,9 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Nome do sistema
+        shell: bash
+        run: cat tool/app.env >> "$GITHUB_ENV"
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -91,9 +97,9 @@ jobs:
           echo "$status" > ci/windows.status
           if [ -d build/windows/x64/runner/Release ]; then
             mkdir -p out
-            powershell -Command "Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath out/Funilar-windows-x64.zip"
+            powershell -Command "Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath out/${APP_ASSET}-windows-x64.zip"
             echo "== teste do atualizador (Windows real)" > ci/updater-test.log
-            FUNILAR_ZIP="$(pwd -W)/out/Funilar-windows-x64.zip" flutter test test/updater_windows_test.dart -r expanded >> ci/updater-test.log 2>&1 && echo UPDATER_OK >> ci/updater-test.log || echo UPDATER_FAILED >> ci/updater-test.log
+            FUNILAR_ZIP="$(pwd -W)/out/${APP_ASSET}-windows-x64.zip" flutter test test/updater_windows_test.dart -r expanded >> ci/updater-test.log 2>&1 && echo UPDATER_OK >> ci/updater-test.log || echo UPDATER_FAILED >> ci/updater-test.log
           fi
           exit $status
       - uses: actions/upload-artifact@v4
@@ -115,6 +121,9 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Nome do sistema
+        shell: bash
+        run: cat tool/app.env >> "$GITHUB_ENV"
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -134,7 +143,7 @@ jobs:
           if [ -d build/ios/iphoneos/Runner.app ]; then
             mkdir -p ipa/Payload
             cp -R build/ios/iphoneos/Runner.app ipa/Payload/
-            (cd ipa && zip -qry ../out/Funilar-ios-sem-assinatura.ipa Payload)
+            (cd ipa && zip -qry ../out/${APP_ASSET}-ios-sem-assinatura.ipa Payload)
           else
             status=1
           fi
@@ -158,6 +167,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Nome do sistema
+        shell: bash
+        run: cat tool/app.env >> "$GITHUB_ENV"
       - uses: actions/download-artifact@v4
         with:
           path: dl
@@ -174,8 +186,8 @@ jobs:
           gh release create "$tag" dl/out-*/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Funilar $tag" \
-            --notes "Android: instale o Funilar-android.apk. Windows: extraia o .zip e abra funilar.exe. Linux: extraia o .tar.gz e rode bundle/funilar. iPhone (quando presente): instale o .ipa com Sideloadly ou AltStore usando seu Apple ID." \
+            --title "$APP_TITLE $tag" \
+            --notes "Android: instale o ${APP_ASSET}-android.apk. Windows: extraia o .zip e abra ${APP_PACKAGE}.exe. Linux: extraia o .tar.gz e rode bundle/${APP_PACKAGE}. iPhone (quando presente): instale o .ipa com Sideloadly ou AltStore usando seu Apple ID." \
             >> /tmp/logs/release.log 2>&1 && echo RELEASE_OK >> /tmp/logs/release.log || echo RELEASE_FAILED >> /tmp/logs/release.log
       - name: Publicar logs no branch ci-logs
         shell: bash

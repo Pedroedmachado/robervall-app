@@ -3,9 +3,13 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:funilar/edition.dart';
 import 'package:funilar/updater.dart';
 
 void main() {
+  // aqui vale o sistema deste repositório (nome do .exe e do .zip)
+  setUp(() => edition = appEdition);
+  final exe = '${appEdition.package}.exe';
   final zipPath = Platform.environment['FUNILAR_ZIP'] ?? '';
   final skip = !Platform.isWindows || zipPath.isEmpty
       ? 'só no Windows do CI (FUNILAR_ZIP)'
@@ -15,7 +19,7 @@ void main() {
     final bytes = await File(zipPath).readAsBytes();
     final install = await Directory.systemTemp.createTemp('fn_instalado');
     // instalação "antiga": exe falso e um arquivo de dados que deve ficar
-    await File('${install.path}\\funilar.exe').writeAsString('versao velha');
+    await File('${install.path}\\$exe').writeAsString('versao velha');
     await File('${install.path}\\data\\flutter_assets\\velho.txt')
         .create(recursive: true);
     // processo que "é o app": o script espera ele fechar
@@ -30,12 +34,12 @@ void main() {
     );
     final r = await Process.run('powershell.exe',
         ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script.path]);
-    final log = File('${Platform.environment['TEMP']}\\funilar-atualizacao.log');
+    final log = File('${Platform.environment['TEMP']}\\${appEdition.package}-atualizacao.log');
     // ignore: avoid_print
     print('saida: ${r.stdout}\nerros: ${r.stderr}\nlog: ${log.existsSync() ? log.readAsStringSync() : '(sem log)'}');
     expect(r.exitCode, 0);
-    final exe = File('${install.path}\\funilar.exe');
-    expect(exe.lengthSync(), greaterThan(10000), reason: 'exe novo copiado');
+    final exeFile = File('${install.path}\\$exe');
+    expect(exeFile.lengthSync(), greaterThan(10000), reason: 'exe novo copiado');
     expect(File('${install.path}\\versao.txt').readAsStringSync().trim(), 'v9.9.9');
     expect(File('${install.path}\\data\\icudtl.dat').existsSync(), isTrue);
     expect(File('${install.path}\\data\\flutter_assets\\velho.txt').existsSync(), isTrue,
@@ -44,8 +48,14 @@ void main() {
   }, skip: skip, timeout: const Timeout(Duration(minutes: 3)));
 
   test('baixa e descompacta a última versão publicada', () async {
-    final rel = await fetchLatestRelease();
-    final a = rel.asset('Funilar-windows-x64.zip');
+    final ReleaseInfo rel;
+    try {
+      rel = await fetchLatestRelease();
+    } on HttpException {
+      markTestSkipped('${appEdition.repo} ainda não tem versão publicada');
+      return;
+    }
+    final a = rel.asset(windowsAsset);
     expect(a, isNotNull, reason: 'release ${rel.tag} sem o zip do Windows');
     final bytes = await downloadAsset(a!.$1, a.$2, null);
     expect(bytes.length, a.$2);

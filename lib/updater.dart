@@ -2,6 +2,7 @@
 /// GitHub e, no Windows, baixa, troca os arquivos e reabre sozinho.
 library;
 
+import 'edition.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -11,10 +12,15 @@ import 'package:http/http.dart' as http;
 /// Versão deste programa (gravada na compilação pelo GitHub Actions).
 const appVersion = String.fromEnvironment('FUNILAR_VERSION', defaultValue: 'dev');
 
-const _repo = 'Pedroedmachado/robervall-app';
+String get _repo => edition.repo;
+String get _exe => '${edition.package}.exe';
+String get _log => '${edition.package}-atualizacao.log';
+
+/// Arquivo do Windows publicado em cada versão.
+String get windowsAsset => '${edition.asset}-windows-x64.zip';
 
 /// Página das versões (Android/iPhone/Linux abrem por aqui).
-const releasesPage = 'https://github.com/$_repo/releases/latest';
+String get releasesPage => 'https://github.com/$_repo/releases/latest';
 
 class ReleaseInfo {
   const ReleaseInfo(this.tag, this.notes, this.assets);
@@ -47,7 +53,7 @@ Future<ReleaseInfo> fetchLatestRelease({http.Client? client}) async {
   try {
     final r = await c.get(
         Uri.parse('https://api.github.com/repos/$_repo/releases/latest'),
-        headers: {'User-Agent': 'Funilar', 'Accept': 'application/vnd.github+json'});
+        headers: {'User-Agent': edition.asset, 'Accept': 'application/vnd.github+json'});
     if (r.statusCode != 200) {
       throw HttpException('GitHub respondeu ${r.statusCode}');
     }
@@ -68,9 +74,9 @@ Future<ReleaseInfo> fetchLatestRelease({http.Client? client}) async {
 
 /// Nome do arquivo de cada sistema.
 String? assetForPlatform() {
-  if (Platform.isWindows) return 'Funilar-windows-x64.zip';
-  if (Platform.isAndroid) return 'Funilar-android.apk';
-  if (Platform.isLinux) return 'Funilar-linux-x64.tar.gz';
+  if (Platform.isWindows) return windowsAsset;
+  if (Platform.isAndroid) return '${edition.asset}-android.apk';
+  if (Platform.isLinux) return '${edition.asset}-linux-x64.tar.gz';
   return null;
 }
 
@@ -87,10 +93,10 @@ String windowsSwapScript({
   String q(String s) => "'${s.replaceAll("'", "''")}'";
   String plain(String s) => s.replaceAll("'", '').replaceAll('"', '');
   final reopen = relaunch
-      ? "Start-Process (Join-Path ${q(to)} 'funilar.exe')"
+      ? "Start-Process (Join-Path ${q(to)} '$_exe')"
       : "Log 'sem reabrir (teste)'";
   return '''
-\$log = Join-Path \$env:TEMP 'funilar-atualizacao.log'
+\$log = Join-Path \$env:TEMP '$_log'
 function Log(\$m) { Add-Content -Path \$log -Value ("{0:yyyy-MM-dd HH:mm:ss}  {1}" -f (Get-Date), \$m) }
 Log "Atualizando para ${plain(tag)} de=${plain(from)} para=${plain(to)}"
 try { Wait-Process -Id $pid -Timeout 60 -ErrorAction SilentlyContinue } catch {}
@@ -109,7 +115,7 @@ if (\$ok) {
 } else {
   Log 'FALHOU'
   Add-Type -AssemblyName PresentationFramework
-  [System.Windows.MessageBox]::Show("Não consegui trocar os arquivos do Funilar. Veja o log em \$log ou rode o atualizador pelo PowerShell.", 'Funilar') | Out-Null
+  [System.Windows.MessageBox]::Show("Não consegui trocar os arquivos do ${edition.title}. Veja o log em \$log ou rode o atualizador pelo PowerShell.", '${edition.title}') | Out-Null
 }
 $reopen
 ''';
@@ -126,7 +132,7 @@ Future<bool> extractWindowsZip(List<int> bytes, Directory into) async {
     if (f.isFile) {
       await File(out).create(recursive: true);
       await File(out).writeAsBytes(f.content as List<int>, flush: true);
-      if (name.toLowerCase() == 'funilar.exe') hasExe = true;
+      if (name.toLowerCase() == _exe) hasExe = true;
     } else {
       await Directory(out).create(recursive: true);
     }
@@ -148,7 +154,7 @@ Future<File> prepareWindowsUpdate(
   if (zipBytes != null) {
     bytes = zipBytes;
   } else {
-    final a = rel.asset('Funilar-windows-x64.zip');
+    final a = rel.asset(windowsAsset);
     if (a == null) throw StateError('Esta versão não tem o arquivo do Windows.');
     bytes = await downloadAsset(a.$1, a.$2, onProgress);
   }
@@ -156,7 +162,7 @@ Future<File> prepareWindowsUpdate(
   final files = Directory('${tmp.path}${Platform.pathSeparator}novo');
   await files.create();
   if (!await extractWindowsZip(bytes, files)) {
-    throw StateError('O arquivo baixado não tem o funilar.exe.');
+    throw StateError('O arquivo baixado não tem o $_exe.');
   }
   final to = installDir ?? File(Platform.resolvedExecutable).parent.path;
   final script = File('${tmp.path}${Platform.pathSeparator}trocar.ps1');
@@ -187,7 +193,7 @@ Future<List<int>> downloadAsset(
   final client = http.Client();
   try {
     final req = http.Request('GET', Uri.parse(url))
-      ..headers['User-Agent'] = 'Funilar';
+      ..headers['User-Agent'] = edition.asset;
     final res = await client.send(req);
     if (res.statusCode != 200) {
       throw HttpException('Download falhou (${res.statusCode})');

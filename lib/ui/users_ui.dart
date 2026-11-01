@@ -1,3 +1,4 @@
+import '../edition.dart';
 import 'package:flutter/material.dart';
 
 import '../models.dart' show newId;
@@ -43,7 +44,7 @@ class _LoginPageState extends State<LoginPage> {
               shrinkWrap: true,
               padding: const EdgeInsets.all(24),
               children: [
-                Text('Funilar', textAlign: TextAlign.center,
+                Text(edition.title, textAlign: TextAlign.center,
                     style: t.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900, color: t.colorScheme.primary)),
                 const SizedBox(height: 4),
                 Text(store.settings.shopName, textAlign: TextAlign.center),

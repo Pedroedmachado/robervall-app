@@ -3,8 +3,10 @@
 # aplica os ajustes do Funilar. Pode rodar quantas vezes quiser.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# nome do sistema (Funilar, Orçamentação, Cadastros ou Gestão)
+set -a; . tool/app.env; set +a
 
-flutter create --platforms=android,ios,linux,windows --org br.com.funilar --project-name funilar . >/dev/null
+flutter create --platforms=android,ios,linux,windows --org "$APP_ORG" --project-name "$APP_PACKAGE" . >/dev/null
 rm -f test/widget_test.dart
 
 # Android: internet (consulta FIPE) e nome do app
@@ -14,7 +16,7 @@ if [ -f "$manifest" ]; then
     sed -i.bak 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <application#' "$manifest"
     rm -f "$manifest.bak"
   fi
-  sed -i.bak 's#android:label="[^"]*"#android:label="Funilar"#' "$manifest" && rm -f "$manifest.bak"
+  sed -i.bak "s#android:label=\"[^\"]*\"#android:label=\"$APP_TITLE\"#" "$manifest" && rm -f "$manifest.bak"
   grep -q 'android.permission.INTERNET' "$manifest" || { echo "ERRO: permissão INTERNET não foi aplicada"; exit 1; }
   echo "AndroidManifest:"; grep -E 'uses-permission|android:label' "$manifest"
 fi
@@ -30,11 +32,11 @@ fi
 
 # Linux: título da janela
 if [ -f linux/runner/my_application.cc ]; then
-  sed -i.bak 's#"funilar"#"Funilar"#g' linux/runner/my_application.cc && rm -f linux/runner/my_application.cc.bak
+  sed -i.bak "s#\"$APP_PACKAGE\"#\"$APP_TITLE\"#g" linux/runner/my_application.cc && rm -f linux/runner/my_application.cc.bak
 fi
 # Windows: título da janela
 if [ -f windows/runner/main.cpp ]; then
-  sed -i.bak 's#L"funilar"#L"Funilar"#g' windows/runner/main.cpp && rm -f windows/runner/main.cpp.bak
+  sed -i.bak "s#L\"$APP_PACKAGE\"#L\"${APP_TITLE_W:-$APP_TITLE}\"#g" windows/runner/main.cpp && rm -f windows/runner/main.cpp.bak
 fi
 # iOS: leitor de notas (ML Kit) exige iOS 15.5 ou mais novo
 if [ -f ios/Podfile ]; then
@@ -53,8 +55,8 @@ fi
 plist=ios/Runner/Info.plist
 if [ -f "$plist" ] && [ -x /usr/libexec/PlistBuddy ]; then
   pb() { /usr/libexec/PlistBuddy -c "Set :$1 $3" "$plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :$1 $2 $3" "$plist"; }
-  pb CFBundleDisplayName string "Funilar"
-  pb CFBundleName string "Funilar"
+  pb CFBundleDisplayName string "'$APP_TITLE'"
+  pb CFBundleName string "$APP_PACKAGE"
   pb NSCameraUsageDescription string "Usada para fotografar as avarias e o veículo."
   pb NSPhotoLibraryUsageDescription string "Usada para anexar fotos do veículo aos orçamentos."
   pb NSPhotoLibraryAddUsageDescription string "Usada para salvar fotos do veículo."

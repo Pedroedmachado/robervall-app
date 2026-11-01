@@ -1,3 +1,4 @@
+import 'edition.dart';
 import 'dart:io';
 import 'dart:ui';
 
@@ -25,7 +26,7 @@ Future<void> _checkUpdateQuietly() async {
     messengerKey.currentState?.showSnackBar(SnackBar(
       duration: const Duration(seconds: 10),
       showCloseIcon: true,
-      content: Text('Nova versão do Funilar: ${rel.tag}'),
+      content: Text('Nova versão do ${edition.title}: ${rel.tag}'),
       action: SnackBarAction(
         label: 'Atualizar',
         onPressed: () => navigatorKey.currentState?.push(
@@ -113,7 +114,7 @@ class _FunilarAppState extends State<FunilarApp>
             _ => ThemeMode.system,
           };
           return MaterialApp(
-            title: 'Funilar',
+            title: edition.title,
             scaffoldMessengerKey: messengerKey,
             navigatorKey: navigatorKey,
             debugShowCheckedModeBanner: false,

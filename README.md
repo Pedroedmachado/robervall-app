@@ -13,6 +13,19 @@ App de orçamentos, vistorias e sinistros para oficina — Android, iPhone, Wind
 - **PDF**: orçamento ou laudo de vistoria sem preços, com fotos — imprimir, compartilhar ou salvar.
 - **Catálogo** próprio de peças e serviços, **cadastros** (clientes, seguradoras, reguladores, fornecedores), **ajustes** (valor hora, numeração, dados da oficina, tema) e **backup .zip** para levar os dados do celular ao PC.
 
+## Sistemas separados
+Além deste Funilar completo, existem três sistemas próprios, cada um com o seu repositório, nome, dados e versões:
+
+| Sistema | Repositório | O que traz |
+|---|---|---|
+| Funilar Orçamentos | `orcamentacao` | sinistros, avarias, fotos, orçamento, catálogo, FIPE, Mercado Livre, PDF |
+| Funilar Cadastros | `cadastros-cliente` | clientes, seguradoras, peritos, fornecedores e funcionários |
+| Funilar Gestão | `gestao-oficina` | carros e O.S., estoque, equipe, financeiro (vendas, caixa, equipe) |
+
+Eles são gerados daqui: `lib/edition.dart` define o que cada um tem e
+`bash tool/gerar_modulos.sh <orcamentacao|cadastros|gestao> <pasta>` atualiza o repositório de cada um.
+O backup de qualquer um deles pode ser restaurado em outro.
+
 ## Baixar
 Cada push na `main` compila no GitHub Actions e publica em **Releases**: `Funilar-android.apk`, `Funilar-windows-x64.zip`, `Funilar-linux-x64.tar.gz`.
 

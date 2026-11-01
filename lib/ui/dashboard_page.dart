@@ -1,3 +1,4 @@
+import '../edition.dart';
 import 'package:flutter/material.dart';
 
 import '../calc.dart';
@@ -83,7 +84,7 @@ class DashboardPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(s.shopName.isEmpty ? 'Funilar' : s.shopName,
+        title: Text(s.shopName.isEmpty ? edition.title : s.shopName,
             style: const TextStyle(fontWeight: FontWeight.w800)),
         actions: [
           Padding(

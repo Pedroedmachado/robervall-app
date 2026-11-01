@@ -1,3 +1,4 @@
+import '../edition.dart';
 import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
@@ -6,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../models.dart';
+import '../modules.dart';
 import '../theme.dart';
 import 'update_ui.dart';
 import 'users_ui.dart';
@@ -81,6 +83,7 @@ class SettingsPage extends StatelessWidget {
                           }),
                     ],
                   ),
+                  if (edition.hasBudget) ...[
                   SectionCard(
                     title: 'Valor da hora',
                     icon: Icons.schedule,
@@ -194,6 +197,7 @@ class SettingsPage extends StatelessWidget {
                       ),
                     ],
                   ),
+                  ],
                   SectionCard(
                     title: 'Usuários e permissões',
                     icon: Icons.groups_outlined,
@@ -250,8 +254,8 @@ class SettingsPage extends StatelessWidget {
                     title: 'Sobre',
                     icon: Icons.info_outline,
                     children: [
-                      const Text(
-                          'Funilar 1.0 — orçamentos, vistorias e sinistros para oficinas. Funciona sem internet; os dados ficam neste aparelho (a consulta à Tabela FIPE usa a internet).'),
+                      Text(
+                          '${edition.title} — ${edition.tagline}. Funciona sem internet; os dados ficam neste aparelho${edition.modules.contains(Mod.integracoes) ? ' (a consulta à Tabela FIPE usa a internet)' : ''}.'),
                       const SizedBox(height: 8),
                       SelectableText('Pasta dos dados: ${store.baseDir.path}',
                           style: Theme.of(context).textTheme.bodySmall),
@@ -287,13 +291,13 @@ class _BackupCardState extends State<_BackupCard> {
       final bytes = await store.exportBackup();
       final now = DateTime.now();
       final name =
-          'funilar-backup-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}.zip';
+          '${edition.package}-backup-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}.zip';
       if (_mobile) {
         final dir = await getTemporaryDirectory();
         final f = File('${dir.path}/$name');
         await f.writeAsBytes(bytes, flush: true);
         await Share.shareXFiles([XFile(f.path, mimeType: 'application/zip')],
-            subject: 'Backup Funilar', sharePositionOrigin: origin);
+            subject: 'Backup ${edition.title}', sharePositionOrigin: origin);
       } else {
         final loc = await getSaveLocation(
           suggestedName: name,

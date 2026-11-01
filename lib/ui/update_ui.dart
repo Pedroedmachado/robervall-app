@@ -1,3 +1,4 @@
+import '../edition.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -46,7 +47,7 @@ class _UpdateCardState extends State<UpdateCard> {
   Future<void> _update(ReleaseInfo rel) async {
     if (Platform.isWindows) {
       final ok = await confirm(context, 'Atualizar para ${rel.tag}?',
-          'O Funilar vai baixar a versão nova, fechar e abrir de novo sozinho. Seus dados ficam como estão.',
+          'O ${edition.title} vai baixar a versão nova, fechar e abrir de novo sozinho. Seus dados ficam como estão.',
           ok: 'Atualizar');
       if (!ok || !mounted) return;
       setState(() => _progress = 0);
