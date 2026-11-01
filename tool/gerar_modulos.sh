@@ -41,7 +41,7 @@ cd "$dest"
 # edição fixa e nome do pacote
 sed -i "s/^const Edition appEdition = Edition\.completo;/const Edition appEdition = Edition.$ed;/" lib/edition.dart
 grep -q "appEdition = Edition.$ed;" lib/edition.dart
-sed -i "s/^name: funilar$/name: $pkg/; s/^description: .*/description: $title - $(echo "$about" | sed 's/[&/\]/\\&/g')/" pubspec.yaml
+sed -i "s/^name: funilar$/name: $pkg/; s/^description: .*/description: \"$title - $(echo "$about" | sed 's/[&/\]/\\&/g')\"/" pubspec.yaml
 grep -rl 'package:funilar/' lib test tool 2>/dev/null | xargs -r sed -i "s#package:funilar/#package:$pkg/#g"
 
 # nome do app nos builds
