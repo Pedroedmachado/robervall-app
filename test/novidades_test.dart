@@ -11,6 +11,7 @@ import 'package:funilar/models.dart';
 import 'package:funilar/seed.dart';
 import 'package:funilar/stock.dart';
 import 'package:funilar/store.dart';
+import 'package:funilar/ui/os_tab.dart';
 
 /// Remoção e instalação com valor da hora próprio, preço mínimo por peça,
 /// orçamento concluído travado, mapa de avarias acompanhando o orçamento,
@@ -319,6 +320,11 @@ void main() {
     await t.pumpAndSettle();
     await openClaim(t);
     await tab(t, 'O.S.');
+    await t.dragUntilVisible(
+        find.text('Liberar insumo'),
+        find.descendant(of: find.byType(OsTab), matching: find.byType(Scrollable)).first,
+        const Offset(0, -250));
+    await t.pumpAndSettle();
     await tap(t, find.text('Liberar insumo'));
     await tap(t, find.byKey(const ValueKey('adicionar-insumo')));
     await type(t, field('Insumo (ex.: Lixa P320, Verniz HS 2x1)'), 'Massa poliéster');
@@ -337,6 +343,11 @@ void main() {
     await t.pumpAndSettle();
     await openClaim(t);
     await tab(t, 'O.S.');
+    await t.dragUntilVisible(
+        find.text('Liberar insumo'),
+        find.descendant(of: find.byType(OsTab), matching: find.byType(Scrollable)).first,
+        const Offset(0, -250));
+    await t.pumpAndSettle();
     await tap(t, find.text('Liberar insumo'));
     expect(find.text('Novo no estoque'), findsOneWidget);
     await type(t, field('Insumo (ex.: Lixa P320, Verniz HS 2x1)'), 'Primer PU');
