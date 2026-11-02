@@ -116,6 +116,26 @@ void main() {
       expect(c.damages.keys, ['teto']); // avaria sem peça removida fica
     });
 
+    test('mapa de avarias: só a pesada (3) vira troca; leve e média são reparo', () {
+      final r = regionById('parachoque_d')!;
+      final ops = {for (final (_, op) in r.suggestions) op};
+      final leve = itemForDamage('Para-choque dianteiro', ops, 1, r.id);
+      expect(leve.op, isNot(ItemOp.troca));
+      expect(leve.laborHours, greaterThan(0)); // reparo
+      expect(leve.paintHours, greaterThan(0)); // e pintura
+      expect(opCode(leve.op, leve.labFlag, leve.paintFlag), 'R / P');
+      final media = itemForDamage('Para-choque dianteiro', ops, 2, r.id);
+      expect(media.op, isNot(ItemOp.troca));
+      expect(media.laborHours, greaterThan(leve.laborHours));
+      final pesada = itemForDamage('Para-choque dianteiro', ops, 3, r.id);
+      expect(pesada.op, ItemOp.troca);
+      // farol leve: reparo, não troca
+      expect(itemForDamage('Farol esquerdo', {ItemOp.troca}, 1, 'farol_e').op,
+          ItemOp.reparo);
+      expect(itemForDamage('Farol esquerdo', {ItemOp.troca}, 3, 'farol_e').op,
+          ItemOp.troca);
+    });
+
     test('orçamento concluído ou entregue fica travado', () {
       final c = Claim(number: 'X');
       for (final st in ClaimStatus.values) {
