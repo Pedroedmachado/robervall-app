@@ -24,15 +24,10 @@ class OsTab extends StatelessWidget {
     final t = Theme.of(context);
     final production = !gate.roleCan(Perm.valoresVer);
     final tasks = c.items.where((i) => i.approved).toList();
-    final doneCount = tasks.where((i) => i.done).length;
     final parts = tasks.where((i) => i.op == ItemOp.troca).toList();
     final clientParts = store.stock
         .where((s) => s.kind == StockKind.cliente && s.claimId == c.id)
         .toList();
-    final byItem = <String, List<SupplyUse>>{};
-    for (final u in c.supplies) {
-      byItem.putIfAbsent(u.itemId, () => []).add(u);
-    }
 
     String itemName(String id) {
       for (final i in c.items) {
@@ -43,53 +38,6 @@ class OsTab extends StatelessWidget {
 
     final children = <Widget>[
       if (!production) _CostCard(claim: c),
-      SectionCard(
-        title: 'Tarefas ($doneCount de ${tasks.length})',
-        icon: Icons.checklist,
-        children: [
-          if (tasks.isEmpty)
-            const Text('Nenhum item aprovado no orçamento ainda.')
-          else ...[
-            LinearProgressIndicator(
-              value: tasks.isEmpty ? 0 : doneCount / tasks.length,
-              minHeight: 6,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            const SizedBox(height: 6),
-            for (final it in tasks)
-              CheckboxListTile(
-                key: ValueKey('task-${it.id}'),
-                dense: true,
-                contentPadding: EdgeInsets.only(left: it.parentId.isEmpty ? 0 : 24),
-                controlAffinity: ListTileControlAffinity.leading,
-                value: it.done,
-                onChanged: !gate.can(Perm.osExecutar)
-                    ? null
-                    : (b) {
-                  it.done = b ?? false;
-                  if (it.done) {
-                    c.timeline.add(TimelineEvent(text: 'Feito: ${it.description}'));
-                  }
-                  store.touch(c);
-                },
-                title: Text(it.description,
-                    style: TextStyle(
-                        decoration: it.done ? TextDecoration.lineThrough : null)),
-                subtitle: Text([
-                  opCode(it.op, it.labFlag, it.paintFlag,
-                      removeInstall: it.removeInstall,
-                      alsoRepair: it.alsoRepair),
-                  opNames(it.op, it.labFlag, it.paintFlag,
-                      removeInstall: it.removeInstall,
-                      alsoRepair: it.alsoRepair),
-                  if (byItem[it.id] != null)
-                    'insumos: ${byItem[it.id]!.map((u) => '${u.name} ${qtyText(u.qty, u.unit)}').join(', ')}',
-                  if (it.note.isNotEmpty) it.note,
-                ].join(' · ')),
-              ),
-          ],
-        ],
-      ),
       SectionCard(
         title: 'Peças',
         icon: Icons.settings_outlined,
