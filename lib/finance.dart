@@ -4,14 +4,6 @@ import 'models.dart';
 import 'stock.dart';
 
 /// Orçamento "fechado": aprovado, em reparo, concluído ou entregue.
-/// Orçamento concluído/entregue não muda mais: o resultado já foi para o
-/// Financeiro e o lucro para o Caixa. Para alterar, volta o status.
-bool budgetLocked(Claim c) =>
-    c.status == ClaimStatus.concluido || c.status == ClaimStatus.entregue;
-
-const budgetLockedMsg =
-    'Orçamento concluído não pode ser alterado (já foi para o Financeiro). Para mudar, volte o status para "Em reparo".';
-
 bool isClosedStatus(ClaimStatus s) =>
     s == ClaimStatus.aprovado ||
     s == ClaimStatus.emReparo ||
@@ -284,18 +276,16 @@ class JobCost {
   final double crew; // pintor, funileiro, martelinho…
   final double supplies; // insumos lançados na O.S.
   final double stockParts; // peças que saíram do estoque (custo)
-  final double boughtParts; // peças compradas para o carro (preço de custo)
   final double otherExpenses; // gastos lançados no Financeiro para o carro
   const JobCost({
     required this.approved,
     required this.crew,
     required this.supplies,
     required this.stockParts,
-    this.boughtParts = 0,
     required this.otherExpenses,
   });
 
-  double get total => crew + supplies + stockParts + boughtParts + otherExpenses;
+  double get total => crew + supplies + stockParts + otherExpenses;
   double get profit => approved - total;
   double get marginPct => approved > 0 ? profit / approved * 100 : 0;
 }
@@ -311,16 +301,11 @@ JobCost jobCost(
   for (final m in c.crew) {
     crew += crewCost(c, m, contactById(m.contactId)).amount;
   }
-  var parts = 0.0, bought = 0.0;
+  var parts = 0.0;
   for (final it in c.items) {
-    if (!it.approved || it.op != ItemOp.troca) continue;
-    final qty = it.qty <= 0 ? 1 : it.qty;
-    final st = it.stockId.isEmpty ? null : stockById(it.stockId);
-    if (st != null) {
-      parts += st.cost * qty;
-    } else {
-      bought += it.partCost * qty; // comprada para o carro
-    }
+    if (!it.approved || it.op != ItemOp.troca || it.stockId.isEmpty) continue;
+    final st = stockById(it.stockId);
+    if (st != null) parts += st.cost * (it.qty <= 0 ? 1 : it.qty);
   }
   final other = entries
       .where((e) => !e.isIncome && e.claimId == c.id && !isCrewEntry(e))
@@ -330,7 +315,6 @@ JobCost jobCost(
     crew: crew,
     supplies: c.supplies.fold(0.0, (a, u) => a + u.total),
     stockParts: parts,
-    boughtParts: bought,
     otherExpenses: other,
   );
 }

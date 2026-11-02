@@ -8,7 +8,7 @@ import '../seed.dart';
 import '../stock.dart';
 import '../theme.dart';
 import 'access.dart';
-import 'stock_page.dart' show StockThumb, editStockItem;
+import 'stock_page.dart' show StockThumb;
 import 'widgets.dart';
 
 /// Ordem de serviço: o que fazer no carro, peças, insumos e equipe.
@@ -24,10 +24,15 @@ class OsTab extends StatelessWidget {
     final t = Theme.of(context);
     final production = !gate.roleCan(Perm.valoresVer);
     final tasks = c.items.where((i) => i.approved).toList();
+    final doneCount = tasks.where((i) => i.done).length;
     final parts = tasks.where((i) => i.op == ItemOp.troca).toList();
     final clientParts = store.stock
         .where((s) => s.kind == StockKind.cliente && s.claimId == c.id)
         .toList();
+    final byItem = <String, List<SupplyUse>>{};
+    for (final u in c.supplies) {
+      byItem.putIfAbsent(u.itemId, () => []).add(u);
+    }
 
     String itemName(String id) {
       for (final i in c.items) {
@@ -38,6 +43,53 @@ class OsTab extends StatelessWidget {
 
     final children = <Widget>[
       if (!production) _CostCard(claim: c),
+      SectionCard(
+        title: 'Tarefas ($doneCount de ${tasks.length})',
+        icon: Icons.checklist,
+        children: [
+          if (tasks.isEmpty)
+            const Text('Nenhum item aprovado no orçamento ainda.')
+          else ...[
+            LinearProgressIndicator(
+              value: tasks.isEmpty ? 0 : doneCount / tasks.length,
+              minHeight: 6,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            const SizedBox(height: 6),
+            for (final it in tasks)
+              CheckboxListTile(
+                key: ValueKey('task-${it.id}'),
+                dense: true,
+                contentPadding: EdgeInsets.only(left: it.parentId.isEmpty ? 0 : 24),
+                controlAffinity: ListTileControlAffinity.leading,
+                value: it.done,
+                onChanged: !gate.can(Perm.osExecutar)
+                    ? null
+                    : (b) {
+                  it.done = b ?? false;
+                  if (it.done) {
+                    c.timeline.add(TimelineEvent(text: 'Feito: ${it.description}'));
+                  }
+                  store.touch(c);
+                },
+                title: Text(it.description,
+                    style: TextStyle(
+                        decoration: it.done ? TextDecoration.lineThrough : null)),
+                subtitle: Text([
+                  opCode(it.op, it.labFlag, it.paintFlag,
+                      removeInstall: it.removeInstall,
+                      alsoRepair: it.alsoRepair),
+                  opNames(it.op, it.labFlag, it.paintFlag,
+                      removeInstall: it.removeInstall,
+                      alsoRepair: it.alsoRepair),
+                  if (byItem[it.id] != null)
+                    'insumos: ${byItem[it.id]!.map((u) => '${u.name} ${qtyText(u.qty, u.unit)}').join(', ')}',
+                  if (it.note.isNotEmpty) it.note,
+                ].join(' · ')),
+              ),
+          ],
+        ],
+      ),
       SectionCard(
         title: 'Peças',
         icon: Icons.settings_outlined,
@@ -187,23 +239,15 @@ class OsTab extends StatelessWidget {
     final store = StoreScope.read(context);
     final materials =
         store.stock.where((s) => s.kind == StockKind.material).toList();
+    if (materials.isEmpty) {
+      toast(context, 'Cadastre os insumos na aba Estoque primeiro.');
+      return;
+    }
     if (!await authorize(context, Perm.insumoLiberar,
         reason: 'Só o gestor/almoxarife libera insumos.')) {
       return;
     }
     if (!context.mounted) return;
-    // cadastra um insumo novo no estoque sem sair da O.S.
-    Future<StockItem?> addSupply(BuildContext ctx) async {
-      final n = await editStockItem(ctx, StockItem(kind: StockKind.material, qty: 0));
-      if (n == null) return null;
-      store.upsertStock(n);
-      if (n.kind == StockKind.material) materials.insert(0, n);
-      return n.kind == StockKind.material ? n : null;
-    }
-    if (materials.isEmpty) {
-      toast(context, 'Nenhum insumo no estoque: cadastre o primeiro.');
-      if (await addSupply(context) == null || !context.mounted) return;
-    }
     var stockId = materials.first.id;
     var search = '';
     var qty = store.stockById(materials.first.id)?.unit == 'folha' ? 0.25 : 1.0;
@@ -316,28 +360,7 @@ class OsTab extends StatelessWidget {
                 );
               }(),
             ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                key: const ValueKey('adicionar-insumo'),
-                onPressed: () async {
-                  final n = await addSupply(ctx);
-                  if (n == null) return;
-                  setS(() {
-                    stockId = n.id;
-                    if (n.unit == 'folha') {
-                      piece = 0.25;
-                      pieces = 1;
-                      qty = 0.25;
-                    } else {
-                      qty = 1;
-                    }
-                  });
-                },
-                icon: const Icon(Icons.add),
-                label: const Text('Adicionar insumo'),
-              ),
-            ),
+            const SizedBox(height: 6),
             Text('Selecionado: ${s.name}',
                 style: const TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 12),
@@ -479,7 +502,6 @@ class _CostCard extends StatelessWidget {
         const Divider(height: 16),
         KeyValue('Equipe (pintor, funileiro…)', money(j.crew)),
         KeyValue('Insumos usados', money(j.supplies)),
-        KeyValue('Peças compradas (custo)', money(j.boughtParts)),
         KeyValue('Peças do estoque (custo)', money(j.stockParts)),
         KeyValue('Outros gastos do carro (Financeiro)', money(j.otherExpenses)),
         KeyValue('Custo total', money(j.total), bold: true),

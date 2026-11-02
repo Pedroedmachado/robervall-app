@@ -83,38 +83,7 @@ class SettingsPage extends StatelessWidget {
                           }),
                     ],
                   ),
-                  if (edition.hasBudget && s.perPieceDefault)
-                    SectionCard(
-                      title: 'Preço mínimo por peça',
-                      icon: Icons.sell_outlined,
-                      children: [
-                        Text(
-                            'Valor mínimo da mão de obra de cada função quando cobra por peça. '
-                            'O item já abre com a soma das funções marcadas e não aceita valor menor.',
-                            style: Theme.of(context).textTheme.bodySmall),
-                        const SizedBox(height: 8),
-                        FieldGrid(children: [
-                          for (final (key, label) in [
-                            for (final lt in LaborType.values) (lt.name, lt.label),
-                            (Settings.pieceMinPaint, 'Pintura'),
-                            (Settings.pieceMinRi, 'Remoção e instalação'),
-                          ])
-                            NumField(
-                              key: ValueKey('min-$key'),
-                              label: label,
-                              prefix: 'R\$',
-                              suffix: '/peça',
-                              value: s.minFor(key),
-                              onChanged: (n) {
-                                s.pieceMin[key] = n;
-                                r();
-                              },
-                            ),
-                        ]),
-                      ],
-                    ),
                   if (edition.hasBudget) ...[
-                  if (!s.perPieceDefault)
                   SectionCard(
                     title: 'Valor da hora',
                     icon: Icons.schedule,
@@ -131,16 +100,6 @@ class SettingsPage extends StatelessWidget {
                               r();
                             },
                           ),
-                        NumField(
-                          label: 'Remoção e instalação (R&I)',
-                          prefix: 'R\$',
-                          suffix: '/h',
-                          value: s.riRate,
-                          onChanged: (n) {
-                            s.riRate = n;
-                            r();
-                          },
-                        ),
                         NumField(
                           label: 'Pintura (mão de obra)',
                           prefix: 'R\$',

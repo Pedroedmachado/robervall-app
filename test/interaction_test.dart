@@ -412,7 +412,7 @@ void main() {
     await settle(t);
   });
 
-  itest('O.S.: liberar insumo', (t) async {
+  itest('O.S.: marcar tarefa e liberar insumo', (t) async {
     await start(t);
     final c = seed();
     store.upsertStock(StockItem(kind: StockKind.material, name: 'Thinner TH700', qty: 900, unit: 'ml', cost: 0.05));
@@ -425,7 +425,8 @@ void main() {
     await settle(t);
     await openFirstClaim(t);
     await tab(t, 'O.S.');
-    expect(find.textContaining('Tarefas'), findsNothing); // tarefas saíram da O.S.
+    await tap(t, find.byKey(ValueKey('task-${c.items.single.id}')));
+    expect(c.items.single.done, isTrue);
     await tap(t, find.text('Liberar insumo'));
     // busca do insumo
     await t.enterText(find.byKey(const ValueKey('busca-insumo')), 'thin');

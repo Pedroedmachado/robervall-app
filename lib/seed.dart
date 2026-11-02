@@ -104,27 +104,6 @@ CarRegion? regionById(String id) {
 
 const severityLabels = {1: 'Leve', 2: 'Média', 3: 'Pesada'};
 
-/// A peça do orçamento é da região do mapa de avarias?
-bool _itemOfRegion(BudgetItem it, CarRegion r) {
-  if (it.region == r.id) return true;
-  final d = it.description.trim().toLowerCase();
-  return r.suggestions.any((e) => e.$1.toLowerCase() == d);
-}
-
-/// Peças saíram do orçamento: as avarias do mapa que ficaram sem nenhuma
-/// peça são desmarcadas. Devolve o que foi desmarcado (para desfazer).
-Map<String, int> unmarkDamagesFor(Claim c, Iterable<BudgetItem> removed) {
-  final out = <String, int>{};
-  for (final id in c.damages.keys.toList()) {
-    final r = regionById(id);
-    if (r == null) continue;
-    if (!removed.any((it) => _itemOfRegion(it, r))) continue;
-    if (c.items.any((it) => _itemOfRegion(it, r))) continue;
-    out[id] = c.damages.remove(id)!;
-  }
-  return out;
-}
-
 /// Horas sugeridas por operação e severidade (ponto de partida editável).
 double suggestedLaborHours(ItemOp op, int severity) {
   switch (op) {
@@ -137,27 +116,6 @@ double suggestedLaborHours(ItemOp op, int severity) {
     case ItemOp.servico:
       return 1;
   }
-}
-
-/// Item do orçamento gerado por uma avaria do mapa. Só a avaria pesada (3)
-/// vira troca da peça; leve e média são reparo (e pintura, se for o caso).
-BudgetItem itemForDamage(String desc, Set<ItemOp> ops, int severity, String regionId) {
-  final replace = severity >= 3 && (ops.contains(ItemOp.troca) || ops.contains(ItemOp.reparo));
-  final labor = replace
-      ? suggestedLaborHours(ItemOp.troca, severity)
-      : (ops.contains(ItemOp.reparo) || ops.contains(ItemOp.troca)
-          ? suggestedLaborHours(ItemOp.reparo, severity)
-          : 0.0);
-  final paint = ops.contains(ItemOp.pintura)
-      ? suggestedPaintHours(ItemOp.pintura, severity)
-      : 0.0;
-  return BudgetItem(
-    description: desc,
-    region: regionId,
-    op: opFor(service: false, replace: replace, laborHours: labor, paintHours: paint),
-    laborHours: labor,
-    paintHours: paint,
-  );
 }
 
 double suggestedPaintHours(ItemOp op, int severity) =>

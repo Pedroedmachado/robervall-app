@@ -71,7 +71,7 @@ double roleRevenue(Claim c, OutsourcedService role, Settings s) {
     if (role == OutsourcedService.pintura) {
       total += v.paintLabor + v.paintMaterial + _pieceShare(it, v, true);
     } else if (labor != null && it.laborType == labor) {
-      total += v.labor + v.ri + _pieceShare(it, v, false);
+      total += v.labor + _pieceShare(it, v, false);
     }
   }
   return total;
