@@ -30,7 +30,8 @@ class Complement {
         description: name,
         op: removeInstall ? ItemOp.reparo : ItemOp.troca,
         removeInstall: removeInstall,
-        laborHours: hours,
+        laborHours: removeInstall ? 0 : hours,
+        riHours: removeInstall ? hours : 0,
         laborType: laborType,
         parentId: parentId,
       );

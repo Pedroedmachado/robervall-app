@@ -4,6 +4,14 @@ import 'models.dart';
 import 'stock.dart';
 
 /// Orçamento "fechado": aprovado, em reparo, concluído ou entregue.
+/// Orçamento concluído/entregue não muda mais: o resultado já foi para o
+/// Financeiro e o lucro para o Caixa. Para alterar, volta o status.
+bool budgetLocked(Claim c) =>
+    c.status == ClaimStatus.concluido || c.status == ClaimStatus.entregue;
+
+const budgetLockedMsg =
+    'Orçamento concluído não pode ser alterado (já foi para o Financeiro). Para mudar, volte o status para "Em reparo".';
+
 bool isClosedStatus(ClaimStatus s) =>
     s == ClaimStatus.aprovado ||
     s == ClaimStatus.emReparo ||

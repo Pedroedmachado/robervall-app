@@ -6,6 +6,7 @@ import '../finance.dart';
 import '../format.dart';
 import '../models.dart';
 import '../modules.dart';
+import '../seed.dart';
 import '../store.dart';
 import '../theme.dart';
 import 'contacts_page.dart' show editContact;
@@ -23,12 +24,27 @@ class BudgetTab extends StatelessWidget {
     final s = store.settings;
     final c = claim;
     final totals = computeTotals(c, s);
+    final locked = budgetLocked(c);
 
     final actions = Wrap(
       spacing: 8,
       runSpacing: 8,
       children: [
-        if (gate.can(Perm.orcamentoEditar)) ...[
+        if (locked)
+          Container(
+            key: const ValueKey('orcamento-travado'),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.secondaryContainer,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.lock_outline, size: 18),
+              const SizedBox(width: 8),
+              Flexible(child: Text(budgetLockedMsg)),
+            ]),
+          )
+        else if (gate.can(Perm.orcamentoEditar)) ...[
         FilledButton.icon(
           onPressed: () async {
             final it = await editBudgetItem(context, null, vehicle: c.vehicle);
@@ -87,6 +103,7 @@ class BudgetTab extends StatelessWidget {
             itemCount: c.items.length,
             // ignore: deprecated_member_use
             onReorder: (a, b) {
+              if (locked) return;
               if (b > a) b--;
               final it = c.items.removeAt(a);
               c.items.insert(b, it);
@@ -100,12 +117,13 @@ class BudgetTab extends StatelessWidget {
                 key: ValueKey(it.id),
                 index: i,
                 item: it,
+                locked: locked,
                 values: itemValues(it, s),
                 hasComplements: complementsFor(it).isNotEmpty,
                 stock: gate.active(Mod.estoque)
                     ? stockFor(store.stock, it, c.vehicle)
                     : const [],
-                onStock: gate.active(Mod.estoque)
+                onStock: gate.active(Mod.estoque) && !locked
                     ? () => showStockFor(context, c, it)
                     : null,
                 onMarket: gate.active(Mod.integracoes)
@@ -114,6 +132,10 @@ class BudgetTab extends StatelessWidget {
                 onComplements: () => offerComplements(context, c, it,
                     alwaysShow: true),
                 onTap: () async {
+                  if (locked) {
+                    toast(context, budgetLockedMsg);
+                    return;
+                  }
                   final edited = await editBudgetItem(context, it, vehicle: c.vehicle);
                   if (edited != null) {
                     final becameReplace = it.op != ItemOp.troca &&
@@ -135,6 +157,8 @@ class BudgetTab extends StatelessWidget {
                   final kids = childrenOf(c.items, it);
                   c.items.remove(it);
                   c.items.removeWhere(kids.contains);
+                  // a avaria some do mapa quando não sobra peça dela
+                  final unmarked = unmarkDamagesFor(c, [it, ...kids]);
                   store.touch(c);
                   showUndo(
                       context,
@@ -143,6 +167,7 @@ class BudgetTab extends StatelessWidget {
                           : '"${it.description}" e ${kids.length} complementos removidos',
                       () {
                     c.items = before;
+                    c.damages.addAll(unmarked);
                     store.touch(c);
                   });
                 },
@@ -158,13 +183,15 @@ class BudgetTab extends StatelessWidget {
       children: [
         KeyValue('Peças', money(totals.parts)),
         KeyValue('Mão de obra (${num2(totals.laborHours)} h)', money(totals.labor)),
+        if (totals.ri > 0)
+          KeyValue('Remoção e instalação (${num2(totals.riHours)} h)', money(totals.ri)),
         KeyValue('Pintura (${num2(totals.paintHours)} h)', money(totals.paintLabor)),
         KeyValue('Material de pintura', money(totals.paintMaterial)),
         KeyValue('Serviços', money(totals.services)),
         if (totals.pieceLabor > 0)
           KeyValue('Mão de obra por peça', money(totals.pieceLabor)),
         const SizedBox(height: 8),
-        Row(children: [
+        IgnorePointer(ignoring: locked, child: Row(children: [
           Expanded(
             child: NumField(
               label: 'Outros custos (guincho…)',
@@ -189,7 +216,7 @@ class BudgetTab extends StatelessWidget {
               },
             ),
           ),
-        ]),
+        ])),
         const Divider(height: 24),
         KeyValue('Subtotal', money(totals.subtotal)),
         if (totals.discount > 0)
@@ -276,6 +303,7 @@ class _ItemRow extends StatelessWidget {
     required this.onTap,
     required this.onToggle,
     required this.onDelete,
+    this.locked = false,
     this.hasComplements = false,
     this.onComplements,
     this.stock = const [],
@@ -293,6 +321,7 @@ class _ItemRow extends StatelessWidget {
   final VoidCallback onTap;
   final ValueChanged<bool> onToggle;
   final VoidCallback onDelete;
+  final bool locked;
 
   @override
   Widget build(BuildContext context) {
@@ -324,13 +353,19 @@ class _ItemRow extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
             child: Row(
               children: [
-                ReorderableDragStartListener(
-                  index: index,
-                  child: const Padding(
+                if (locked)
+                  const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 4),
-                    child: Icon(Icons.drag_indicator, size: 18),
+                    child: Icon(Icons.lock_outline, size: 16),
+                  )
+                else
+                  ReorderableDragStartListener(
+                    index: index,
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 4),
+                      child: Icon(Icons.drag_indicator, size: 18),
+                    ),
                   ),
-                ),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Column(
@@ -417,10 +452,10 @@ class _ItemRow extends StatelessWidget {
                             visualDensity: VisualDensity.compact,
                             materialTapTargetSize:
                                 MaterialTapTargetSize.shrinkWrap,
-                            onChanged: (v) => onToggle(v ?? true),
+                            onChanged: locked ? null : (v) => onToggle(v ?? true),
                           ),
                         ),
-                        if (hasComplements)
+                        if (hasComplements && !locked)
                           IconButton(
                             tooltip: 'Peças complementares',
                             visualDensity: VisualDensity.compact,
@@ -431,6 +466,7 @@ class _ItemRow extends StatelessWidget {
                                 size: 20),
                             onPressed: onComplements,
                           ),
+                        if (!locked)
                         IconButton(
                           tooltip: 'Remover',
                           visualDensity: VisualDensity.compact,
@@ -517,6 +553,9 @@ class _ItemEditorState extends State<_ItemEditor> {
   late bool _replace = it.op == ItemOp.troca;
   bool _saveToCatalog = false;
 
+  /// Valor por peça segue o mínimo dos Ajustes até a pessoa digitar outro.
+  late bool _autoMin = it.piecePrice == 0;
+
   void _fillFromCatalog(CatalogItem ci) {
     setState(() {
       it.description = ci.description;
@@ -528,12 +567,14 @@ class _ItemEditorState extends State<_ItemEditor> {
       _service = ci.op == ItemOp.servico;
       _replace = ci.op == ItemOp.troca;
       it.removeInstall = ci.removeInstall;
+      it.alsoRepair = ci.alsoRepair;
+      it.riHours = ci.riHours;
       if (ci.perPiece) {
         it.perPiece = true;
         it.piecePrice = ci.piecePrice;
         it.doRepair = ci.doRepair;
         it.doPaint = ci.doPaint;
-      } else if (ci.laborHours > 0 || ci.paintHours > 0) {
+      } else if (ci.laborHours > 0 || ci.paintHours > 0 || ci.riHours > 0) {
         it.perPiece = false;
       }
       if (ci.region.isNotEmpty) it.region = ci.region;
@@ -611,6 +652,8 @@ class _ItemEditorState extends State<_ItemEditor> {
   /// R, R&I ou os dois (desmonta, recupera e monta).
   void _setOps(bool r, bool ri) {
     if (!it.perPiece && !r && !ri) r = true; // por horas: precisa de um
+    if (!r) it.laborHours = 0;
+    if (!ri) it.riHours = 0;
     it.removeInstall = ri;
     it.alsoRepair = r && ri;
     if (it.perPiece) it.doRepair = r || ri;
@@ -637,6 +680,8 @@ class _ItemEditorState extends State<_ItemEditor> {
     final store = StoreScope.of(context);
     final s = store.settings;
     _applyOp();
+    final minimum = pieceMinimum(it, s);
+    if (_autoMin && it.perPiece && minimum > 0) it.piecePrice = minimum;
     final v = itemValues(it, s);
     final isNew = widget.original == null;
     final showPrice = _service || _replace;
@@ -656,10 +701,17 @@ class _ItemEditorState extends State<_ItemEditor> {
                   return;
                 }
                 _applyOp();
+                if (it.perPiece && it.piecePrice < pieceMinimum(it, s)) {
+                  toast(context,
+                      'Valor abaixo do preço mínimo por peça (${money(pieceMinimum(it, s))}), definido nos Ajustes.');
+                  return;
+                }
+                if (!it.removeInstall || _replace || _service) it.riHours = 0;
                 if (it.perPiece) {
                   // por peça: valor fechado, sem horas
                   it.laborHours = 0;
                   it.paintHours = 0;
+                  it.riHours = 0;
                 } else {
                   it.piecePrice = 0;
                 }
@@ -674,6 +726,7 @@ class _ItemEditorState extends State<_ItemEditor> {
                     paintHours: it.paintHours,
                     region: it.region,
                     removeInstall: it.removeInstall, alsoRepair: it.alsoRepair,
+                    riHours: it.riHours,
                     perPiece: it.perPiece,
                     piecePrice: it.piecePrice,
                     doRepair: it.doRepair,
@@ -725,6 +778,8 @@ class _ItemEditorState extends State<_ItemEditor> {
             ),
             if (_replace) _replaceHelp(store),
             const SizedBox(height: 4),
+            // com "mão de obra por peça" nos Ajustes, não aparece cobrança por hora
+            if (!(s.perPieceDefault && it.perPiece)) ...[
             Text('Cobrar a mão de obra', style: Theme.of(context).textTheme.labelLarge),
             const SizedBox(height: 6),
             SegmentedButton<bool>(
@@ -743,6 +798,7 @@ class _ItemEditorState extends State<_ItemEditor> {
                   setState(() => it.perPiece = sel.first),
             ),
             const SizedBox(height: 10),
+            ],
             if (!_replace || it.perPiece) ...[
               Text('O que é feito na peça',
                   style: Theme.of(context).textTheme.bodySmall),
@@ -800,17 +856,38 @@ class _ItemEditorState extends State<_ItemEditor> {
                 label: 'Valor da mão de obra da peça',
                 prefix: 'R\$',
                 value: it.piecePrice,
-                onChanged: (n) => setState(() => it.piecePrice = n),
+                onChanged: (n) => setState(() {
+                  _autoMin = false;
+                  it.piecePrice = n;
+                }),
               ),
-            if (!_service && !it.perPiece)
+            if (!_service && it.perPiece && minimum > 0)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  it.piecePrice < minimum
+                      ? 'Abaixo do mínimo: ${money(minimum)}'
+                      : 'Preço mínimo: ${money(minimum)}',
+                  key: const ValueKey('preco-minimo'),
+                  style: TextStyle(
+                      color: it.piecePrice < minimum
+                          ? Theme.of(context).colorScheme.error
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontWeight: it.piecePrice < minimum ? FontWeight.w700 : null),
+                ),
+              ),
+            if (!_service && !it.perPiece && !_replace && it.removeInstall)
+              NumField(
+                label: 'Horas de remoção e instalação',
+                suffix: 'h',
+                value: it.riHours,
+                onChanged: (n) => setState(() => it.riHours = n),
+              ),
+            if (!_service && !it.perPiece && (_replace || _selR))
               NumField(
                 label: _replace
                     ? 'Horas de mão de obra (tirar e colocar)'
-                    : (it.removeInstall
-                        ? (it.alsoRepair
-                            ? 'Horas de R&I + reparo'
-                            : 'Horas de remoção e instalação')
-                        : 'Horas de reparo'),
+                    : 'Horas de reparo',
                 suffix: 'h',
                 value: it.laborHours,
                 onChanged: (n) => setState(() => it.laborHours = n),
@@ -898,6 +975,7 @@ class _ItemEditorState extends State<_ItemEditor> {
           if (v.parts > 0) KeyValue('Peça', money(v.parts)),
           if (v.services > 0) KeyValue('Serviço', money(v.services)),
           if (v.labor > 0) KeyValue('Mão de obra', money(v.labor)),
+          if (v.ri > 0) KeyValue('Remoção e instalação', money(v.ri)),
           if (v.paintLabor > 0) KeyValue('Pintura', money(v.paintLabor)),
           if (v.paintMaterial > 0)
             KeyValue('Material de pintura', money(v.paintMaterial)),
@@ -1127,7 +1205,7 @@ Future<void> offerComplements(BuildContext context, Claim c, BudgetItem parent,
                         }),
                         title: Text(comp.name),
                         subtitle: Text(comp.removeInstall
-                            ? 'R&I · ${num2(comp.hours)} h · ${comp.laborType.label} · ${money(comp.hours * s.rateFor(comp.laborType))}'
+                            ? 'R&I · ${num2(comp.hours)} h · ${comp.laborType.label} · ${money(comp.hours * s.riRate)}'
                             : 'Troca · informe o preço depois'),
                       ),
                   ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../complements.dart';
+import '../finance.dart';
 import '../models.dart';
 import '../modules.dart';
 import '../seed.dart';
@@ -43,6 +44,10 @@ class _DamageTabState extends State<DamageTab> {
     }
 
     void generate() {
+      if (budgetLocked(c)) {
+        toast(context, budgetLockedMsg);
+        return;
+      }
       var added = 0;
       c.damages.forEach((id, sev) {
         final r = regionById(id);

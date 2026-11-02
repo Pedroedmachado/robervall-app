@@ -342,12 +342,13 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
                     _t(it.op == ItemOp.troca ? _originShort(it.origin) : ''),
                     priced ? num2(it.qty <= 0 ? 1 : it.qty) : '',
                     if (s.showHours)
-                      it.laborHours > 0 ? num2(it.laborHours) : '',
+                      it.laborHours + it.riHours > 0 ? num2(it.laborHours + it.riHours) : '',
                     if (s.showHours)
                       it.paintHours > 0 ? num2(it.paintHours) : '',
                     if (withPrices && !s.showHours)
                       () {
                         final l = v.labor +
+                            v.ri +
                             v.paintLabor +
                             v.paintMaterial +
                             v.pieceLabor;
@@ -429,6 +430,12 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
                           ? 'Mão de obra (${num2(totals.laborHours)} h)'
                           : 'Mão de obra',
                       money(totals.labor)),
+                  if (totals.ri > 0)
+                    totalRow(
+                        s.showHours
+                            ? 'Remoção e instalação (${num2(totals.riHours)} h)'
+                            : 'Remoção e instalação',
+                        money(totals.ri)),
                   totalRow(
                       s.showHours
                           ? 'Pintura (${num2(totals.paintHours)} h)'

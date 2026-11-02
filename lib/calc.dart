@@ -11,6 +11,9 @@ class ItemValues {
   /// Mão de obra cobrada por peça (reparo/pintura sem separar).
   final double pieceLabor;
 
+  /// Remoção e instalação (horas de R&I × valor da hora de R&I).
+  final double ri;
+
   const ItemValues({
     this.parts = 0,
     this.labor = 0,
@@ -18,10 +21,26 @@ class ItemValues {
     this.paintMaterial = 0,
     this.services = 0,
     this.pieceLabor = 0,
+    this.ri = 0,
   });
 
   double get total =>
-      parts + labor + paintLabor + paintMaterial + services + pieceLabor;
+      parts + labor + paintLabor + paintMaterial + services + pieceLabor + ri;
+}
+
+/// Preço mínimo da mão de obra por peça, somando as funções marcadas
+/// (reparo do tipo de mão de obra, R&I e pintura).
+double pieceMinimum(BudgetItem it, Settings s) {
+  if (!it.perPiece || it.op == ItemOp.servico) return 0;
+  var m = 0.0;
+  if (it.doRepair) {
+    if (it.op == ItemOp.troca || it.removeInstall) m += s.minFor(Settings.pieceMinRi);
+    if (it.op != ItemOp.troca && (!it.removeInstall || it.alsoRepair)) {
+      m += s.minFor(it.laborType.name);
+    }
+  }
+  if (it.doPaint) m += s.minFor(Settings.pieceMinPaint);
+  return m;
 }
 
 ItemValues itemValues(BudgetItem it, Settings s) {
@@ -37,11 +56,13 @@ ItemValues itemValues(BudgetItem it, Settings s) {
     );
   }
   final labor = it.laborHours * s.rateFor(it.laborType);
+  final ri = it.op == ItemOp.servico ? 0.0 : it.riHours * s.riRate;
   final paintLabor = it.paintHours * s.paintRate;
   final paintMaterial = it.paintHours * s.paintMaterialRate;
   return ItemValues(
     parts: parts,
     labor: labor,
+    ri: ri,
     paintLabor: paintLabor,
     paintMaterial: paintMaterial,
     services: services,
@@ -56,6 +77,8 @@ class BudgetTotals {
   final double paintMaterial;
   final double services;
   final double pieceLabor;
+  final double ri;
+  final double riHours;
   final double extra;
   final double discount;
   final double total;
@@ -78,6 +101,8 @@ class BudgetTotals {
     required this.paintMaterial,
     required this.services,
     this.pieceLabor = 0,
+    this.ri = 0,
+    this.riHours = 0,
     required this.extra,
     required this.discount,
     required this.total,
@@ -93,13 +118,13 @@ class BudgetTotals {
   });
 
   double get subtotal =>
-      parts + labor + paintLabor + paintMaterial + services + extra;
+      parts + labor + paintLabor + paintMaterial + services + pieceLabor + ri + extra;
 }
 
 BudgetTotals computeTotals(Claim c, Settings s, {bool onlyApproved = true}) {
   double parts = 0, labor = 0, paintLabor = 0, paintMat = 0, services = 0;
-  double pieceLabor = 0;
-  double lh = 0, ph = 0;
+  double pieceLabor = 0, ri = 0;
+  double lh = 0, ph = 0, rh = 0;
   int count = 0, rejected = 0;
   for (final it in c.items) {
     if (!it.approved) {
@@ -114,14 +139,16 @@ BudgetTotals computeTotals(Claim c, Settings s, {bool onlyApproved = true}) {
     paintMat += v.paintMaterial;
     services += v.services;
     pieceLabor += v.pieceLabor;
+    ri += v.ri;
     if (!it.perPiece) {
       lh += it.laborHours;
       ph += it.paintHours;
+      rh += it.riHours;
     }
   }
   final extra = c.extraCosts < 0 ? 0.0 : c.extraCosts;
   final subtotal =
-      parts + labor + paintLabor + paintMat + services + pieceLabor + extra;
+      parts + labor + paintLabor + paintMat + services + pieceLabor + ri + extra;
   final discount = subtotal * (c.discountPct.clamp(0, 100) / 100);
   final total = _round(subtotal - discount);
 
@@ -144,6 +171,8 @@ BudgetTotals computeTotals(Claim c, Settings s, {bool onlyApproved = true}) {
     paintMaterial: _round(paintMat),
     services: _round(services),
     pieceLabor: _round(pieceLabor),
+    ri: _round(ri),
+    riHours: rh,
     extra: _round(extra),
     discount: _round(discount),
     total: total,

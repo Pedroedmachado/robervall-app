@@ -104,6 +104,27 @@ CarRegion? regionById(String id) {
 
 const severityLabels = {1: 'Leve', 2: 'Média', 3: 'Pesada'};
 
+/// A peça do orçamento é da região do mapa de avarias?
+bool _itemOfRegion(BudgetItem it, CarRegion r) {
+  if (it.region == r.id) return true;
+  final d = it.description.trim().toLowerCase();
+  return r.suggestions.any((e) => e.$1.toLowerCase() == d);
+}
+
+/// Peças saíram do orçamento: as avarias do mapa que ficaram sem nenhuma
+/// peça são desmarcadas. Devolve o que foi desmarcado (para desfazer).
+Map<String, int> unmarkDamagesFor(Claim c, Iterable<BudgetItem> removed) {
+  final out = <String, int>{};
+  for (final id in c.damages.keys.toList()) {
+    final r = regionById(id);
+    if (r == null) continue;
+    if (!removed.any((it) => _itemOfRegion(it, r))) continue;
+    if (c.items.any((it) => _itemOfRegion(it, r))) continue;
+    out[id] = c.damages.remove(id)!;
+  }
+  return out;
+}
+
 /// Horas sugeridas por operação e severidade (ponto de partida editável).
 double suggestedLaborHours(ItemOp op, int severity) {
   switch (op) {

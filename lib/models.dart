@@ -207,6 +207,9 @@ class BudgetItem {
   /// Com R&I: a peça também é reparada (desmonta, recupera e monta).
   bool alsoRepair;
 
+  /// Horas de remoção e instalação (cobradas pelo valor da hora de R&I).
+  double riHours;
+
   /// Peça que sai do estoque da oficina (vazio = comprar).
   String stockId;
 
@@ -224,13 +227,13 @@ class BudgetItem {
   bool doPaint;
 
   /// Tem reparo/R&I/mão de obra na peça (por horas ou por peça).
-  bool get hasLabor => perPiece ? doRepair : laborHours > 0;
+  bool get hasLabor => perPiece ? doRepair : laborHours + riHours > 0;
 
   /// Tem pintura na peça (por horas ou por peça).
   bool get hasPaint => perPiece ? doPaint : paintHours > 0;
 
   /// Valores usados nas siglas (1 = tem, quando cobrado por peça).
-  double get labFlag => perPiece ? (doRepair ? 1 : 0) : laborHours;
+  double get labFlag => perPiece ? (doRepair ? 1 : 0) : laborHours + riHours;
   double get paintFlag => perPiece ? (doPaint ? 1 : 0) : paintHours;
 
   BudgetItem({
@@ -251,6 +254,7 @@ class BudgetItem {
     this.note = '',
     this.removeInstall = false,
     this.alsoRepair = false,
+    this.riHours = 0,
     this.stockId = '',
     this.done = false,
     this.parentId = '',
@@ -280,6 +284,7 @@ class BudgetItem {
         'note': note,
         'ri': removeInstall,
         if (alsoRepair) 'rr': true,
+        if (riHours > 0) 'riH': riHours,
         if (stockId.isNotEmpty) 'stock': stockId,
         if (done) 'done': true,
         'parent': parentId,
@@ -291,7 +296,7 @@ class BudgetItem {
         },
       };
 
-  factory BudgetItem.fromJson(Map<String, dynamic> j) => BudgetItem(
+  factory BudgetItem.fromJson(Map<String, dynamic> j) => _migrateRi(j, BudgetItem(
         id: _s(j['id'], newId()),
         description: _s(j['description']),
         partNumber: _s(j['partNumber']),
@@ -317,7 +322,8 @@ class BudgetItem {
         piecePrice: _d(j['ppv']),
         doRepair: j['pr'] != false,
         doPaint: j['pt'] == true,
-      );
+        riHours: _d(j['riH']),
+      ));
 }
 
 class ClaimPhoto {
@@ -678,8 +684,9 @@ class CatalogItem {
   double piecePrice;
   bool doRepair;
   bool doPaint;
+  double riHours;
 
-  double get labFlag => perPiece ? (doRepair ? 1 : 0) : laborHours;
+  double get labFlag => perPiece ? (doRepair ? 1 : 0) : laborHours + riHours;
   double get paintFlag => perPiece ? (doPaint ? 1 : 0) : paintHours;
 
   CatalogItem({
@@ -698,9 +705,11 @@ class CatalogItem {
     this.piecePrice = 0,
     this.doRepair = true,
     this.doPaint = false,
+    this.riHours = 0,
   }) : id = id ?? newId();
 
   BudgetItem toBudgetItem() => BudgetItem(
+        riHours: riHours,
         perPiece: perPiece,
         piecePrice: piecePrice,
         doRepair: doRepair,
@@ -729,6 +738,7 @@ class CatalogItem {
         'region': region,
         'ri': removeInstall,
         if (alsoRepair) 'rr': true,
+        if (riHours > 0) 'riH': riHours,
         if (perPiece) ...{
           'pp': true,
           'ppv': piecePrice,
@@ -737,7 +747,8 @@ class CatalogItem {
         },
       };
 
-  factory CatalogItem.fromJson(Map<String, dynamic> j) => CatalogItem(
+  factory CatalogItem.fromJson(Map<String, dynamic> j) {
+    final c = CatalogItem(
         id: _s(j['id'], newId()),
         description: _s(j['description']),
         partNumber: _s(j['partNumber']),
@@ -754,7 +765,24 @@ class CatalogItem {
         piecePrice: _d(j['ppv']),
         doRepair: j['pr'] != false,
         doPaint: j['pt'] == true,
+        riHours: _d(j['riH']),
       );
+    // versão antiga: as horas de R&I ficavam nas horas de mão de obra
+    if (c.removeInstall && !c.alsoRepair && !j.containsKey('riH') && !c.perPiece) {
+      c.riHours = c.laborHours;
+      c.laborHours = 0;
+    }
+    return c;
+  }
+}
+
+/// Versão antiga: as horas de R&I ficavam nas horas de mão de obra.
+BudgetItem _migrateRi(Map<String, dynamic> j, BudgetItem it) {
+  if (it.removeInstall && !it.alsoRepair && !j.containsKey('riH') && !it.perPiece) {
+    it.riHours = it.laborHours;
+    it.laborHours = 0;
+  }
+  return it;
 }
 
 class Settings {
@@ -773,6 +801,11 @@ class Settings {
   Map<String, double> laborRates;
   double paintRate; // hora de pintura (mão de obra)
   double paintMaterialRate; // material de pintura por hora pintada
+  double riRate; // hora de remoção e instalação (R&I)
+
+  /// Preço mínimo por peça de cada função (mão de obra por peça):
+  /// tipos de mão de obra + 'pintura' + 'ri'.
+  Map<String, double> pieceMin;
   double totalLossPct; // % do valor FIPE para indicar possível perda total
   bool perPieceDefault; // itens novos já cobram a mão de obra por peça
   bool showHours; // mostra horas de M.O./pintura no orçamento (seguradora)
@@ -794,12 +827,15 @@ class Settings {
     Map<String, double>? laborRates,
     this.paintRate = 90,
     this.paintMaterialRate = 70,
+    this.riRate = 90,
+    Map<String, double>? pieceMin,
     this.totalLossPct = 75,
     this.perPieceDefault = false,
     this.showHours = false,
     this.managerPin = '',
     this.productionMode = false,
-  }) : laborRates = laborRates ??
+  })  : pieceMin = pieceMin ?? {},
+        laborRates = laborRates ??
             {
               LaborType.funilaria.name: 90,
               LaborType.mecanica.name: 110,
@@ -809,6 +845,11 @@ class Settings {
             };
 
   double rateFor(LaborType t) => laborRates[t.name] ?? 0;
+
+  /// Chaves do preço mínimo por peça.
+  static const pieceMinPaint = 'pintura';
+  static const pieceMinRi = 'ri';
+  double minFor(String key) => pieceMin[key] ?? 0;
 
   Map<String, dynamic> toJson() => {
         'shopName': shopName,
@@ -824,6 +865,8 @@ class Settings {
         'laborRates': laborRates,
         'paintRate': paintRate,
         'paintMaterialRate': paintMaterialRate,
+        'riRate': riRate,
+        'pieceMin': pieceMin,
         'totalLossPct': totalLossPct,
         'perPiece': perPieceDefault,
         'showHours': showHours,
@@ -857,6 +900,12 @@ class Settings {
     final r = j['laborRates'];
     if (r is Map) {
       r.forEach((k, v) => s.laborRates[k.toString()] = _d(v));
+    }
+    // sem valor de R&I salvo (versão antiga): usa o da funilaria
+    s.riRate = _d(j['riRate'], s.rateFor(LaborType.funilaria));
+    final m = j['pieceMin'];
+    if (m is Map) {
+      m.forEach((k, v) => s.pieceMin[k.toString()] = _d(v));
     }
     return s;
   }

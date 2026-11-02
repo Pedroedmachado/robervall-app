@@ -520,6 +520,9 @@ void main() {
     Navigator.of(t.element(find.text('ORÇAMENTO'))).pop();
     await t.pumpAndSettle();
 
+    // carro concluído tem o orçamento travado: reabre para incluir
+    store.setStatus(s.claim, ClaimStatus.emReparo);
+    await t.pumpAndSettle();
     await tab(t, 'Orçamento');
     await tap(t, find.text('Novo item'));
     await t.enterText(find.widgetWithText(TextField, 'Peça'), 'Para-lama');

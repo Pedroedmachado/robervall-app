@@ -8,7 +8,7 @@ import '../seed.dart';
 import '../stock.dart';
 import '../theme.dart';
 import 'access.dart';
-import 'stock_page.dart' show StockThumb;
+import 'stock_page.dart' show StockThumb, editStockItem;
 import 'widgets.dart';
 
 /// Ordem de serviço: o que fazer no carro, peças, insumos e equipe.
@@ -239,15 +239,23 @@ class OsTab extends StatelessWidget {
     final store = StoreScope.read(context);
     final materials =
         store.stock.where((s) => s.kind == StockKind.material).toList();
-    if (materials.isEmpty) {
-      toast(context, 'Cadastre os insumos na aba Estoque primeiro.');
-      return;
-    }
     if (!await authorize(context, Perm.insumoLiberar,
         reason: 'Só o gestor/almoxarife libera insumos.')) {
       return;
     }
     if (!context.mounted) return;
+    // cadastra um insumo novo no estoque sem sair da O.S.
+    Future<StockItem?> addSupply(BuildContext ctx) async {
+      final n = await editStockItem(ctx, StockItem(kind: StockKind.material, qty: 0));
+      if (n == null) return null;
+      store.upsertStock(n);
+      if (n.kind == StockKind.material) materials.insert(0, n);
+      return n.kind == StockKind.material ? n : null;
+    }
+    if (materials.isEmpty) {
+      toast(context, 'Nenhum insumo no estoque: cadastre o primeiro.');
+      if (await addSupply(context) == null || !context.mounted) return;
+    }
     var stockId = materials.first.id;
     var search = '';
     var qty = store.stockById(materials.first.id)?.unit == 'folha' ? 0.25 : 1.0;
@@ -360,7 +368,28 @@ class OsTab extends StatelessWidget {
                 );
               }(),
             ),
-            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const ValueKey('adicionar-insumo'),
+                onPressed: () async {
+                  final n = await addSupply(ctx);
+                  if (n == null) return;
+                  setS(() {
+                    stockId = n.id;
+                    if (n.unit == 'folha') {
+                      piece = 0.25;
+                      pieces = 1;
+                      qty = 0.25;
+                    } else {
+                      qty = 1;
+                    }
+                  });
+                },
+                icon: const Icon(Icons.add),
+                label: const Text('Adicionar insumo'),
+              ),
+            ),
             Text('Selecionado: ${s.name}',
                 style: const TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 12),

@@ -82,7 +82,10 @@ class _StockPageState extends State<StockPage> {
                 selected: _kind == null,
                 onSelected: (_) => setState(() => _kind = null),
               ),
+              // peças "de cliente" saíram do estoque: só aparecem se já existiam
               for (final k in StockKind.values)
+                if (k != StockKind.cliente ||
+                    store.stock.any((e) => e.kind == StockKind.cliente))
                 ChoiceChip(
                   label: Text(switch (k) {
                     StockKind.peca => 'Peças',
@@ -292,19 +295,20 @@ Future<StockItem?> editStockItem(BuildContext context, StockItem s,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SegmentedButton<StockKind>(
-          segments: const [
-            ButtonSegment(
+          segments: [
+            const ButtonSegment(
                 value: StockKind.peca,
                 label: Text('Peça'),
                 icon: Icon(Icons.settings_outlined)),
-            ButtonSegment(
+            const ButtonSegment(
                 value: StockKind.material,
                 label: Text('Insumo'),
                 icon: Icon(Icons.format_color_fill_outlined)),
-            ButtonSegment(
-                value: StockKind.cliente,
-                label: Text('Do cliente'),
-                icon: Icon(Icons.person_pin_outlined)),
+            if (s.kind == StockKind.cliente)
+              const ButtonSegment(
+                  value: StockKind.cliente,
+                  label: Text('Do cliente'),
+                  icon: Icon(Icons.person_pin_outlined)),
           ],
           selected: {s.kind},
           onSelectionChanged: (sel) => setS(() {

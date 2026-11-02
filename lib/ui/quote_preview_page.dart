@@ -366,6 +366,12 @@ class _Paper extends StatelessWidget {
                                 ? 'Mão de obra (${num2(totals.laborHours)} h)'
                                 : 'Mão de obra',
                             money(totals.labor)),
+                        if (totals.ri > 0)
+                          KeyValue(
+                              s.showHours
+                                  ? 'Remoção e instalação (${num2(totals.riHours)} h)'
+                                  : 'Remoção e instalação',
+                              money(totals.ri)),
                         KeyValue(
                             s.showHours
                                 ? 'Pintura (${num2(totals.paintHours)} h)'
@@ -559,7 +565,7 @@ class _ItemsTable extends StatelessWidget {
                 cell(it.op == ItemOp.troca ? _originShort(it.origin) : ''),
                 cell(priced ? num2(it.qty <= 0 ? 1 : it.qty) : '', right: true),
                 if (hours)
-                  cell(it.laborHours > 0 ? num2(it.laborHours) : '',
+                  cell(it.laborHours + it.riHours > 0 ? num2(it.laborHours + it.riHours) : '',
                       right: true),
                 if (hours)
                   cell(it.paintHours > 0 ? num2(it.paintHours) : '',
@@ -586,8 +592,8 @@ class _ItemsTable extends StatelessWidget {
           () {
             final v = itemValues(it, settings);
             final info = <String>[
-              if (settings.showHours && it.laborHours > 0)
-                'M.O. ${num2(it.laborHours)} h',
+              if (settings.showHours && it.laborHours + it.riHours > 0)
+                'M.O. ${num2(it.laborHours + it.riHours)} h',
               if (settings.showHours && it.paintHours > 0)
                 'Pint. ${num2(it.paintHours)} h',
               if (withPrices && !settings.showHours && _labor(v) > 0)
@@ -706,4 +712,4 @@ class _Signature extends StatelessWidget {
 
 /// Mão de obra da linha em R\$ (reparo, R&I, pintura e material).
 double _labor(ItemValues v) =>
-    v.labor + v.paintLabor + v.paintMaterial + v.pieceLabor;
+    v.labor + v.ri + v.paintLabor + v.paintMaterial + v.pieceLabor;
