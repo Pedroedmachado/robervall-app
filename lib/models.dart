@@ -210,6 +210,9 @@ class BudgetItem {
   /// Horas de remoção e instalação (cobradas pelo valor da hora de R&I).
   double riHours;
 
+  /// Troca: quanto a oficina paga pela peça (custo, entra no custo da O.S.).
+  double partCost;
+
   /// Peça que sai do estoque da oficina (vazio = comprar).
   String stockId;
 
@@ -255,6 +258,7 @@ class BudgetItem {
     this.removeInstall = false,
     this.alsoRepair = false,
     this.riHours = 0,
+    this.partCost = 0,
     this.stockId = '',
     this.done = false,
     this.parentId = '',
@@ -285,6 +289,7 @@ class BudgetItem {
         'ri': removeInstall,
         if (alsoRepair) 'rr': true,
         if (riHours > 0) 'riH': riHours,
+        if (partCost > 0) 'cost': partCost,
         if (stockId.isNotEmpty) 'stock': stockId,
         if (done) 'done': true,
         'parent': parentId,
@@ -323,6 +328,7 @@ class BudgetItem {
         doRepair: j['pr'] != false,
         doPaint: j['pt'] == true,
         riHours: _d(j['riH']),
+        partCost: _d(j['cost']),
       ));
 }
 

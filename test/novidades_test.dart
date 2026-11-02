@@ -136,6 +136,21 @@ void main() {
           ItemOp.troca);
     });
 
+    test('custo da peça comprada entra no custo real da O.S.', () {
+      final s = Settings();
+      final c = Claim(number: 'X')
+        ..items = [
+          BudgetItem(description: 'Para-choque', op: ItemOp.troca, price: 900, partCost: 600),
+          BudgetItem(description: 'Farol', op: ItemOp.troca, price: 400, partCost: 250, qty: 2),
+          BudgetItem(description: 'Grade', op: ItemOp.troca, price: 100, partCost: 70, approved: false),
+        ];
+      final j = jobCost(c, s, entries: const [], contactById: (_) => null, stockById: (_) => null);
+      expect(j.boughtParts, 600 + 500);
+      expect(j.total, 1100);
+      expect(j.profit, j.approved - 1100);
+      expect(BudgetItem.fromJson(c.items.first.toJson()).partCost, 600);
+    });
+
     test('orçamento concluído ou entregue fica travado', () {
       final c = Claim(number: 'X');
       for (final st in ClaimStatus.values) {
@@ -285,6 +300,24 @@ void main() {
     expect(it.laborHours, 0);
     expect(itemValues(it, store.settings).ri, 140);
     expect(find.textContaining('Remoção e instalação (2'), findsOneWidget);
+
+    // troca: preço de venda e preço de custo
+    await tap(t, find.text('Novo item'));
+    await type(t, find.widgetWithText(TextField, 'Peça'), 'Para-choque traseiro');
+    expect(field('Preço de custo da peça'), findsNothing); // só na troca
+    await tap(t, find.text('Trocar a peça'));
+    await type(t, field('Preço unitário da peça'), '900');
+    await type(t, field('Preço de custo da peça'), '620');
+    expect(find.text('Ganho na peça'), findsOneWidget);
+    await tap(t, find.text('Salvar'));
+    if (find.text('Agora não').evaluate().isNotEmpty) {
+      await tap(t, find.text('Agora não'));
+    }
+    final troca = c.items.firstWhere((e) => e.description == 'Para-choque traseiro');
+    expect(troca.price, 900);
+    expect(troca.partCost, 620);
+    await tab(t, 'O.S.');
+    expect(find.text('Peças compradas (custo)', skipOffstage: false), findsOneWidget);
   });
 
   itest('mão de obra por peça: preço mínimo por função, sem preço por hora', (t) async {

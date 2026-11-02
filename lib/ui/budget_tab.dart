@@ -710,6 +710,7 @@ class _ItemEditorState extends State<_ItemEditor> {
                   return;
                 }
                 if (!it.removeInstall || _replace || _service) it.riHours = 0;
+                if (!_replace || _service) it.partCost = 0;
                 if (it.perPiece) {
                   // por peça: valor fechado, sem horas
                   it.laborHours = 0;
@@ -852,6 +853,13 @@ class _ItemEditorState extends State<_ItemEditor> {
                 value: it.price,
                 onChanged: (n) => setState(() => it.price = n),
               ),
+            if (_replace && !_service)
+              NumField(
+                label: 'Preço de custo da peça',
+                prefix: 'R\$',
+                value: it.partCost,
+                onChanged: (n) => setState(() => it.partCost = n),
+              ),
             if (showPrice)
               NumField(
                 label: 'Quantidade',
@@ -980,6 +988,11 @@ class _ItemEditorState extends State<_ItemEditor> {
           ]),
           const SizedBox(height: 8),
           if (v.parts > 0) KeyValue('Peça', money(v.parts)),
+          if (_replace && it.partCost > 0) ...[
+            KeyValue('Custo da peça', money(it.partCost * (it.qty <= 0 ? 1 : it.qty))),
+            KeyValue('Ganho na peça',
+                money(v.parts - it.partCost * (it.qty <= 0 ? 1 : it.qty))),
+          ],
           if (v.services > 0) KeyValue('Serviço', money(v.services)),
           if (v.labor > 0) KeyValue('Mão de obra', money(v.labor)),
           if (v.ri > 0) KeyValue('Remoção e instalação', money(v.ri)),
