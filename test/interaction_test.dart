@@ -363,6 +363,35 @@ void main() {
     await settle(t);
   });
 
+  itest('item por horas: ligar e desligar a pintura ao lado do reparo', (t) async {
+    await start(t);
+    final c = seed();
+    await openFirstClaim(t);
+    await tab(t, 'Orçamento');
+    await tap(t, find.text('Novo item'));
+    await type(t, find.widgetWithText(TextField, 'Peça'), 'Capô');
+    expect(field('Horas de pintura'), findsNothing);
+    await tap(t, find.text('Pintura (P)'));
+    await type(t, field('Horas de pintura'), '3');
+    await type(t, field('Horas de reparo'), '2');
+    await t.pumpAndSettle();
+    await tap(t, find.text('Salvar'));
+    if (find.text('Agora não').evaluate().isNotEmpty) {
+      await tap(t, find.text('Agora não'));
+    }
+    final it = c.items.single;
+    expect(it.paintHours, 3);
+    expect(opCode(it.op, it.labFlag, it.paintFlag), 'R / P');
+    // desligar a pintura zera as horas
+    await tap(t, find.text('Capô').first);
+    await tap(t, find.text('Pintura (P)'));
+    expect(field('Horas de pintura'), findsNothing);
+    await tap(t, find.text('Salvar'));
+    expect(c.items.single.paintHours, 0);
+    expect(opCode(c.items.single.op, c.items.single.labFlag, c.items.single.paintFlag), 'R');
+    await settle(t);
+  });
+
   itest('item: R&I, reparo e pintura juntos', (t) async {
     await start(t);
     final c = seed();
