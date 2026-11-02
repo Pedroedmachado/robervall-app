@@ -249,6 +249,12 @@ void main() {
     await tap(t, find.text('Reparo (R)')); // só R&I
     expect(field('Horas de reparo'), findsNothing);
     await type(t, field('Horas de remoção e instalação'), '2');
+    // pintura por horas: marca o "P" e aparecem as horas de pintura
+    expect(field('Horas de pintura'), findsNothing);
+    await tap(t, find.text('Pintura (P)'));
+    await type(t, field('Horas de pintura'), '1');
+    await tap(t, find.text('Pintura (P)'));
+    expect(field('Horas de pintura'), findsNothing); // desmarcou: some e zera
     await tap(t, find.text('Salvar'));
     if (find.text('Agora não').evaluate().isNotEmpty) {
       await tap(t, find.text('Agora não'));

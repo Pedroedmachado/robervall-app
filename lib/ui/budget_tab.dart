@@ -556,6 +556,9 @@ class _ItemEditorState extends State<_ItemEditor> {
   /// Valor por peça segue o mínimo dos Ajustes até a pessoa digitar outro.
   late bool _autoMin = it.piecePrice == 0;
 
+  /// Por horas: pintura marcada (mostra as horas de pintura).
+  late bool _paintOn = it.paintHours > 0;
+
   void _fillFromCatalog(CatalogItem ci) {
     setState(() {
       it.description = ci.description;
@@ -827,13 +830,17 @@ class _ItemEditorState extends State<_ItemEditor> {
                     label: const Text('Pintura (P)'),
                     selected: it.doPaint,
                     onSelected: (b) => setState(() => it.doPaint = b),
+                  )
+                else
+                  FilterChip(
+                    label: const Text('Pintura (P)'),
+                    selected: _paintOn,
+                    onSelected: (b) => setState(() {
+                      _paintOn = b;
+                      if (!b) it.paintHours = 0;
+                    }),
                   ),
               ]),
-              if (!it.perPiece && !_replace) ...[
-                const SizedBox(height: 4),
-                Text('A pintura entra pelas horas de pintura.',
-                    style: Theme.of(context).textTheme.bodySmall),
-              ],
             ],
           ],
           const SizedBox(height: 8),
@@ -892,7 +899,7 @@ class _ItemEditorState extends State<_ItemEditor> {
                 value: it.laborHours,
                 onChanged: (n) => setState(() => it.laborHours = n),
               ),
-            if (!_service && !it.perPiece)
+            if (!_service && !it.perPiece && (_replace || _paintOn))
               NumField(
                 label: 'Horas de pintura',
                 suffix: 'h',
