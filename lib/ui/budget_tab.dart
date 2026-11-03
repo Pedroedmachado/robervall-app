@@ -511,7 +511,7 @@ class _ItemEditorState extends State<_ItemEditor> {
   late final BudgetItem it = widget.original == null
       ? BudgetItem(
           op: ItemOp.reparo,
-          perPiece: StoreScope.read(context).settings.perPieceDefault)
+          perPiece: false) // abre por horas; "Por peça" fica no próprio item
       : (BudgetItem.fromJson(widget.original!.toJson()));
   late bool _service = it.op == ItemOp.servico;
   late bool _replace = it.op == ItemOp.troca;

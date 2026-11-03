@@ -491,7 +491,7 @@ void main() {
     expect(find.text('Retrovisor direito'), findsOneWidget);
   });
 
-  itest('ajustes: tema escuro, horas no orçamento e mão de obra por peça',
+  itest('ajustes: tema escuro, horas no orçamento; item novo abre por horas',
       (t) async {
     final s = await start(t, const Size(1440, 900));
     await tap(t, nav('Ajustes'));
@@ -509,9 +509,9 @@ void main() {
     }
     expect(store.settings.showHours, isTrue);
 
-    // mão de obra por peça como padrão para itens novos
-    await tap(t, find.text('Cobrar mão de obra por peça'));
-    expect(store.settings.perPieceDefault, isTrue);
+    // a chave "Cobrar mão de obra por peça" saiu dos Ajustes
+    expect(find.text('Cobrar mão de obra por peça'), findsNothing);
+    store.settings.perPieceDefault = true; // valor salvo de versão antiga não muda nada
 
     await tap(t, nav('Sinistros'));
     await tap(t, find.text('XYZ-9A99').first);
@@ -524,7 +524,8 @@ void main() {
     await tap(t, find.text('Novo item'));
     await t.enterText(find.widgetWithText(TextField, 'Peça'), 'Para-lama');
     await t.pumpAndSettle();
-    expect(field('Horas de reparo'), findsNothing); // já abre por peça
+    expect(field('Horas de reparo'), findsOneWidget); // abre por horas
+    await tap(t, find.text('Por peça')); // por peça continua no item
     await t.enterText(field('Valor da mão de obra da peça'), '200');
     await t.pumpAndSettle();
     await tap(t, find.text('Salvar'));
