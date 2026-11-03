@@ -65,8 +65,6 @@ class _ClaimDetailPageState extends State<ClaimDetailPage> {
     final totals = computeTotals(c, store.settings);
     final wide = isWide(context);
     final production = !gate.roleCan(Perm.valoresVer);
-    final doneTasks = c.items.where((i) => i.approved && i.done).length;
-    final allTasks = c.items.where((i) => i.approved).length;
     // modo produção: sem dados do cliente, sem orçamento e sem valores
     final tabs = <(IconData, String, Widget)>[
       if (!production)
@@ -80,7 +78,7 @@ class _ClaimDetailPageState extends State<ClaimDetailPage> {
         (Icons.request_quote_outlined, 'Orçamento (${c.items.length})',
             BudgetTab(claim: c)),
       if (gate.active(Mod.producao))
-        (Icons.assignment_outlined, 'O.S. ($doneTasks/$allTasks)',
+        (Icons.assignment_outlined, 'O.S.',
             OsTab(claim: c)),
       (Icons.timeline, 'Histórico', TimelineTab(claim: c)),
     ];
