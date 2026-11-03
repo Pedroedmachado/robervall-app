@@ -525,7 +525,7 @@ void main() {
     await t.enterText(find.widgetWithText(TextField, 'Peça'), 'Para-lama');
     await t.pumpAndSettle();
     expect(field('Horas de reparo'), findsOneWidget); // abre por horas
-    await tap(t, find.text('Por peça')); // por peça continua no item
+    await tap(t, find.text('Por peça').last); // por peça continua no item
     await t.enterText(field('Valor da mão de obra da peça'), '200');
     await t.pumpAndSettle();
     await tap(t, find.text('Salvar'));
