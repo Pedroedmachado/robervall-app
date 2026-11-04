@@ -172,9 +172,9 @@ void main() {
 
     await tap(t, find.text('Novo item'));
     await type(t, find.widgetWithText(TextField, 'Peça'), 'Farol esquerdo');
-    expect(field('Preço unitário da peça'), findsNothing); // só com troca
+    expect(field('Preço unitário da peça (venda)'), findsNothing); // só com troca
     await tap(t, find.text('Trocar a peça'));
-    await type(t, field('Preço unitário da peça'), '450,50');
+    await type(t, field('Preço unitário da peça (venda)'), '450,50');
     await type(t, field('Horas de pintura'), '2');
     await tap(t, find.text('Salvar'));
     // troca do farol oferece complementos; aqui seguimos sem eles
@@ -399,10 +399,10 @@ void main() {
     await tab(t, 'Orçamento');
     await tap(t, find.text('Novo item'));
     await type(t, find.widgetWithText(TextField, 'Peça'), 'Porta dianteira direita');
-    expect(field('Preço de custo da peça'), findsNothing); // só na troca
+    expect(field('Preço unitário da peça (custo)'), findsNothing); // só na troca
     await tap(t, find.text('Trocar a peça'));
-    await type(t, field('Preço unitário da peça'), '1500');
-    await type(t, field('Preço de custo da peça'), '1200');
+    await type(t, field('Preço unitário da peça (venda)'), '1500');
+    await type(t, field('Preço unitário da peça (custo)'), '1200');
     await t.pumpAndSettle();
     expect(find.text('Ganho na peça'), findsOneWidget);
     await tap(t, find.text('Salvar'));
@@ -872,7 +872,7 @@ void main() {
     await tap(t, find.text('Novo item'));
     await type(t, find.widgetWithText(TextField, 'Peça'), 'Porta dianteira esquerda');
     await tap(t, find.text('Trocar a peça'));
-    await type(t, field('Preço unitário da peça'), '900');
+    await type(t, field('Preço unitário da peça (venda)'), '900');
     await tap(t, find.text('Salvar'));
     expect(find.text('Peças complementares'), findsOneWidget);
     expect(find.text('Máquina de vidro'), findsOneWidget);

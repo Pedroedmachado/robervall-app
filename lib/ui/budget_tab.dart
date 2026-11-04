@@ -794,14 +794,14 @@ class _ItemEditorState extends State<_ItemEditor> {
           FieldGrid(maxColumns: 2, children: [
             if (showPrice)
               NumField(
-                label: _service ? 'Valor do serviço' : 'Preço unitário da peça',
+                label: _service ? 'Valor do serviço' : 'Preço unitário da peça (venda)',
                 prefix: 'R\$',
                 value: it.price,
                 onChanged: (n) => setState(() => it.price = n),
               ),
             if (_replace && !_service)
               NumField(
-                label: 'Preço de custo da peça',
+                label: 'Preço unitário da peça (custo)',
                 prefix: 'R\$',
                 value: it.partCost,
                 onChanged: (n) => setState(() => it.partCost = n),
