@@ -172,7 +172,7 @@ void main() {
   });
 
   testWidgets('tela: clicar na peça, registrar avaria e ver no orçamento', (t) async {
-    t.view.physicalSize = const Size(1440, 900);
+    t.view.physicalSize = const Size(1440, 1700);
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.reset);
     final store = (await t.runAsync(() async => AppStore.open(
@@ -186,8 +186,8 @@ void main() {
     await t.pumpWidget(FunilarApp(store: store));
     await t.pumpAndSettle();
 
+    // sem ensureVisible: o painel fica à direita e ele rolaria as abas
     Future<void> tap(Finder f) async {
-      await t.ensureVisible(f);
       await t.pumpAndSettle();
       await t.tap(f);
       await t.pumpAndSettle();
