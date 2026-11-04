@@ -13,7 +13,6 @@ import 'os_tab.dart';
 import 'photos_tab.dart';
 import 'quote_preview_page.dart';
 import 'timeline_tab.dart';
-import 'inspection_tab.dart';
 import 'widgets.dart';
 
 class ClaimDetailPage extends StatefulWidget {
@@ -75,8 +74,6 @@ class _ClaimDetailPageState extends State<ClaimDetailPage> {
         (Icons.photo_library_outlined, 'Fotos (${c.photos.length})',
             PhotosTab(claim: c)),
       ],
-      if (gate.active(Mod.vistoria) && !production)
-        (Icons.view_in_ar_outlined, 'Inspeção 3D', InspectionTab(claim: c)),
       if (!production)
         (Icons.request_quote_outlined, 'Orçamento (${c.items.length})',
             BudgetTab(claim: c)),

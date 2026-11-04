@@ -450,7 +450,6 @@ class _CostCard extends StatelessWidget {
         const Divider(height: 16),
         KeyValue('Equipe (pintor, funileiro…)', money(j.crew)),
         KeyValue('Insumos usados', money(j.supplies)),
-        KeyValue('Peças compradas (custo)', money(j.boughtParts)),
         KeyValue('Peças do estoque (custo)', money(j.stockParts)),
         KeyValue('Outros gastos do carro (Financeiro)', money(j.otherExpenses)),
         KeyValue('Custo total', money(j.total), bold: true),

@@ -10,7 +10,6 @@ import 'package:path_provider/path_provider.dart';
 import 'models.dart';
 import 'cash.dart';
 import 'finance.dart';
-import 'inspection.dart';
 import 'format.dart' show hideMoney, num2;
 import 'licensing.dart';
 import 'modules.dart';
@@ -26,9 +25,6 @@ class AppStore extends ChangeNotifier {
   final List<Claim> claims = [];
   final List<Contact> contacts = [];
   final List<CatalogItem> catalog = [];
-
-  /// Serviços sugeridos na Inspeção 3D (preço e tempo por gravidade).
-  final List<ServiceTemplate> inspServices = [];
   final List<FinanceEntry> entries = [];
   final List<StockItem> stock = [];
 
@@ -130,13 +126,12 @@ class AppStore extends ChangeNotifier {
       }
     }
     catalog.addAll(defaultCatalog());
-    inspServices.addAll(defaultInspectionServices());
     await _write();
   }
 
   static const _knownKeys = {
     'app', 'version', 'savedAt', 'settings', 'claims', 'contacts',
-    'catalog', 'entries', 'stock', 'users', 'cash', 'inspServices',
+    'catalog', 'entries', 'stock', 'users', 'cash',
   };
 
   void _fromJson(Map<String, dynamic> j) {
@@ -175,11 +170,6 @@ class AppStore extends ChangeNotifier {
     cash
       ..clear()
       ..addAll(list(j['cash']).map(CashEntry.fromJson));
-    inspServices
-      ..clear()
-      ..addAll(j['inspServices'] is List
-          ? list(j['inspServices']).map(ServiceTemplate.fromJson)
-          : defaultInspectionServices());
   }
 
   Map<String, dynamic> toJson() => {
@@ -195,7 +185,6 @@ class AppStore extends ChangeNotifier {
         'stock': stock.map((e) => e.toJson()).toList(),
         'users': users.map((e) => e.toJson()).toList(),
         'cash': cash.map((e) => e.toJson()).toList(),
-        'inspServices': inspServices.map((e) => e.toJson()).toList(),
       };
 
   Future<void> _write() async {
@@ -671,42 +660,6 @@ class AppStore extends ChangeNotifier {
       contacts.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
       changed();
     }
-  }
-
-  // ------------------------------------------------------------ inspeção 3D
-
-  /// Salva a avaria da Inspeção 3D e atualiza os itens do orçamento.
-  void saveInspection(Claim c, InspectionDamage d) {
-    gate.requirePerm(Perm.orcamentoEditar);
-    final body = CarBody.of(c.vehicle);
-    final isNew = !c.inspection.contains(d);
-    if (isNew) c.inspection.add(d);
-    syncDamageItems(c, d, body);
-    c.timeline.add(TimelineEvent(
-        text: 'Inspeção 3D: ${partById(body, d.partId)?.label ?? d.partId}'
-            '${d.type.isEmpty ? ' (serviço sem avaria)' : ' — ${damageTypeLabel(d.type)}, ${severityName(d.severity).toLowerCase()}'}'
-            '${isNew ? '' : ' (alterada)'}'));
-    touch(c);
-  }
-
-  /// Tira a avaria e os itens que ela gerou no orçamento.
-  void removeInspection(Claim c, InspectionDamage d) {
-    gate.requirePerm(Perm.orcamentoEditar);
-    c.inspection.remove(d);
-    c.items.removeWhere((e) => e.inspectionId == d.id);
-    touch(c);
-  }
-
-  void upsertInspService(ServiceTemplate t) {
-    gate.requirePerm(Perm.orcamentoEditar);
-    if (!inspServices.contains(t)) inspServices.add(t);
-    changed();
-  }
-
-  void removeInspService(ServiceTemplate t) {
-    gate.requirePerm(Perm.orcamentoEditar);
-    inspServices.remove(t);
-    changed();
   }
 
   // ---------------------------------------------------------------- catálogo

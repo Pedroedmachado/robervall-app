@@ -133,10 +133,6 @@ class Vehicle {
   String fipeCode;
   double fipeValue;
 
-  /// Carroceria do modelo 3D da inspeção: sedan, hatch, suv ou picape
-  /// (vazio = escolher pelo modelo).
-  String body;
-
   Vehicle({
     this.plate = '',
     this.brand = '',
@@ -148,7 +144,6 @@ class Vehicle {
     this.fuel = '',
     this.fipeCode = '',
     this.fipeValue = 0,
-    this.body = '',
   });
 
   String get title {
@@ -167,7 +162,6 @@ class Vehicle {
         'fuel': fuel,
         'fipeCode': fipeCode,
         'fipeValue': fipeValue,
-        if (body.isNotEmpty) 'body': body,
       };
 
   factory Vehicle.fromJson(Map<String, dynamic> j) => Vehicle(
@@ -181,7 +175,6 @@ class Vehicle {
         fuel: _s(j['fuel']),
         fipeCode: _s(j['fipeCode']),
         fipeValue: _d(j['fipeValue']),
-        body: _s(j['body']),
       );
 }
 
@@ -214,9 +207,6 @@ class BudgetItem {
   /// Com R&I: a peça também é reparada (desmonta, recupera e monta).
   bool alsoRepair;
 
-  /// Troca: quanto a oficina paga pela peça (custo, entra no custo da O.S.).
-  double partCost;
-
   /// Peça que sai do estoque da oficina (vazio = comprar).
   String stockId;
 
@@ -225,9 +215,6 @@ class BudgetItem {
 
   /// Peça principal da qual este item é complemento (vazio = item normal).
   String parentId;
-
-  /// Avaria da Inspeção 3D que gerou este item (vazio = item normal).
-  String inspectionId;
 
   /// Mão de obra cobrada por peça (valor fechado, sem separar horas de
   /// reparo e de pintura). [doRepair]/[doPaint] dizem o que é feito na peça.
@@ -264,11 +251,9 @@ class BudgetItem {
     this.note = '',
     this.removeInstall = false,
     this.alsoRepair = false,
-    this.partCost = 0,
     this.stockId = '',
     this.done = false,
     this.parentId = '',
-    this.inspectionId = '',
     this.perPiece = false,
     this.piecePrice = 0,
     this.doRepair = true,
@@ -295,11 +280,9 @@ class BudgetItem {
         'note': note,
         'ri': removeInstall,
         if (alsoRepair) 'rr': true,
-        if (partCost > 0) 'cost': partCost,
         if (stockId.isNotEmpty) 'stock': stockId,
         if (done) 'done': true,
         'parent': parentId,
-        if (inspectionId.isNotEmpty) 'insp': inspectionId,
         if (perPiece) ...{
           'pp': true,
           'ppv': piecePrice,
@@ -327,11 +310,9 @@ class BudgetItem {
         note: _s(j['note']),
         removeInstall: j['ri'] == true,
         alsoRepair: j['rr'] == true,
-        partCost: _d(j['cost']),
         stockId: _s(j['stock']),
         done: j['done'] == true,
         parentId: _s(j['parent']),
-        inspectionId: _s(j['insp']),
         perPiece: j['pp'] == true,
         piecePrice: _d(j['ppv']),
         doRepair: j['pr'] != false,
@@ -445,9 +426,6 @@ class Claim {
   /// Insumos usados na O.S. (lixa, massa, primer…), com custo.
   List<SupplyUse> supplies;
 
-  /// Avarias registradas na Inspeção 3D (cada uma gera itens no orçamento).
-  List<InspectionDamage> inspection;
-
   Claim({
     String? id,
     this.number = '',
@@ -484,14 +462,12 @@ class Claim {
     Map<String, int>? preDamages,
     Reception? reception,
     List<SupplyUse>? supplies,
-    List<InspectionDamage>? inspection,
   })  : id = id ?? newId(),
         crew = crew ?? [],
         stockTaken = stockTaken ?? {},
         preDamages = preDamages ?? {},
         reception = reception ?? Reception(),
         supplies = supplies ?? [],
-        inspection = inspection ?? [],
         vehicle = vehicle ?? Vehicle(),
         createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now(),
@@ -544,8 +520,6 @@ class Claim {
         if (!reception.isEmpty) 'reception': reception.toJson(),
         if (supplies.isNotEmpty)
           'supplies': supplies.map((e) => e.toJson()).toList(),
-        if (inspection.isNotEmpty)
-          'inspection': inspection.map((e) => e.toJson()).toList(),
         if (stockTaken.isNotEmpty)
           'stockTaken': {
             for (final e in stockTaken.entries) e.key: e.value.toJson()
@@ -611,7 +585,6 @@ class Claim {
           ? Reception.fromJson(Map<String, dynamic>.from(j['reception'] as Map))
           : Reception(),
       supplies: list(j['supplies']).map(SupplyUse.fromJson).toList(),
-      inspection: list(j['inspection']).map(InspectionDamage.fromJson).toList(),
       stockTaken: {
         if (j['stockTaken'] is Map)
           for (final e in (j['stockTaken'] as Map).entries)
@@ -985,10 +958,7 @@ ItemOp opFor({required bool service, required bool replace, required double labo
 List<BudgetItem> mergePartLines(List<BudgetItem> items) {
   final out = <BudgetItem>[];
   for (final it in items) {
-    if (it.op == ItemOp.servico ||
-        it.parentId.isNotEmpty ||
-        it.perPiece ||
-        it.inspectionId.isNotEmpty) {
+    if (it.op == ItemOp.servico || it.parentId.isNotEmpty || it.perPiece) {
       out.add(it);
       continue;
     }
@@ -1376,92 +1346,5 @@ class FinanceEntry {
         receiptFile: _s(j['receipt']),
         invoiceNumber: _s(j['invoice']),
         paymentMethod: _s(j['payment']),
-      );
-}
-
-
-// ------------------------------------------------------------ inspeção 3D
-
-/// Um serviço escolhido numa avaria da Inspeção 3D.
-class InspectionService {
-  String name;
-  double price;
-  int minutes;
-
-  /// Peça ou insumo (entra em "Peças e insumos"); senão é mão de obra.
-  bool isPart;
-
-  InspectionService({
-    this.name = '',
-    this.price = 0,
-    this.minutes = 0,
-    this.isPart = false,
-  });
-
-  Map<String, dynamic> toJson() => {
-        'name': name,
-        'price': price,
-        'min': minutes,
-        if (isPart) 'part': true,
-      };
-
-  factory InspectionService.fromJson(Map<String, dynamic> j) => InspectionService(
-        name: _s(j['name']),
-        price: _d(j['price']),
-        minutes: _d(j['min']).round(),
-        isPart: j['part'] == true,
-      );
-}
-
-/// Avaria registrada numa peça do carro 3D.
-class InspectionDamage {
-  String id;
-  String partId;
-
-  /// amassado, risco, trinca, quebra, corrosao, pintura ('' = serviço sem avaria).
-  String type;
-
-  /// 1 = leve, 2 = moderada, 3 = grave.
-  int severity;
-  List<InspectionService> services;
-  String note;
-  DateTime createdAt;
-
-  InspectionDamage({
-    String? id,
-    this.partId = '',
-    this.type = '',
-    this.severity = 1,
-    List<InspectionService>? services,
-    this.note = '',
-    DateTime? createdAt,
-  })  : id = id ?? newId(),
-        services = services ?? [],
-        createdAt = createdAt ?? DateTime.now();
-
-  double get total => services.fold(0.0, (a, s) => a + s.price);
-  int get minutes => services.fold(0, (a, s) => a + s.minutes);
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'part': partId,
-        'type': type,
-        'sev': severity,
-        'services': services.map((e) => e.toJson()).toList(),
-        if (note.isNotEmpty) 'note': note,
-        'at': createdAt.toIso8601String(),
-      };
-
-  factory InspectionDamage.fromJson(Map<String, dynamic> j) => InspectionDamage(
-        id: _s(j['id'], newId()),
-        partId: _s(j['part']),
-        type: _s(j['type']),
-        severity: _d(j['sev'], 1).round().clamp(1, 3),
-        services: (j['services'] is List ? j['services'] as List : const [])
-            .whereType<Map>()
-            .map((e) => InspectionService.fromJson(Map<String, dynamic>.from(e)))
-            .toList(),
-        note: _s(j['note']),
-        createdAt: DateTime.tryParse(_s(j['at'])) ?? DateTime.now(),
       );
 }
