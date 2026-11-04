@@ -392,6 +392,35 @@ void main() {
     await settle(t);
   });
 
+  itest('troca: preço para o cliente e custo da peça para a oficina', (t) async {
+    await start(t);
+    final c = seed();
+    await openFirstClaim(t);
+    await tab(t, 'Orçamento');
+    await tap(t, find.text('Novo item'));
+    await type(t, find.widgetWithText(TextField, 'Peça'), 'Porta dianteira direita');
+    expect(field('Preço de custo da peça'), findsNothing); // só na troca
+    await tap(t, find.text('Trocar a peça'));
+    await type(t, field('Preço unitário da peça'), '1500');
+    await type(t, field('Preço de custo da peça'), '1200');
+    await t.pumpAndSettle();
+    expect(find.text('Ganho na peça'), findsOneWidget);
+    await tap(t, find.text('Salvar'));
+    if (find.text('Agora não').evaluate().isNotEmpty) {
+      await tap(t, find.text('Agora não'));
+    }
+    final it = c.items.single;
+    expect(it.price, 1500);
+    expect(it.partCost, 1200);
+    expect(find.textContaining('custo ${money(1200)}'), findsOneWidget);
+    it.approved = true;
+    store.setStatus(c, ClaimStatus.aprovado);
+    await settle(t);
+    await tab(t, 'O.S.');
+    expect(find.text('Peças compradas (custo)', skipOffstage: false), findsOneWidget);
+    await settle(t);
+  });
+
   itest('item: R&I, reparo e pintura juntos', (t) async {
     await start(t);
     final c = seed();
