@@ -26,6 +26,7 @@ import 'package:funilar/ui/budget_tab.dart';
 import 'package:funilar/ui/contacts_page.dart';
 import 'package:funilar/ui/finance_page.dart';
 import 'package:funilar/ui/quote_preview_page.dart';
+import 'package:funilar/ui/inspection_tab.dart';
 
 void main() {
   final out = Platform.environment['SAMPLE_OUT'];
@@ -302,6 +303,40 @@ void main() {
     tester.view.physicalSize = s;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
+  }
+
+  for (final (name, w, h, dmg) in [
+    ('inspecao3d_resumo', 1400.0, 820.0, true),
+    ('inspecao3d_celular', 420.0, 1300.0, true),
+    ('inspecao3d_picape', 1400.0, 820.0, false),
+  ]) {
+    testWidgets('captura $name', (tester) async {
+      size(tester, Size(w, h));
+      final c = Claim(number: 'FN-0177')
+        ..customerName = 'André Figueiredo'
+        ..customerPhone = '(11) 98120-7705'
+        ..vehicle = Vehicle(plate: 'TXK-4J58', brand: 'Volkswagen', model: 'Golf GTI', year: '2019', color: 'Branco');
+      if (!dmg) c.vehicle.body = 'picape';
+      if (dmg) {
+        c.inspection.addAll([
+          InspectionDamage(partId: 'porta_de', type: 'pintura', severity: 2, services: [
+            InspectionService(name: 'Recuperação e pintura', price: 910, minutes: 390),
+            InspectionService(name: 'Insumos de pintura', price: 105, isPart: true),
+          ]),
+          InspectionDamage(partId: 'capo', type: 'amassado', severity: 1, services: [
+            InspectionService(name: 'Martelinho de ouro', price: 240, minutes: 90),
+          ]),
+          InspectionDamage(partId: 'parachoque_d', type: 'quebra', severity: 3, services: [
+            InspectionService(name: 'Substituição da peça (mão de obra)', price: 425, minutes: 205),
+          ]),
+        ]);
+      }
+      store.claims.insert(0, c);
+      await tester.pumpWidget(app(Scaffold(body: InspectionTab(claim: c))));
+      await tester.pumpAndSettle();
+      store.claims.remove(c);
+      await shot(tester, name);
+    }, skip: skip != null);
   }
 
   testWidgets('captura estoque', (tester) async {
