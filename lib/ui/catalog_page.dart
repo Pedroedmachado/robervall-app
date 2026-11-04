@@ -5,6 +5,7 @@ import '../format.dart';
 import '../models.dart';
 import '../seed.dart';
 import '../theme.dart';
+import 'inspection_services_page.dart';
 import 'widgets.dart';
 
 class CatalogPage extends StatefulWidget {
@@ -30,7 +31,17 @@ class _CatalogPageState extends State<CatalogPage> {
         .toList();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Catálogo de peças e serviços')),
+      appBar: AppBar(
+        title: const Text('Catálogo de peças e serviços'),
+        actions: [
+          IconButton(
+            tooltip: 'Serviços da inspeção 3D',
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => const InspectionServicesPage())),
+            icon: const Icon(Icons.view_in_ar_outlined),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           final it = await _editCatalog(context, CatalogItem());
