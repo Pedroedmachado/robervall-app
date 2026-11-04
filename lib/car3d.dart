@@ -231,7 +231,7 @@ CarMesh buildCar(CarBody body) {
 // ------------------------------------------------------------------ câmera
 
 class Camera3D {
-  const Camera3D({this.yaw = -0.75, this.pitch = 0.32, this.zoom = 1.0});
+  const Camera3D({this.yaw = 0.75, this.pitch = 0.32, this.zoom = 1.0});
 
   /// Giro em volta do carro (radianos) e inclinação para cima.
   final double yaw, pitch, zoom;

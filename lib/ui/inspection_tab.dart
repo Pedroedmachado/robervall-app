@@ -538,12 +538,15 @@ class _InspectionTabState extends State<InspectionTab> {
           ]),
         ]),
         const SizedBox(height: 10),
-        Row(children: [
+        OverflowBar(
+          alignment: MainAxisAlignment.spaceBetween,
+          overflowAlignment: OverflowBarAlignment.end,
+          overflowSpacing: 6,
+          children: [
           TextButton(
             onPressed: () => setState(() => _mode = _Mode.part),
             child: const Text('Cancelar'),
           ),
-          const Spacer(),
           FilledButton.icon(
             onPressed: services.isEmpty ? null : () => _save(store, body),
             icon: const Icon(Icons.check),
