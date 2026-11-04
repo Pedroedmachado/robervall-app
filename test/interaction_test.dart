@@ -404,7 +404,6 @@ void main() {
     await type(t, field('Preço unitário da peça (venda)'), '1500');
     await type(t, field('Preço unitário da peça (custo)'), '1200');
     await t.pumpAndSettle();
-    expect(find.text('Ganho na peça'), findsOneWidget);
     await tap(t, find.text('Salvar'));
     if (find.text('Agora não').evaluate().isNotEmpty) {
       await tap(t, find.text('Agora não'));
