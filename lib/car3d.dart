@@ -59,9 +59,25 @@ class _Builder {
     }
   }
 
+  /// Quadrilátero a-b-c-d, dividido em pedaços para a ordem de desenho
+  /// (do fundo para a frente) sair certa mesmo em peças grandes.
   void quad(V3 a, V3 b, V3 c, V3 d, String part, [Surface s = Surface.body]) {
-    tri(a, b, c, part, s);
-    tri(a, c, d, part, s);
+    int steps(double len) => (len / 0.45).ceil().clamp(1, 6);
+    final nu = steps(math.max((b - a).length, (c - d).length));
+    final nv = steps(math.max((d - a).length, (c - b).length));
+    V3 at(double u, double v) {
+      final p = a + (b - a) * u, q = d + (c - d) * u;
+      return p + (q - p) * v;
+    }
+
+    for (var i = 0; i < nu; i++) {
+      for (var j = 0; j < nv; j++) {
+        final p00 = at(i / nu, j / nv), p10 = at((i + 1) / nu, j / nv);
+        final p11 = at((i + 1) / nu, (j + 1) / nv), p01 = at(i / nu, (j + 1) / nv);
+        tri(p00, p10, p11, part, s);
+        tri(p00, p11, p01, part, s);
+      }
+    }
   }
 
   /// Caixa alinhada aos eixos (sem a face de baixo).
@@ -291,14 +307,31 @@ Offset _project(V3 v, Size size, double zoom) {
 Offset projectPoint(V3 p, Camera3D cam, Size size) => _project(cam.view(p), size, cam.zoom);
 
 /// Projeta e ordena do mais longe para o mais perto (pintor).
+const _center = V3(0, 0.75, 0);
+
 List<ProjTri> projectMesh(CarMesh mesh, Camera3D cam, Size size) {
   const light = V3(0.35, 0.85, 0.4);
   final l = light.unit;
+  final origin = cam.view(const V3(0, 0, 0));
   final out = <ProjTri>[];
   for (final t in mesh.tris) {
     final a = cam.view(t.a), b = cam.view(t.b), c = cam.view(t.c);
-    final n = (t.b - t.a).cross(t.c - t.a).unit;
-    final shade = 0.55 + 0.45 * n.dot(l).abs();
+    var n = (t.b - t.a).cross(t.c - t.a).unit;
+    final twoSided = t.surface == Surface.tire ||
+        t.surface == Surface.rim ||
+        t.part == 'cacamba';
+    if (!twoSided) {
+      // normal para fora do carro; some se estiver de costas para a câmera
+      final mid = (t.a + t.b + t.c) * (1 / 3);
+      if (n.dot(mid - _center) < 0) n = n * -1;
+      final nv = cam.view(n) - origin;
+      final pv = (a + b + c) * (1 / 3);
+      final toEye = V3(-pv.x, -pv.y, _dist - pv.z);
+      if (nv.dot(toEye) <= 0) continue;
+    }
+    final shade = twoSided
+        ? 0.55 + 0.45 * n.dot(l).abs()
+        : 0.5 + 0.5 * math.max(0.0, n.dot(l)) + 0.08;
     out.add(ProjTri(_project(a, size, cam.zoom), _project(b, size, cam.zoom),
         _project(c, size, cam.zoom), (a.z + b.z + c.z) / 3, t, shade));
   }
