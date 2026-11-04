@@ -7,6 +7,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import 'inspection.dart';
@@ -163,7 +164,7 @@ CarMesh buildCar(CarBody body) {
   if (body != CarBody.picape) {
     b.quad(cb(cabR, -1), cb(cabR, 1), ct(roofR, 1), ct(roofR, -1), rearGlassPart, Surface.glass);
   }
-  for (final side in [1, -1]) {
+  for (final side in const [1.0, -1.0]) {
     final s = side == 1 ? 'e' : 'd';
     // vidros laterais divididos na altura da porta
     double topX(double x) {
