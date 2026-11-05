@@ -134,8 +134,6 @@ jobs:
           set -o pipefail
           mkdir -p ci out
           status=0
-          # o ML Kit (leitura de nota) ainda não tem pacote Swift: usa CocoaPods
-          flutter config --no-enable-swift-package-manager
           {
             bash tool/prepare_platforms.sh && flutter pub get \
               && flutter build ios --config-only --no-codesign \

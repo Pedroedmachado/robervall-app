@@ -22,7 +22,8 @@ dependencies:
   cryptography: ^2.7.0
   crypto: ^3.0.3
   archive: any
-  google_mlkit_text_recognition: any
+  # 1.0 passou a exigir Swift Package Manager no iPhone e não compila; fica na última com CocoaPods
+  google_mlkit_text_recognition: 0.17.1
 
 dev_dependencies:
   flutter_test:
