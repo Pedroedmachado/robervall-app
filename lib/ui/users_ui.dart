@@ -44,6 +44,13 @@ class _LoginPageState extends State<LoginPage> {
               shrinkWrap: true,
               padding: const EdgeInsets.all(24),
               children: [
+                Center(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(22),
+                    child: Image.asset('assets/icon/logo_256.png', width: 96, height: 96),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 Text(edition.title, textAlign: TextAlign.center,
                     style: t.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900, color: t.colorScheme.primary)),
                 const SizedBox(height: 4),

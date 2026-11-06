@@ -9,6 +9,10 @@ set -a; . tool/app.env; set +a
 flutter create --platforms=android,ios,linux,windows --org "$APP_ORG" --project-name "$APP_PACKAGE" . >/dev/null
 rm -f test/widget_test.dart
 
+# ícone do app (Android, iPhone e Windows) a partir de assets/icon/icon.png
+{ flutter pub get >/dev/null && dart run flutter_launcher_icons >/dev/null && echo "Ícones gerados."; } \
+  || echo "aviso: não consegui gerar os ícones (o app usa o ícone padrão)"
+
 # Android: internet (consulta FIPE) e nome do app
 manifest=android/app/src/main/AndroidManifest.xml
 if [ -f "$manifest" ]; then

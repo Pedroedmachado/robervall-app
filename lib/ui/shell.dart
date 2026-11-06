@@ -214,19 +214,10 @@ class _Logo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        edition.title.split(' ').last[0],
-        style: TextStyle(
-            color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900),
-      ),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Image.asset('assets/icon/logo_256.png',
+          width: 44, height: 44, fit: BoxFit.cover, semanticLabel: edition.title),
     );
   }
 }

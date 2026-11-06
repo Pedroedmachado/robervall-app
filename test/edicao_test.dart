@@ -60,7 +60,7 @@ void main() {
           expect(inMenu(label), e.pages.contains(p), reason: '${e.name}: $label');
         }
       }
-      expect(find.text(e.title.split(' ').last[0]), findsWidgets); // logo
+      expect(find.byType(Image), findsWidgets); // logo
 
       if (e.pages.contains(AppPage.sinistros)) {
         // abre um carro: aba O.S. só onde tem produção
