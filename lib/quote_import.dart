@@ -149,11 +149,14 @@ ImportedQuote parseInsurerQuote(List<PdfWord> words) {
       final r = rows[i];
       for (final s in r.segs) {
         if (!_isLabel(s.text, label)) continue;
-        if (i + 1 >= rows.length) return (s.text, '');
-        final n = rows[i + 1];
-        if (n.page != r.page || n.y - r.y > 16) return (s.text, '');
-        for (final v in n.segs) {
-          if ((v.x - s.x).abs() < 4) return (s.text, _clean(v.text));
+        // o valor fica nas linhas logo abaixo (pode haver outra coluna com
+        // texto em duas linhas no meio)
+        for (var j = i + 1; j < rows.length; j++) {
+          final n = rows[j];
+          if (n.page != r.page || n.y - r.y > 16) break;
+          for (final v in n.segs) {
+            if ((v.x - s.x).abs() < 4) return (s.text, _clean(v.text));
+          }
         }
         return (s.text, '');
       }
