@@ -617,6 +617,9 @@ class Contact {
   PayType payType;
   double rate; // salário mensal, valor da empreita ou valor por peça
 
+  /// Assalariado com comissão: % do valor aprovado de cada carro (0 = sem).
+  double commissionPct;
+
   Contact({
     String? id,
     this.kind = ContactKind.cliente,
@@ -629,12 +632,15 @@ class Contact {
     this.service = OutsourcedService.pintura,
     this.payType = PayType.porPeca,
     this.rate = 0,
+    this.commissionPct = 0,
   }) : id = id ?? newId();
 
   /// Ex.: "Terceirizado · Pintura · Por peça".
   String get workerSummary => [
         outsourced ? 'Terceirizado · ${service.label}' : 'Funcionário',
-        payType.label,
+        payType == PayType.salario && commissionPct > 0
+            ? 'Salário + comissão de ${commissionPct.toStringAsFixed(commissionPct % 1 == 0 ? 0 : 1)}%'
+            : payType.label,
       ].join(' · ');
 
   Map<String, dynamic> toJson() => {
@@ -649,9 +655,10 @@ class Contact {
         'service': service.name,
         'payType': payType.name,
         'rate': rate,
+        if (commissionPct > 0) 'commission': commissionPct,
       };
 
-  factory Contact.fromJson(Map<String, dynamic> j) => Contact(
+  factory Contact.fromJson(Map<String, dynamic> j) => _migratePay(Contact(
         id: _s(j['id'], newId()),
         kind: _enum(ContactKind.values, j['kind'], ContactKind.cliente),
         name: _s(j['name']),
@@ -664,7 +671,19 @@ class Contact {
             OutsourcedService.pintura),
         payType: _enum(PayType.values, j['payType'], PayType.porPeca),
         rate: _d(j['rate']),
-      );
+        commissionPct: _d(j['commission']),
+      ));
+
+  /// Versão de 05/11: "Comissão" era uma forma de pagamento à parte; agora é
+  /// salário + comissão (o % fica em [commissionPct]).
+  static Contact _migratePay(Contact c) {
+    if (c.payType == PayType.comissao) {
+      c.payType = PayType.salario;
+      if (c.commissionPct == 0) c.commissionPct = c.rate;
+      c.rate = 0;
+    }
+    return c;
+  }
 }
 
 /// Item do catálogo próprio de peças e serviços (tabela de preços da oficina).

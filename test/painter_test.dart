@@ -169,4 +169,30 @@ void main() {
     }
     expect(PayType.values.map((e) => e.label), contains('Comissão'));
   });
+
+  test('salário + comissão: salário fixo e comissão por carro', () {
+    final s = Settings(laborRates: {for (final l in LaborType.values) l.name: 100});
+    final c = Claim(number: 'X')
+      ..items = [BudgetItem(description: 'Porta', op: ItemOp.reparo, laborHours: 10)];
+    final w = Contact(
+        kind: ContactKind.funcionario, name: 'Zé', payType: PayType.salario, rate: 2500,
+        commissionPct: 5);
+    final cc = crewCost(c, CrewMember(role: OutsourcedService.funilaria, contactId: w.id), w,
+        settings: s);
+    expect(cc.payType, PayType.comissao);
+    expect(cc.amount, 50); // 5% de R$ 1.000
+    expect(w.workerSummary, contains('Salário + comissão de 5%'));
+    final back = Contact.fromJson(w.toJson());
+    expect(back.commissionPct, 5);
+    expect(back.rate, 2500);
+    // sem comissão: assalariado não tem custo por carro
+    w.commissionPct = 0;
+    expect(crewCost(c, CrewMember(role: OutsourcedService.funilaria, contactId: w.id), w,
+            settings: s).amount, 0);
+    // quem ficou com a "Comissão" de antes vira salário + comissão
+    final old = Contact.fromJson({'kind': 'funcionario', 'name': 'A', 'payType': 'comissao', 'rate': 8});
+    expect(old.payType, PayType.salario);
+    expect(old.commissionPct, 8);
+    expect(old.rate, 0);
+  });
 }

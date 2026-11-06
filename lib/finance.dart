@@ -260,10 +260,16 @@ double crewPieces(Claim c, CrewMember m) =>
     m.pieces ?? (autoPieces(c, m.role)?.toDouble() ?? 1);
 
 CrewCost crewCost(Claim c, CrewMember m, Contact? worker, {Settings? settings}) {
-  final pay = worker?.payType ?? PayType.porPeca;
+  var pay = worker?.payType ?? PayType.porPeca;
+  var rate = m.rate ?? worker?.rate ?? 0;
+  // assalariado com comissão: por carro ele recebe a comissão
+  if (worker != null && pay == PayType.salario && worker.commissionPct > 0) {
+    pay = PayType.comissao;
+    rate = m.rate ?? worker.commissionPct;
+  }
   return CrewCost(
       crewPieces(c, m),
-      m.rate ?? worker?.rate ?? 0,
+      rate,
       pay,
       pay == PayType.comissao ? commissionBase(c, m.role, settings ?? Settings()) : 0);
 }

@@ -274,7 +274,7 @@ Future<Contact?> editContact(BuildContext context, Contact ct) {
             const SizedBox(height: 4),
             Wrap(spacing: 8, runSpacing: 4, children: [
               for (final pt in PayType.values)
-                if (!(ct.outsourced && pt == PayType.salario))
+                if (!(ct.outsourced && pt == PayType.salario) && pt != PayType.comissao)
                   ChoiceChip(
                     label: Text(pt.label),
                     selected: ct.payType == pt,
@@ -287,19 +287,36 @@ Future<Contact?> editContact(BuildContext context, Contact ct) {
                 PayType.porPeca => 'Valor por peça',
                 PayType.empreita => 'Valor da empreita (por carro)',
                 PayType.salario => 'Salário mensal',
-                PayType.comissao => 'Comissão (% do valor aprovado do carro)',
+                PayType.comissao => 'Salário mensal',
               },
-              prefix: ct.payType == PayType.comissao ? null : 'R\$',
-              suffix: ct.payType == PayType.comissao ? '%' : null,
+              prefix: 'R\$',
               value: ct.rate,
               onChanged: (n) => ct.rate = n,
             ),
+            // salário: sub-opção de comissão por carro
+            if (ct.payType == PayType.salario) ...[
+              SwitchListTile(
+                key: const ValueKey('salario-comissao'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('+ Comissão por carro'),
+                subtitle: const Text('Além do salário, recebe um % do valor aprovado de cada carro em que trabalhar.'),
+                value: ct.commissionPct > 0,
+                onChanged: (b) => setS(() => ct.commissionPct = b ? 5 : 0),
+              ),
+              if (ct.commissionPct > 0)
+                NumField(
+                  label: 'Comissão (% do valor aprovado do carro)',
+                  suffix: '%',
+                  value: ct.commissionPct,
+                  onChanged: (n) => ct.commissionPct = n,
+                ),
+            ],
             const SizedBox(height: 4),
             Text(
               switch (ct.payType) {
-                PayType.salario => 'Salário entra no Financeiro como gasto fixo mensal.',
-                PayType.comissao =>
-                  'Ex.: 5% → em cada carro que ele trabalhar, recebe 5% do valor aprovado (faturamento) do orçamento.',
+                PayType.salario || PayType.comissao => ct.commissionPct > 0
+                    ? 'Salário entra no Financeiro como gasto fixo mensal; a comissão entra por carro, sozinha, quando ele está na equipe do carro.'
+                    : 'Salário entra no Financeiro como gasto fixo mensal.',
                 _ => 'Esse valor é usado quando ele for escalado na equipe do carro, no orçamento.',
               },
               style: Theme.of(ctx).textTheme.bodySmall,

@@ -1379,7 +1379,7 @@ Future<void> _editCrewMember(BuildContext context, Claim c, CrewMember original,
       final w = store.contactById(m.contactId);
       final auto = autoPieces(c, m.role);
       final cost = crewCost(c, m, w, settings: store.settings);
-      final payType = w?.payType ?? PayType.porPeca;
+      final payType = w == null ? PayType.porPeca : cost.payType;
 
       Future<void> register() async {
         final ct = await editContact(
@@ -1425,7 +1425,9 @@ Future<void> _editCrewMember(BuildContext context, Claim c, CrewMember original,
                     x.outsourced ? Icons.handshake_outlined : Icons.badge_outlined,
                     size: 18),
                 label: Text(
-                    '${x.name}${x.rate > 0 ? ' · ${x.payType == PayType.comissao ? num2(x.rate) : money(x.rate)}${_rateLabel(x.payType)}' : ''}'),
+                    x.payType == PayType.salario && x.commissionPct > 0
+                        ? '${x.name} · ${num2(x.commissionPct)}% comissão'
+                        : '${x.name}${x.rate > 0 ? ' · ${money(x.rate)}${_rateLabel(x.payType)}' : ''}'),
                 selected: m.contactId == x.id,
                 onSelected: (_) => setS(() {
                   m.contactId = x.id;
@@ -1470,9 +1472,11 @@ Future<void> _editCrewMember(BuildContext context, Claim c, CrewMember original,
                   },
                   prefix: payType == PayType.comissao ? null : 'R\$',
                   suffix: payType == PayType.comissao ? '%' : null,
-                  value: m.rate ?? w?.rate ?? 0,
-                  onChanged: (n) => setS(
-                      () => m.rate = (w != null && n == w.rate) ? null : n),
+                  value: m.rate ?? (payType == PayType.comissao ? w?.commissionPct : w?.rate) ?? 0,
+                  onChanged: (n) => setS(() => m.rate = (w != null &&
+                          n == (payType == PayType.comissao ? w.commissionPct : w.rate))
+                      ? null
+                      : n),
                 ),
               ),
             ]),
