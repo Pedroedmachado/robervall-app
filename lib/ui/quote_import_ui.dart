@@ -159,31 +159,31 @@ class _ReviewPage extends StatelessWidget {
                   child: Text('⚠ $w', style: TextStyle(color: Colors.orange.shade900)),
                 ),
               SectionCard(title: 'Veículo', icon: Icons.directions_car_outlined, children: [
-                KeyValue('Veículo', [v.brand, v.model, v.year].where((e) => e.isNotEmpty).join(' ')),
-                KeyValue('Placa', v.plate),
-                KeyValue('Cor', v.color),
-                KeyValue('Chassi', v.chassis),
-                if (v.km.isNotEmpty) KeyValue('Quilometragem', v.km),
+                _Kv('Veículo', [v.brand, v.model, v.year].where((e) => e.isNotEmpty).join(' ')),
+                _Kv('Placa', v.plate),
+                _Kv('Cor', v.color),
+                _Kv('Chassi', v.chassis),
+                if (v.km.isNotEmpty) _Kv('Quilometragem', v.km),
                 if (v.fipeValue > 0)
-                  KeyValue('Valor FIPE${v.fipeCode.isEmpty ? '' : ' (${v.fipeCode})'}',
+                  _Kv('Valor FIPE${v.fipeCode.isEmpty ? '' : ' (${v.fipeCode})'}',
                       money(v.fipeValue)),
               ]),
               SectionCard(title: 'Seguro e cliente', icon: Icons.shield_outlined, children: [
-                KeyValue('Atendimento', c.type.label),
-                if (c.insurerName.isNotEmpty) KeyValue('Seguradora', c.insurerName),
-                if (c.claimNumber.isNotEmpty) KeyValue('Sinistro', c.claimNumber),
-                if (c.regulatorName.isNotEmpty) KeyValue('Regulador', c.regulatorName),
-                KeyValue(c.type == ClaimType.terceiro ? 'Terceiro' : 'Cliente', c.customerName),
-                if (c.customerDoc.isNotEmpty) KeyValue('CPF/CNPJ', c.customerDoc),
-                if (c.customerPhone.isNotEmpty) KeyValue('Telefone', c.customerPhone),
+                _Kv('Atendimento', c.type.label),
+                if (c.insurerName.isNotEmpty) _Kv('Seguradora', c.insurerName),
+                if (c.claimNumber.isNotEmpty) _Kv('Sinistro', c.claimNumber),
+                if (c.regulatorName.isNotEmpty) _Kv('Regulador', c.regulatorName),
+                _Kv(c.type == ClaimType.terceiro ? 'Terceiro' : 'Cliente', c.customerName),
+                if (c.customerDoc.isNotEmpty) _Kv('CPF/CNPJ', c.customerDoc),
+                if (c.customerPhone.isNotEmpty) _Kv('Telefone', c.customerPhone),
               ]),
               SectionCard(title: 'Valores da hora (do PDF)', icon: Icons.schedule, children: [
-                KeyValue('Mão de obra',
+                _Kv('Mão de obra',
                     c.laborRate > 0 ? '${money(c.laborRate)}/h' : 'os da oficina'),
-                KeyValue('Pintura (com material)',
+                _Kv('Pintura (com material)',
                     c.paintRate > 0 ? '${money(c.paintRate)}/h' : 'os da oficina'),
                 if (q.partsDiscountPct > 0)
-                  KeyValue('Desconto nas peças', '${num2(q.partsDiscountPct)}%'),
+                  _Kv('Desconto nas peças', '${num2(q.partsDiscountPct)}%'),
               ]),
               SectionCard(
                 title: 'Itens (${c.items.length})',
@@ -205,8 +205,8 @@ class _ReviewPage extends StatelessWidget {
                 ],
               ),
               SectionCard(title: 'Total', icon: Icons.calculate_outlined, children: [
-                if (q.pdfTotal > 0) KeyValue('Total no PDF', money(q.pdfTotal)),
-                KeyValue('Total no app', money(totals.total), bold: true),
+                if (q.pdfTotal > 0) _Kv('Total no PDF', money(q.pdfTotal)),
+                _Kv('Total no app', money(totals.total), bold: true),
                 if (q.pdfTotal > 0)
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
@@ -231,6 +231,29 @@ class _ReviewPage extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Rótulo e valor; valor comprido quebra linha em vez de estourar a tela.
+class _Kv extends StatelessWidget {
+  const _Kv(this.k, this.v, {this.bold = false});
+  final String k;
+  final String v;
+  final bool bold;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = TextStyle(
+        fontWeight: bold ? FontWeight.w700 : FontWeight.w400, fontSize: bold ? 16 : 14);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SizedBox(width: 130, child: Text(k, style: style)),
+        const SizedBox(width: 8),
+        Expanded(
+            child: Text(v.isEmpty ? '—' : v, style: style, textAlign: TextAlign.end)),
+      ]),
     );
   }
 }

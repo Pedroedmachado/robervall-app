@@ -351,10 +351,20 @@ void _parseItems(List<_Row> rows, ImportedQuote q) {
       continue;
     }
     if (t.startsWith('ITENS DO TIPO') || t.startsWith('ÁREA DE')) continue;
+    // cada palavra vai para a coluna em que começa (colunas coladas não se
+    // misturam)
     final cells = <String, String>{};
-    for (final s in r.segs) {
-      final k = s.x < cols['QTD']! - 3 ? 'OPS' : colOf(s.x);
-      cells[k] = '${cells[k] ?? ''} ${s.text}'.trim();
+    final lastX1 = <String, double>{};
+    for (final w in r.words) {
+      final k = w.x < cols['QTD']! - 3 ? 'OPS' : colOf(w.x);
+      final prev = cells[k];
+      final t = w.text.trim();
+      if (prev == null) {
+        cells[k] = t;
+      } else {
+        cells[k] = w.x - (lastX1[k] ?? w.x) < 0.8 ? '$prev$t' : '$prev $t';
+      }
+      lastX1[k] = w.x1;
     }
     final qty = cells['QTD'] ?? '';
     if (RegExp(r'^\d+([.,]\d+)?$').hasMatch(qty)) {
