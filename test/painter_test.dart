@@ -146,4 +146,34 @@ void main() {
     expect(old.crew.single.role, OutsourcedService.pintura);
     expect(old.crew.single.contactId, pintor.id);
   });
+
+  test('comissão: % dos serviços da função dele no carro', () {
+    final s = Settings(laborRates: {for (final l in LaborType.values) l.name: 100})
+      ..paintRate = 80
+      ..paintMaterialRate = 50;
+    final c = Claim(number: 'X')
+      ..items = [
+        BudgetItem(description: 'Porta', op: ItemOp.reparo, laborHours: 3, paintHours: 2),
+        BudgetItem(description: 'Capô', op: ItemOp.pintura, paintHours: 2),
+        BudgetItem(description: 'Para-choque', op: ItemOp.troca, price: 900),
+        BudgetItem(description: 'Grade', op: ItemOp.reparo, laborHours: 5, approved: false),
+      ];
+    final funileiro = Contact(
+        kind: ContactKind.funcionario, name: 'Baiano', payType: PayType.comissao, rate: 30);
+    final pintor = Contact(
+        kind: ContactKind.funcionario, name: 'Luan', payType: PayType.comissao, rate: 25);
+    final f = crewCost(c, CrewMember(role: OutsourcedService.funilaria, contactId: funileiro.id),
+        funileiro, settings: s);
+    expect(f.base, 300); // 3 h × 100 (a grade não foi aprovada; peça não entra)
+    expect(f.amount, 90);
+    final p = crewCost(c, CrewMember(role: OutsourcedService.pintura, contactId: pintor.id),
+        pintor, settings: s);
+    expect(p.base, 320); // 4 h × 80, sem o material de pintura
+    expect(p.amount, 80);
+    // martelinho: toda a mão de obra aprovada
+    final m = crewCost(c, CrewMember(role: OutsourcedService.martelinho, contactId: funileiro.id),
+        funileiro, settings: s);
+    expect(m.base, 300 + 320);
+    expect(PayType.values.map((e) => e.label), contains('Comissão'));
+  });
 }

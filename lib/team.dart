@@ -120,7 +120,7 @@ List<WorkerReport> teamReport({
       final r = report(w.id, w.name);
       r.roles.add(m.role);
       final revenue = roleRevenue(c, m.role, settings) / sameRole[m.role]!;
-      final pay = crewCost(c, m, w).amount;
+      final pay = crewCost(c, m, w, settings: settings).amount;
       final mat = c.supplies
           .where((u) => u.workerId == w.id)
           .fold(0.0, (a, u) => a + u.total);

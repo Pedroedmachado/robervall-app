@@ -1033,7 +1033,8 @@ enum ExpenseCategory {
 enum PayType {
   salario('Salário'),
   empreita('Empreita'),
-  porPeca('Por peça');
+  porPeca('Por peça'),
+  comissao('Comissão');
 
   const PayType(this.label);
   final String label;

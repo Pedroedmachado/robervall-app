@@ -1,6 +1,7 @@
 // Cálculos do financeiro: fluxo de caixa, gastos por categoria e lucro.
 import 'calc.dart';
 import 'models.dart';
+import 'team.dart';
 import 'stock.dart';
 
 /// Orçamento "fechado": aprovado, em reparo, concluído ou entregue.
@@ -206,13 +207,17 @@ class CrewCost {
   final double pieces;
   final double rate;
   final PayType payType;
-  const CrewCost(this.pieces, this.rate, this.payType);
 
-  /// Por peça: peças × valor; empreita: valor por carro; salário: 0 (já é
-  /// lançado como salário mensal).
+  /// Comissão: valor dos serviços da função dele neste carro (orçamento aprovado).
+  final double base;
+  const CrewCost(this.pieces, this.rate, this.payType, [this.base = 0]);
+
+  /// Por peça: peças × valor; empreita: valor por carro; comissão: % dos
+  /// serviços dele no carro; salário: 0 (já é lançado como salário mensal).
   double get amount => switch (payType) {
         PayType.porPeca => pieces * rate,
         PayType.empreita => pieces > 0 ? rate : 0,
+        PayType.comissao => (base * rate / 100 * 100).roundToDouble() / 100,
         PayType.salario => 0,
       };
 }
@@ -255,10 +260,42 @@ String autoPiecesHint(OutsourcedService role) => switch (role) {
 double crewPieces(Claim c, CrewMember m) =>
     m.pieces ?? (autoPieces(c, m.role)?.toDouble() ?? 1);
 
-CrewCost crewCost(Claim c, CrewMember m, Contact? worker) => CrewCost(
-    crewPieces(c, m),
-    m.rate ?? worker?.rate ?? 0,
-    worker?.payType ?? PayType.porPeca);
+CrewCost crewCost(Claim c, CrewMember m, Contact? worker, {Settings? settings}) {
+  final pay = worker?.payType ?? PayType.porPeca;
+  return CrewCost(
+      crewPieces(c, m),
+      m.rate ?? worker?.rate ?? 0,
+      pay,
+      pay == PayType.comissao ? commissionBase(c, m.role, settings ?? Settings()) : 0);
+}
+
+/// Base da comissão: valor dos serviços da função no orçamento aprovado.
+/// Pintor: só a mão de obra de pintura. Martelinho, polimento e outros (sem
+/// tipo de mão de obra próprio): toda a mão de obra e serviços aprovados
+/// do carro (sem peças nem material).
+double commissionBase(Claim c, OutsourcedService role, Settings s) {
+  switch (role) {
+    case OutsourcedService.martelinho:
+    case OutsourcedService.polimento:
+    case OutsourcedService.outros:
+      var t = 0.0;
+      for (final it in c.items) {
+        if (!it.approved) continue;
+        final v = itemValues(it, s);
+        t += v.labor + v.paintLabor + v.services + v.pieceLabor;
+      }
+      return t;
+    case OutsourcedService.pintura:
+      // pintor: mão de obra de pintura (o material de pintura não comissiona)
+      var mat = 0.0;
+      for (final it in c.items) {
+        if (it.approved && it.op != ItemOp.servico) mat += itemValues(it, s).paintMaterial;
+      }
+      return roleRevenue(c, role, s) - mat;
+    default:
+      return roleRevenue(c, role, s);
+  }
+}
 
 /// Lançamentos automáticos da equipe do carro.
 const crewAutoKey = 'equipe';
@@ -301,7 +338,7 @@ JobCost jobCost(
 }) {
   var crew = 0.0;
   for (final m in c.crew) {
-    crew += crewCost(c, m, contactById(m.contactId)).amount;
+    crew += crewCost(c, m, contactById(m.contactId), settings: s).amount;
   }
   var parts = 0.0, bought = 0.0;
   for (final it in c.items) {

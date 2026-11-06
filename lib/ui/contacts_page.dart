@@ -287,16 +287,21 @@ Future<Contact?> editContact(BuildContext context, Contact ct) {
                 PayType.porPeca => 'Valor por peça',
                 PayType.empreita => 'Valor da empreita (por carro)',
                 PayType.salario => 'Salário mensal',
+                PayType.comissao => 'Comissão (% dos serviços dele no carro)',
               },
-              prefix: 'R\$',
+              prefix: ct.payType == PayType.comissao ? null : 'R\$',
+              suffix: ct.payType == PayType.comissao ? '%' : null,
               value: ct.rate,
               onChanged: (n) => ct.rate = n,
             ),
             const SizedBox(height: 4),
             Text(
-              ct.payType == PayType.salario
-                  ? 'Salário entra no Financeiro como gasto fixo mensal.'
-                  : 'Esse valor é usado quando ele for escalado na equipe do carro, no orçamento.',
+              switch (ct.payType) {
+                PayType.salario => 'Salário entra no Financeiro como gasto fixo mensal.',
+                PayType.comissao =>
+                  'Ex.: 30% → em cada carro ele recebe 30% do valor dos serviços da função dele no orçamento aprovado (funilaria, pintura…).',
+                _ => 'Esse valor é usado quando ele for escalado na equipe do carro, no orçamento.',
+              },
               style: Theme.of(ctx).textTheme.bodySmall,
             ),
           ],

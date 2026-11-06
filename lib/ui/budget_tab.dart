@@ -1228,6 +1228,7 @@ String _rateLabel(PayType p) => switch (p) {
       PayType.porPeca => '/peça',
       PayType.empreita => '/carro',
       PayType.salario => '/mês',
+      PayType.comissao => '%',
     };
 
 /// Equipe do carro: pintor, funileiro, martelinho de ouro… e o custo de
@@ -1249,7 +1250,7 @@ class _CrewCard extends StatelessWidget {
     final rows = <Widget>[];
     for (final m in c.crew) {
       final w = store.contactById(m.contactId);
-      final cost = crewCost(c, m, w);
+      final cost = crewCost(c, m, w, settings: store.settings);
       total += cost.amount;
       final pieces = cost.pieces;
       final detail = w == null
@@ -1257,6 +1258,8 @@ class _CrewCard extends StatelessWidget {
           : switch (cost.payType) {
               PayType.salario => 'Assalariado: sem custo por carro',
               PayType.empreita => 'Empreita: ${money(cost.rate)} por carro',
+              PayType.comissao =>
+                'Comissão: ${num2(cost.rate)}% de ${money(cost.base)} (serviços dele)',
               PayType.porPeca =>
                 '${num2(pieces)} ${pieces == 1 ? 'peça' : 'peças'} × ${money(cost.rate)}',
             };
@@ -1375,7 +1378,7 @@ Future<void> _editCrewMember(BuildContext context, Claim c, CrewMember original,
         });
       final w = store.contactById(m.contactId);
       final auto = autoPieces(c, m.role);
-      final cost = crewCost(c, m, w);
+      final cost = crewCost(c, m, w, settings: store.settings);
       final payType = w?.payType ?? PayType.porPeca;
 
       Future<void> register() async {
@@ -1422,7 +1425,7 @@ Future<void> _editCrewMember(BuildContext context, Claim c, CrewMember original,
                     x.outsourced ? Icons.handshake_outlined : Icons.badge_outlined,
                     size: 18),
                 label: Text(
-                    '${x.name}${x.rate > 0 ? ' · ${money(x.rate)}${_rateLabel(x.payType)}' : ''}'),
+                    '${x.name}${x.rate > 0 ? ' · ${x.payType == PayType.comissao ? num2(x.rate) : money(x.rate)}${_rateLabel(x.payType)}' : ''}'),
                 selected: m.contactId == x.id,
                 onSelected: (_) => setS(() {
                   m.contactId = x.id;
@@ -1460,10 +1463,13 @@ Future<void> _editCrewMember(BuildContext context, Claim c, CrewMember original,
               ],
               Expanded(
                 child: NumField(
-                  label: payType == PayType.porPeca
-                      ? 'Valor por peça'
-                      : 'Valor por carro',
-                  prefix: 'R\$',
+                  label: switch (payType) {
+                    PayType.porPeca => 'Valor por peça',
+                    PayType.comissao => 'Comissão',
+                    _ => 'Valor por carro',
+                  },
+                  prefix: payType == PayType.comissao ? null : 'R\$',
+                  suffix: payType == PayType.comissao ? '%' : null,
                   value: m.rate ?? w?.rate ?? 0,
                   onChanged: (n) => setS(
                       () => m.rate = (w != null && n == w.rate) ? null : n),

@@ -320,7 +320,7 @@ class AppStore extends ChangeNotifier {
       for (final m in c.crew) {
         final w = contactById(m.contactId);
         if (w == null) continue;
-        final cost = crewCost(c, m, w);
+        final cost = crewCost(c, m, w, settings: settings);
         if (cost.amount <= 0) continue;
         final id = 'equipe-${c.id}-${m.id}';
         final found = existing.where((e) => e.id == id);

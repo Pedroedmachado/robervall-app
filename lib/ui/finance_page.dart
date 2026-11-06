@@ -834,7 +834,7 @@ Future<FinanceEntry?> editFinanceEntry(BuildContext context, FinanceEntry e,
             const SizedBox(height: 4),
             Wrap(spacing: 8, runSpacing: 4, children: [
               for (final pt in PayType.values)
-                if (!(e.outsourced && pt == PayType.salario))
+                if (!(e.outsourced && pt == PayType.salario) && pt != PayType.comissao)
                   ChoiceChip(
                     label: Text(pt.label),
                     selected: e.payType == pt,
