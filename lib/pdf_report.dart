@@ -232,7 +232,8 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
     c.vehicle.year,
   ].where((e) => e.trim().isNotEmpty).join(' - ').toUpperCase();
   final isThird = c.type == ClaimType.terceiro;
-  final lastNotes = c.timeline.reversed.take(4).toList();
+  // só mudanças de situação (insumos, PDFs e anotações internas não vão para o cliente)
+  final lastNotes = c.timeline.reversed.where((e) => e.isStatus).take(4).toList();
 
   doc.addPage(
     pw.MultiPage(
