@@ -550,6 +550,11 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
             ],
           ]),
         ),
+        // checklist de entrada logo depois da conclusão
+        if (!c.reception.isEmpty) ...[
+          band('Checklist de entrada'),
+          for (final l in receptionLines(c)) pw.Text(_t(l), style: normal),
+        ],
         // ---- observações gerais
         pw.SizedBox(height: 10),
         pw.Container(
@@ -570,11 +575,6 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
                 if (l.trim().isNotEmpty) pw.Text(_t('- ${l.trim()}'), style: normal),
           ]),
         ),
-        // checklist de entrada no fim do documento
-        if (!c.reception.isEmpty) ...[
-          band('Checklist de entrada'),
-          for (final l in receptionLines(c)) pw.Text(_t(l), style: normal),
-        ],
         if (images.isNotEmpty) ...[
           band('Fotos'),
           pw.Wrap(
