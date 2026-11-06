@@ -56,6 +56,7 @@ double _pieceShare(BudgetItem it, ItemValues v, bool paint) {
 
 /// Quanto os serviços de uma função valem no orçamento do carro.
 double roleRevenue(Claim c, OutsourcedService role, Settings s) {
+  s = s.forClaim(c);
   LaborType? labor = switch (role) {
     OutsourcedService.funilaria => LaborType.funilaria,
     OutsourcedService.mecanica => LaborType.mecanica,

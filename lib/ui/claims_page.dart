@@ -6,6 +6,7 @@ import '../models.dart';
 import '../modules.dart';
 import '../theme.dart';
 import 'claim_detail_page.dart';
+import 'quote_import_ui.dart' show importQuoteFromPdf;
 import 'widgets.dart';
 
 Future<void> openClaim(BuildContext context, Claim c) => Navigator.of(context)
@@ -96,6 +97,11 @@ class _ClaimsPageState extends State<ClaimsPage> {
       appBar: AppBar(
         title: const Text('Sinistros e orçamentos'),
         actions: [
+          IconButton(
+            tooltip: 'Importar orçamento da seguradora (PDF)',
+            icon: const Icon(Icons.upload_file),
+            onPressed: () => importQuoteFromPdf(context),
+          ),
           PopupMenuButton<_Sort>(
             tooltip: 'Ordenar',
             icon: const Icon(Icons.sort),
@@ -109,10 +115,24 @@ class _ClaimsPageState extends State<ClaimsPage> {
           const SizedBox(width: 8),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => createAndOpenClaim(context),
-        icon: const Icon(Icons.add),
-        label: const Text('Novo'),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton.small(
+            heroTag: 'importar-pdf',
+            tooltip: 'Importar PDF da seguradora',
+            onPressed: () => importQuoteFromPdf(context),
+            child: const Icon(Icons.picture_as_pdf_outlined),
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton.extended(
+            heroTag: 'novo-sinistro',
+            onPressed: () => createAndOpenClaim(context),
+            icon: const Icon(Icons.add),
+            label: const Text('Novo'),
+          ),
+        ],
       ),
       body: Column(
         children: [

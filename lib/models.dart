@@ -432,6 +432,18 @@ class Claim {
   /// Insumos usados na O.S. (lixa, massa, primer…), com custo.
   List<SupplyUse> supplies;
 
+  /// Valores da hora deste orçamento (ex.: os da seguradora). 0 = usa os da
+  /// oficina (Ajustes). Com valor próprio de pintura o material já vem junto.
+  double laborRate = 0;
+  double paintRate = 0;
+
+  /// Orçamento importado de PDF: sistema de origem (ex.: Cilia) e o arquivo
+  /// original guardado na pasta de fotos.
+  String sourceSystem = '';
+  String sourcePdf = '';
+
+  bool get hasOwnRates => laborRate > 0 || paintRate > 0;
+
   Claim({
     String? id,
     this.number = '',
@@ -531,6 +543,10 @@ class Claim {
             for (final e in stockTaken.entries) e.key: e.value.toJson()
           },
         'timeline': timeline.map((e) => e.toJson()).toList(),
+        if (laborRate > 0) 'laborRate': laborRate,
+        if (paintRate > 0) 'paintRate': paintRate,
+        if (sourceSystem.isNotEmpty) 'sourceSystem': sourceSystem,
+        if (sourcePdf.isNotEmpty) 'sourcePdf': sourcePdf,
       };
 
   factory Claim.fromJson(Map<String, dynamic> j) {
@@ -543,7 +559,7 @@ class Claim {
         ? v.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
         : <Map<String, dynamic>>[];
     final veh = j['vehicle'];
-    return Claim(
+    final claim = Claim(
       id: _s(j['id'], newId()),
       number: _s(j['number']),
       claimNumber: _s(j['claimNumber']),
@@ -599,6 +615,11 @@ class Claim {
                   StockUse.fromJson(Map<String, dynamic>.from(e.value as Map)),
       },
     );
+    return claim
+      ..laborRate = _d(j['laborRate'])
+      ..paintRate = _d(j['paintRate'])
+      ..sourceSystem = _s(j['sourceSystem'])
+      ..sourcePdf = _s(j['sourcePdf']);
   }
 }
 
@@ -834,6 +855,23 @@ class Settings {
             };
 
   double rateFor(LaborType t) => laborRates[t.name] ?? 0;
+
+  /// Os valores da hora valendo para um orçamento: os próprios do orçamento
+  /// (ex.: os da seguradora, importados do PDF) ou os da oficina.
+  Settings forClaim(Claim c) {
+    if (!c.hasOwnRates) return this;
+    final s = Settings.fromJson(toJson());
+    if (c.laborRate > 0) {
+      for (final t in LaborType.values) {
+        s.laborRates[t.name] = c.laborRate;
+      }
+    }
+    if (c.paintRate > 0) {
+      s.paintRate = c.paintRate;
+      s.paintMaterialRate = 0; // valor da seguradora já inclui o material
+    }
+    return s;
+  }
 
   Map<String, dynamic> toJson() => {
         'shopName': shopName,

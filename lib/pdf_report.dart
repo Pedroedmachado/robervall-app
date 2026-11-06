@@ -35,7 +35,7 @@ String _t(String s) {
 
 Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
     {bool withPhotos = true, bool withPrices = true}) async {
-  final s = store.settings;
+  final s = store.settings.forClaim(c);
   final totals = computeTotals(c, s);
   final doc = pw.Document(
     title: _t('Orçamento ${c.number}'),

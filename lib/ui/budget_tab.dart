@@ -9,6 +9,7 @@ import '../modules.dart';
 import '../store.dart';
 import '../theme.dart';
 import 'contacts_page.dart' show editContact;
+import 'quote_import_ui.dart' show openSourcePdf;
 import 'stock_page.dart';
 import '../stock.dart';
 import 'widgets.dart';
@@ -20,8 +21,8 @@ class BudgetTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
-    final s = store.settings;
     final c = claim;
+    final s = store.settings.forClaim(c);
     final totals = computeTotals(c, s);
 
     final actions = Wrap(
@@ -31,7 +32,7 @@ class BudgetTab extends StatelessWidget {
         if (gate.can(Perm.orcamentoEditar)) ...[
         FilledButton.icon(
           onPressed: () async {
-            final it = await editBudgetItem(context, null, vehicle: c.vehicle);
+            final it = await editBudgetItem(context, null, vehicle: c.vehicle, claim: c);
             if (it != null) {
               c.items.add(it);
               store.touch(c);
@@ -114,7 +115,7 @@ class BudgetTab extends StatelessWidget {
                 onComplements: () => offerComplements(context, c, it,
                     alwaysShow: true),
                 onTap: () async {
-                  final edited = await editBudgetItem(context, it, vehicle: c.vehicle);
+                  final edited = await editBudgetItem(context, it, vehicle: c.vehicle, claim: c);
                   if (edited != null) {
                     final becameReplace = it.op != ItemOp.troca &&
                         edited.op == ItemOp.troca;
@@ -190,6 +191,7 @@ class BudgetTab extends StatelessWidget {
             ),
           ),
         ]),
+        _OwnRates(claim: c),
         const Divider(height: 24),
         KeyValue('Subtotal', money(totals.subtotal)),
         if (totals.discount > 0)
@@ -485,9 +487,9 @@ class OpChip extends StatelessWidget {
 
 /// Abre o editor de item. Retorna uma cópia editada (ou novo item).
 Future<BudgetItem?> editBudgetItem(BuildContext context, BudgetItem? original,
-    {Vehicle? vehicle}) {
+    {Vehicle? vehicle, Claim? claim}) {
   final wide = isWide(context);
-  final editor = _ItemEditor(original: original, vehicle: vehicle);
+  final editor = _ItemEditor(original: original, vehicle: vehicle, claim: claim);
   if (wide) {
     return showDialog<BudgetItem>(
       context: context,
@@ -501,9 +503,10 @@ Future<BudgetItem?> editBudgetItem(BuildContext context, BudgetItem? original,
 }
 
 class _ItemEditor extends StatefulWidget {
-  const _ItemEditor({this.original, this.vehicle});
+  const _ItemEditor({this.original, this.vehicle, this.claim});
   final BudgetItem? original;
   final Vehicle? vehicle;
+  final Claim? claim;
 
   @override
   State<_ItemEditor> createState() => _ItemEditorState();
@@ -640,7 +643,9 @@ class _ItemEditorState extends State<_ItemEditor> {
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
-    final s = store.settings;
+    final s = widget.claim == null
+        ? store.settings
+        : store.settings.forClaim(widget.claim!);
     _applyOp();
     final v = itemValues(it, s);
     final isNew = widget.original == null;
@@ -1533,4 +1538,108 @@ Future<void> _editCrewMember(BuildContext context, Claim c, CrewMember original,
     c.timeline.add(TimelineEvent(text: '${r.role.worker}: $name'));
   }
   store.touch(c);
+}
+
+
+/// Valores da hora próprios do orçamento (ex.: os da seguradora, que vêm no
+/// PDF importado) e acesso ao PDF original.
+class _OwnRates extends StatelessWidget {
+  const _OwnRates({required this.claim});
+  final Claim claim;
+
+  @override
+  Widget build(BuildContext context) {
+    final store = StoreScope.of(context);
+    final c = claim;
+    final canEdit = gate.can(Perm.orcamentoEditar);
+    Future<void> edit() async {
+      var labor = c.laborRate > 0 ? c.laborRate : store.settings.rateFor(LaborType.funilaria);
+      var paint = c.paintRate > 0
+          ? c.paintRate
+          : store.settings.paintRate + store.settings.paintMaterialRate;
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Valores da hora deste orçamento'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text(
+                'Use quando a seguradora paga valores diferentes dos da oficina. Vale só para este orçamento.'),
+            const SizedBox(height: 12),
+            NumField(
+                label: 'Mão de obra (R\$/h)',
+                prefix: 'R\$',
+                value: labor,
+                onChanged: (v) => labor = v),
+            const SizedBox(height: 12),
+            NumField(
+                label: 'Pintura com material (R\$/h)',
+                prefix: 'R\$',
+                value: paint,
+                onChanged: (v) => paint = v),
+          ]),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancelar')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Salvar')),
+          ],
+        ),
+      );
+      if (ok != true) return;
+      c.laborRate = labor < 0 ? 0 : labor;
+      c.paintRate = paint < 0 ? 0 : paint;
+      store.touch(c);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        if (c.sourceSystem.isNotEmpty || c.sourcePdf.isNotEmpty)
+          Row(children: [
+            const Icon(Icons.picture_as_pdf_outlined, size: 18),
+            const SizedBox(width: 6),
+            Expanded(
+                child: Text(
+                    'Importado do PDF${c.sourceSystem.isEmpty ? '' : ' (${c.sourceSystem})'}')),
+            if (c.sourcePdf.isNotEmpty)
+              TextButton(
+                onPressed: () => openSourcePdf(context, store, c),
+                child: const Text('Ver PDF original'),
+              ),
+          ]),
+        if (c.hasOwnRates) ...[
+          Text('Valores da hora deste orçamento',
+              style: Theme.of(context).textTheme.labelLarge),
+          if (c.laborRate > 0) KeyValue('Mão de obra', '${money(c.laborRate)}/h'),
+          if (c.paintRate > 0)
+            KeyValue('Pintura (com material)', '${money(c.paintRate)}/h'),
+          if (canEdit)
+            Wrap(spacing: 8, children: [
+              TextButton.icon(
+                  onPressed: edit,
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: const Text('Alterar')),
+              TextButton.icon(
+                  onPressed: () {
+                    c.laborRate = 0;
+                    c.paintRate = 0;
+                    store.touch(c);
+                  },
+                  icon: const Icon(Icons.restart_alt, size: 18),
+                  label: const Text('Usar os da oficina')),
+            ]),
+        ] else if (canEdit)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: edit,
+              icon: const Icon(Icons.price_change_outlined, size: 18),
+              label: const Text('Valores da hora só deste orçamento'),
+            ),
+          ),
+      ]),
+    );
+  }
 }

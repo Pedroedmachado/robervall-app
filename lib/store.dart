@@ -282,6 +282,40 @@ class AppStore extends ChangeNotifier {
     return c;
   }
 
+  /// Cria um sinistro numerado a partir de um orçamento importado (PDF).
+  Future<Claim> addImportedClaim(Claim src, {Uint8List? pdf, String system = ''}) async {
+    final c = newClaim();
+    final j = src.toJson()
+      ..remove('id')
+      ..remove('number')
+      ..remove('timeline')
+      ..remove('createdAt')
+      ..remove('updatedAt');
+    final base = c.toJson()..addAll(j);
+    final n = Claim.fromJson(base);
+    n.timeline
+      ..clear()
+      ..addAll(c.timeline)
+      ..add(TimelineEvent(
+          text: 'Orçamento importado do PDF${system.isEmpty ? '' : ' ($system)'}'));
+    n.sourceSystem = system;
+    if (pdf != null && pdf.isNotEmpty) {
+      try {
+        await photosDir.create(recursive: true);
+        final name = '${n.id}_original_${newId()}.pdf';
+        await File('${photosDir.path}/$name').writeAsBytes(pdf, flush: true);
+        n.sourcePdf = name;
+      } catch (_) {
+        // sem o arquivo original o orçamento continua valendo
+      }
+    }
+    claims[claims.indexOf(c)] = n;
+    changed();
+    return n;
+  }
+
+  File sourcePdfFile(Claim c) => File('${photosDir.path}/${c.sourcePdf}');
+
   Claim? claimById(String id) {
     for (final c in claims) {
       if (c.id == id) return c;
@@ -564,6 +598,10 @@ class AppStore extends ChangeNotifier {
     gate.requirePerm(Perm.sinistroEditar);
     for (final p in c.photos) {
       final f = photoFile(p);
+      if (await f.exists()) await f.delete();
+    }
+    if (c.sourcePdf.isNotEmpty) {
+      final f = sourcePdfFile(c);
       if (await f.exists()) await f.delete();
     }
     claims.remove(c);

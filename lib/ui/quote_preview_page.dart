@@ -169,8 +169,8 @@ class _Paper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
-    final s = store.settings;
     final c = claim;
+    final s = store.settings.forClaim(c);
     final totals = computeTotals(c, s);
     final items = c.items.where((e) => e.approved).toList();
     final hasInsurer = c.type != ClaimType.particular;

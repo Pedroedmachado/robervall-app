@@ -97,6 +97,7 @@ class BudgetTotals {
 }
 
 BudgetTotals computeTotals(Claim c, Settings s, {bool onlyApproved = true}) {
+  s = s.forClaim(c);
   double parts = 0, labor = 0, paintLabor = 0, paintMat = 0, services = 0;
   double pieceLabor = 0;
   double lh = 0, ph = 0;
