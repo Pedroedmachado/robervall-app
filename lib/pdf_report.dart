@@ -129,7 +129,7 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
     final out = <String>[];
     if (it.op == ItemOp.troca) {
       out.add('T');
-      if (it.laborHours > 0) out.add('R&I${h(it.laborHours)}');
+      if (it.laborHours > 0) out.add('R${h(it.laborHours)}');
     } else if (it.hasLabor) {
       if (it.removeInstall && !it.alsoRepair) {
         out.add('R&I${h(it.laborHours)}');
@@ -168,7 +168,7 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
     addLabor('Mão de obra por peça', v.pieceLabor, 0);
     addLabor('Serviços', v.services, 0);
     if (it.op == ItemOp.troca) partsGross += it.price * (it.qty <= 0 ? 1 : it.qty);
-    if (it.op == ItemOp.troca || (it.removeInstall && !it.alsoRepair)) {
+    if (it.op != ItemOp.troca && it.removeInstall && !it.alsoRepair) {
       riValue += v.labor;
       riHours += hrs;
     } else {

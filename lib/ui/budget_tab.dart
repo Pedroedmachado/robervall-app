@@ -822,7 +822,7 @@ class _ItemEditorState extends State<_ItemEditor> {
             if (!_service && !it.perPiece)
               NumField(
                 label: _replace
-                    ? 'Horas de mão de obra (tirar e colocar)'
+                    ? 'Horas de reparação'
                     : (it.removeInstall
                         ? (it.alsoRepair
                             ? 'Horas de R&I + reparo'

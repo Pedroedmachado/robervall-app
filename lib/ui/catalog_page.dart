@@ -251,7 +251,7 @@ Future<CatalogItem?> _editCatalog(BuildContext context, CatalogItem it) {
         ],
         if (it.op != ItemOp.servico && !it.perPiece)
         NumField(
-            label: it.op == ItemOp.troca ? 'Horas de mão de obra (tirar e colocar)' : 'Horas de reparo',
+            label: it.op == ItemOp.troca ? 'Horas de reparação' : 'Horas de reparo',
             suffix: 'h',
             value: it.laborHours,
             onChanged: (n) => it.laborHours = n),
