@@ -325,7 +325,7 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
             if (withPrices)
               cells([
                 cell('Mão de obra (funilaria)', '${money(s.rateFor(LaborType.funilaria))}/h'),
-                cell('Pintura', '${money(s.paintRate)}/h + ${money(s.paintMaterialRate)} mat.'),
+                cell('Pintura', '${money(s.paintRate + s.paintMaterialRate)}/h'),
                 cell('Desconto', c.discountPct > 0 ? '${num2(c.discountPct)}%' : '-'),
                 cell(hasInsurer ? 'Franquia' : 'Atendimento',
                     hasInsurer ? (c.deductible > 0 ? money(c.deductible) : '-') : c.type.label),

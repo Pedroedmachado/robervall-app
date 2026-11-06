@@ -370,9 +370,8 @@ class _Paper extends StatelessWidget {
                             s.showHours
                                 ? 'Pintura (${num2(totals.paintHours)} h)'
                                 : 'Pintura',
-                            money(totals.paintLabor)),
-                        KeyValue('Material de pintura',
-                            money(totals.paintMaterial)),
+                            // material de pintura vai junto, sem linha própria
+                            money(totals.paintLabor + totals.paintMaterial)),
                         KeyValue('Serviços', money(totals.services)),
                         if (totals.pieceLabor > 0)
                           KeyValue('Mão de obra por peça',
