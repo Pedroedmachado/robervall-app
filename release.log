@@ -1,0 +1,91 @@
+dl:
+total 32
+drwxr-xr-x 8 runner runner 4096 Nov  6 23:53 .
+drwxr-xr-x 9 runner runner 4096 Nov  6 23:53 ..
+drwxr-xr-x 3 runner runner 4096 Nov  6 23:53 logs-android-linux
+drwxr-xr-x 2 runner runner 4096 Nov  6 23:53 logs-ios
+drwxr-xr-x 2 runner runner 4096 Nov  6 23:53 logs-windows
+drwxr-xr-x 2 runner runner 4096 Nov  6 23:53 out-android-linux
+drwxr-xr-x 2 runner runner 4096 Nov  6 23:53 out-ios
+drwxr-xr-x 2 runner runner 4096 Nov  6 23:53 out-windows
+
+dl/logs-android-linux:
+total 72
+drwxr-xr-x 3 runner runner  4096 Nov  6 23:53 .
+drwxr-xr-x 8 runner runner  4096 Nov  6 23:53 ..
+-rw-r--r-- 1 runner runner     2 Nov  6 23:53 android-linux.status
+-rw-r--r-- 1 runner runner  9004 Nov  6 23:53 android.log
+-rw-r--r-- 1 runner runner 36436 Nov  6 23:53 checks.log
+-rw-r--r-- 1 runner runner  2079 Nov  6 23:53 coverage.txt
+drwxr-xr-x 2 runner runner  4096 Nov  6 23:53 exemplo
+-rw-r--r-- 1 runner runner   114 Nov  6 23:53 linux.log
+
+dl/logs-android-linux/exemplo:
+total 3440
+drwxr-xr-x 2 runner runner   4096 Nov  6 23:53 .
+drwxr-xr-x 3 runner runner   4096 Nov  6 23:53 ..
+-rw-r--r-- 1 runner runner 101459 Nov  6 23:53 ajustes_licenca.png
+-rw-r--r-- 1 runner runner 143855 Nov  6 23:53 avarias_entrada.png
+-rw-r--r-- 1 runner runner  52042 Nov  6 23:53 cadastro_funcionario.png
+-rw-r--r-- 1 runner runner 142369 Nov  6 23:53 caixa_celular.png
+-rw-r--r-- 1 runner runner  91383 Nov  6 23:53 estoque_celular.png
+-rw-r--r-- 1 runner runner 110025 Nov  6 23:53 estoque_insumo.png
+-rw-r--r-- 1 runner runner 155806 Nov  6 23:53 estoque_peca.png
+-rw-r--r-- 1 runner runner 201461 Nov  6 23:53 financeiro_celular.png
+-rw-r--r-- 1 runner runner  81228 Nov  6 23:53 item_ri_r_p.png
+-rw-r--r-- 1 runner runner  71316 Nov  6 23:53 janela_complementos.png
+-rw-r--r-- 1 runner runner  75628 Nov  6 23:53 lancamento_por_peca.png
+-rw-r--r-- 1 runner runner  74014 Nov  6 23:53 lancamento_terceirizado.png
+-rw-r--r-- 1 runner runner 203601 Nov  6 23:53 liberar_lixa.png
+-rw-r--r-- 1 runner runner  41714 Nov  6 23:53 master_desafio.png
+-rw-r--r-- 1 runner runner 109106 Nov  6 23:53 nota_lida.png
+-rw-r--r-- 1 runner runner 123662 Nov  6 23:53 orcamento-exemplo-1.png
+-rw-r--r-- 1 runner runner  92690 Nov  6 23:53 orcamento-exemplo-2.png
+-rw-r--r-- 1 runner runner  14250 Nov  6 23:53 orcamento-exemplo.pdf
+-rw-r--r-- 1 runner runner 368318 Nov  6 23:53 orcamento_complementos.png
+-rw-r--r-- 1 runner runner 148419 Nov  6 23:53 os_gestor.png
+-rw-r--r-- 1 runner runner 101726 Nov  6 23:53 os_producao.png
+-rw-r--r-- 1 runner runner 299998 Nov  6 23:53 preview_celular.png
+-rw-r--r-- 1 runner runner 403984 Nov  6 23:53 preview_desktop.png
+-rw-r--r-- 1 runner runner 100933 Nov  6 23:53 usuarios.png
+-rw-r--r-- 1 runner runner  93114 Nov  6 23:53 vistoria-exemplo-1.png
+-rw-r--r-- 1 runner runner  48013 Nov  6 23:53 vistoria-exemplo-2.png
+-rw-r--r-- 1 runner runner  11151 Nov  6 23:53 vistoria-exemplo.pdf
+
+dl/logs-ios:
+total 20
+drwxr-xr-x 2 runner runner 4096 Nov  6 23:53 .
+drwxr-xr-x 8 runner runner 4096 Nov  6 23:53 ..
+-rw-r--r-- 1 runner runner 2395 Nov  6 23:53 ios-prep.log
+-rw-r--r-- 1 runner runner 1266 Nov  6 23:53 ios.log
+-rw-r--r-- 1 runner runner    2 Nov  6 23:53 ios.status
+
+dl/logs-windows:
+total 24
+drwxr-xr-x 2 runner runner 4096 Nov  6 23:53 .
+drwxr-xr-x 8 runner runner 4096 Nov  6 23:53 ..
+-rw-r--r-- 1 runner runner  609 Nov  6 23:53 updater-test.log
+-rw-r--r-- 1 runner runner 1054 Nov  6 23:53 windows-prep.log
+-rw-r--r-- 1 runner runner  128 Nov  6 23:53 windows.log
+-rw-r--r-- 1 runner runner    2 Nov  6 23:53 windows.status
+
+dl/out-android-linux:
+total 117176
+drwxr-xr-x 2 runner runner      4096 Nov  6 23:53 .
+drwxr-xr-x 8 runner runner      4096 Nov  6 23:53 ..
+-rw-r--r-- 1 runner runner 104461625 Nov  6 23:53 Funilar-android.apk
+-rw-r--r-- 1 runner runner  15514361 Nov  6 23:53 Funilar-linux-x64.tar.gz
+
+dl/out-ios:
+total 28500
+drwxr-xr-x 2 runner runner     4096 Nov  6 23:53 .
+drwxr-xr-x 8 runner runner     4096 Nov  6 23:53 ..
+-rw-r--r-- 1 runner runner 29172578 Nov  6 23:53 Funilar-ios-sem-assinatura.ipa
+
+dl/out-windows:
+total 17196
+drwxr-xr-x 2 runner runner     4096 Nov  6 23:53 .
+drwxr-xr-x 8 runner runner     4096 Nov  6 23:53 ..
+-rw-r--r-- 1 runner runner 17599252 Nov  6 23:53 Funilar-windows-x64.zip
+https://github.com/Pedroedmachado/robervall-app/releases/tag/v1.0.111
+RELEASE_OK

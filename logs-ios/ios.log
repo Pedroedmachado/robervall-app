@@ -1,0 +1,17 @@
+Warning: Building for device with codesigning disabled. You will have to manually codesign before deploying to device.
+Building br.com.funilar.funilar for device (ios-release)...
+The following plugins do not support Swift Package Manager for ios:
+  - google_mlkit_commons
+  - google_mlkit_text_recognition
+This will become an error in a future version of Flutter. Please contact the plugin maintainers to request Swift Package Manager adoption.
+The following target(s) do not support arm64 architecture, which is a requirement for Apple Silicon iOS 26+ simulators:
+  - GoogleMLKit (transitive dependency of Flutter plugin google_mlkit_text_recognition)
+  - MLImage (transitive dependency of Flutter plugin google_mlkit_commons)
+  - MLKitCommon (transitive dependency of Flutter plugin google_mlkit_text_recognition)
+  - MLKitVision (transitive dependency of Flutter plugin google_mlkit_commons)
+
+Please contact plugin maintainers to request arm64 support to continue to be able to use the plugin on a simulator.
+Running pod install...                                           1,843ms
+Running Xcode build...                                          
+Xcode build done.                                           164.1s
+✓ Built build/ios/iphoneos/Runner.app (79.5MB)
