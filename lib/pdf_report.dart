@@ -232,8 +232,6 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
     c.vehicle.year,
   ].where((e) => e.trim().isNotEmpty).join(' - ').toUpperCase();
   final isThird = c.type == ClaimType.terceiro;
-  // só mudanças de situação (insumos, PDFs e anotações internas não vão para o cliente)
-  final lastNotes = c.timeline.reversed.where((e) => e.isStatus).take(4).toList();
 
   doc.addPage(
     pw.MultiPage(
@@ -556,15 +554,6 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
             ],
           ]),
         ),
-        if (lastNotes.isNotEmpty) ...[
-          pw.SizedBox(height: 6),
-          pw.Text('Últimos registros', style: bold),
-          for (final e in lastNotes)
-            pw.Padding(
-              padding: const pw.EdgeInsets.only(top: 2),
-              child: pw.Text(_t('${dateTime(e.at)} - ${e.text}'), style: small),
-            ),
-        ],
         // ---- observações gerais
         pw.SizedBox(height: 10),
         pw.Container(
