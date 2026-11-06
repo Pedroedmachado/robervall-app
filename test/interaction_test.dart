@@ -392,6 +392,16 @@ void main() {
     await settle(t);
   });
 
+  itest('estoque: sem a opção "de clientes"', (t) async {
+    await start(t);
+    await tap(t, nav('Estoque'));
+    expect(find.text('De clientes'), findsNothing);
+    await tap(t, find.text('Adicionar'));
+    expect(find.text('Insumo'), findsWidgets);
+    expect(find.text('Do cliente'), findsNothing);
+    await settle(t);
+  });
+
   itest('troca: preço para o cliente e custo da peça para a oficina', (t) async {
     await start(t);
     final c = seed();
