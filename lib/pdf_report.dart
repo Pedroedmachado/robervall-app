@@ -359,10 +359,6 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
             ]),
           ],
         ],
-        if (!c.reception.isEmpty) ...[
-          band('Checklist de entrada'),
-          for (final l in receptionLines(c)) pw.Text(_t(l), style: normal),
-        ],
         // ---- itens
         band('Peças e serviços (${items.length} ${items.length == 1 ? 'item' : 'itens'})'),
         if (items.isEmpty)
@@ -574,6 +570,11 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
                 if (l.trim().isNotEmpty) pw.Text(_t('- ${l.trim()}'), style: normal),
           ]),
         ),
+        // checklist de entrada no fim do documento
+        if (!c.reception.isEmpty) ...[
+          band('Checklist de entrada'),
+          for (final l in receptionLines(c)) pw.Text(_t(l), style: normal),
+        ],
         if (images.isNotEmpty) ...[
           band('Fotos'),
           pw.Wrap(
