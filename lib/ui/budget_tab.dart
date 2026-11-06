@@ -1259,7 +1259,7 @@ class _CrewCard extends StatelessWidget {
               PayType.salario => 'Assalariado: sem custo por carro',
               PayType.empreita => 'Empreita: ${money(cost.rate)} por carro',
               PayType.comissao =>
-                'Comissão: ${num2(cost.rate)}% de ${money(cost.base)} (serviços dele)',
+                'Comissão: ${num2(cost.rate)}% de ${money(cost.base)} (valor aprovado)',
               PayType.porPeca =>
                 '${num2(pieces)} ${pieces == 1 ? 'peça' : 'peças'} × ${money(cost.rate)}',
             };

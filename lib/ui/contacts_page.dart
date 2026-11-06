@@ -287,7 +287,7 @@ Future<Contact?> editContact(BuildContext context, Contact ct) {
                 PayType.porPeca => 'Valor por peça',
                 PayType.empreita => 'Valor da empreita (por carro)',
                 PayType.salario => 'Salário mensal',
-                PayType.comissao => 'Comissão (% dos serviços dele no carro)',
+                PayType.comissao => 'Comissão (% do valor aprovado do carro)',
               },
               prefix: ct.payType == PayType.comissao ? null : 'R\$',
               suffix: ct.payType == PayType.comissao ? '%' : null,
@@ -299,7 +299,7 @@ Future<Contact?> editContact(BuildContext context, Contact ct) {
               switch (ct.payType) {
                 PayType.salario => 'Salário entra no Financeiro como gasto fixo mensal.',
                 PayType.comissao =>
-                  'Ex.: 30% → em cada carro ele recebe 30% do valor dos serviços da função dele no orçamento aprovado (funilaria, pintura…).',
+                  'Ex.: 5% → em cada carro que ele trabalhar, recebe 5% do valor aprovado (faturamento) do orçamento.',
                 _ => 'Esse valor é usado quando ele for escalado na equipe do carro, no orçamento.',
               },
               style: Theme.of(ctx).textTheme.bodySmall,

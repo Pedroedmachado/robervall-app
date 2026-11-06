@@ -1,7 +1,6 @@
 // Cálculos do financeiro: fluxo de caixa, gastos por categoria e lucro.
 import 'calc.dart';
 import 'models.dart';
-import 'team.dart';
 import 'stock.dart';
 
 /// Orçamento "fechado": aprovado, em reparo, concluído ou entregue.
@@ -269,33 +268,9 @@ CrewCost crewCost(Claim c, CrewMember m, Contact? worker, {Settings? settings}) 
       pay == PayType.comissao ? commissionBase(c, m.role, settings ?? Settings()) : 0);
 }
 
-/// Base da comissão: valor dos serviços da função no orçamento aprovado.
-/// Pintor: só a mão de obra de pintura. Martelinho, polimento e outros (sem
-/// tipo de mão de obra próprio): toda a mão de obra e serviços aprovados
-/// do carro (sem peças nem material).
-double commissionBase(Claim c, OutsourcedService role, Settings s) {
-  switch (role) {
-    case OutsourcedService.martelinho:
-    case OutsourcedService.polimento:
-    case OutsourcedService.outros:
-      var t = 0.0;
-      for (final it in c.items) {
-        if (!it.approved) continue;
-        final v = itemValues(it, s);
-        t += v.labor + v.paintLabor + v.services + v.pieceLabor;
-      }
-      return t;
-    case OutsourcedService.pintura:
-      // pintor: mão de obra de pintura (o material de pintura não comissiona)
-      var mat = 0.0;
-      for (final it in c.items) {
-        if (it.approved && it.op != ItemOp.servico) mat += itemValues(it, s).paintMaterial;
-      }
-      return roleRevenue(c, role, s) - mat;
-    default:
-      return roleRevenue(c, role, s);
-  }
-}
+/// Base da comissão: o valor aprovado (faturamento) do carro.
+double commissionBase(Claim c, OutsourcedService role, Settings s) =>
+    computeTotals(c, s).total;
 
 /// Lançamentos automáticos da equipe do carro.
 const crewAutoKey = 'equipe';
