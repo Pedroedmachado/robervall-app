@@ -307,12 +307,32 @@ class _BackupCardState extends State<_BackupCard> {
 
   Future<void> _import() async {
     final store = StoreScope.read(context);
-    final file = await openFile(acceptedTypeGroups: const [
-      XTypeGroup(
-          label: 'Backup',
+    XFile? file;
+    try {
+      // cada plataforma filtra de um jeito: extensão (PC), tipo MIME (Android)
+      // e identificador de tipo (iPhone). Arquivos vindos do WhatsApp/Drive às
+      // vezes chegam como "dados genéricos", então esses também são aceitos.
+      file = await openFile(acceptedTypeGroups: const [
+        XTypeGroup(
+          label: 'Backup (.zip)',
           extensions: ['zip'],
-          mimeTypes: ['application/zip', 'application/x-zip-compressed'])
-    ]);
+          mimeTypes: [
+            'application/zip',
+            'application/x-zip-compressed',
+            'application/x-zip',
+            'application/octet-stream',
+          ],
+          uniformTypeIdentifiers: [
+            'public.zip-archive',
+            'com.pkware.zip-archive',
+            'public.data',
+          ],
+        ),
+      ]);
+    } catch (e) {
+      if (mounted) toast(context, 'Não foi possível abrir o seletor de arquivos: $e');
+      return;
+    }
     if (file == null || !mounted) return;
     final ok = await confirm(
       context,
@@ -356,7 +376,7 @@ class _BackupCardState extends State<_BackupCard> {
           OutlinedButton.icon(
             onPressed: _busy ? null : _import,
             icon: const Icon(Icons.restore),
-            label: const Text('Restaurar backup'),
+            label: const Text('Importar backup'),
           ),
           if (_busy)
             const Padding(
