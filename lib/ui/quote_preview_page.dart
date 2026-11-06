@@ -175,51 +175,86 @@ class _Paper extends StatelessWidget {
     final items = c.items.where((e) => e.approved).toList();
     final hasInsurer = c.type != ClaimType.particular;
     const primary = brandSeed;
+    const light = Color(0xFFE8F0F3);
     final small = TextStyle(fontSize: 12, color: Colors.grey.shade700);
+    final statusColor = switch (c.status) {
+      ClaimStatus.aprovado || ClaimStatus.emReparo => const Color(0xFF1B7F5B),
+      ClaimStatus.concluido || ClaimStatus.entregue => primary,
+      ClaimStatus.cancelado => Colors.red.shade700,
+      ClaimStatus.aguardandoAprovacao => Colors.orange.shade700,
+      _ => Colors.grey.shade700,
+    };
 
-    Widget box(String title, List<Widget> children) => Container(
+    // ---- mesmas contas do PDF
+    final labor = <String, (double, double)>{};
+    void addLabor(String k, double v, double h) {
+      if (v <= 0 && h <= 0) return;
+      final o = labor[k] ?? (0.0, 0.0);
+      labor[k] = (o.$1 + v, o.$2 + h);
+    }
+
+    var partsGross = 0.0, repairValue = 0.0, repairHours = 0.0, riValue = 0.0, riHours = 0.0;
+    for (final it in items) {
+      final v = itemValues(it, s);
+      final hrs = it.perPiece ? 0.0 : it.laborHours;
+      addLabor(it.laborType.label, v.labor, hrs);
+      addLabor('Pintura', v.paintLabor + v.paintMaterial, it.perPiece ? 0 : it.paintHours);
+      addLabor('Mão de obra por peça', v.pieceLabor, 0);
+      addLabor('Serviços', v.services, 0);
+      if (it.op == ItemOp.troca) partsGross += it.price * (it.qty <= 0 ? 1 : it.qty);
+      if (it.op != ItemOp.troca && it.removeInstall && !it.alsoRepair) {
+        riValue += v.labor;
+        riHours += hrs;
+      } else {
+        repairValue += v.labor;
+        repairHours += hrs;
+      }
+    }
+    final laborTotal = labor.values.fold(0.0, (a, e) => a + e.$1);
+    final laborList = labor.entries.toList()..sort((a, b) => b.value.$1.compareTo(a.value.$1));
+    const laborColors = [
+      Color(0xFF2F80ED), Color(0xFF27AE60), Color(0xFFE74C3C), Color(0xFFF2994A),
+      Color(0xFF9B51E0), Color(0xFF56CCF2), Color(0xFF6FCF97), Color(0xFFBB6BD9), Color(0xFF828282),
+    ];
+
+    Widget band(String title) => Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade300),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title,
-                  style: const TextStyle(
-                      color: primary, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 6),
-              ...children,
-            ],
+          margin: const EdgeInsets.only(top: 16, bottom: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(color: primary, borderRadius: BorderRadius.circular(8)),
+          child: Text(title.toUpperCase(),
+              style: const TextStyle(
+                  color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: .3)),
+        );
+
+    Widget cell(String label, String value, {double width = 150}) => SizedBox(
+          width: width,
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 10, right: 8),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label,
+                  style: TextStyle(
+                      fontSize: 11, fontWeight: FontWeight.w700, color: Colors.grey.shade700)),
+              Text(value.trim().isEmpty ? '—' : value.trim()),
+            ]),
           ),
         );
 
-    Widget kv(String k, String v) => Padding(
-          padding: const EdgeInsets.only(bottom: 2),
-          child: Text.rich(TextSpan(children: [
-            TextSpan(
-                text: '$k: ',
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-            TextSpan(text: v.isEmpty ? '—' : v),
-          ])),
+    Widget sumBox(String title, String value, String hours) => Container(
+          width: 128,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(color: light, borderRadius: BorderRadius.circular(6)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: small.copyWith(fontSize: 11)),
+            Text(value, style: const TextStyle(fontWeight: FontWeight.w800)),
+            if (hours.isNotEmpty) Text(hours, style: small.copyWith(fontSize: 11)),
+          ]),
         );
 
-    Widget pair(Widget a, Widget b) => LayoutBuilder(
-          builder: (context, cons) => cons.maxWidth < 520
-              ? Column(children: [a, const SizedBox(height: 8), b])
-              : IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(child: a),
-                      const SizedBox(width: 8),
-                      Expanded(child: b),
-                    ],
-                  ),
-                ),
-        );
+    final vehicleTitle = [c.vehicle.brand, c.vehicle.model, c.vehicle.year]
+        .where((e) => e.trim().isNotEmpty)
+        .join(' - ')
+        .toUpperCase();
 
     return Material(
       color: Colors.white,
@@ -243,18 +278,11 @@ class _Paper extends StatelessWidget {
                     children: [
                       Text(s.shopName,
                           style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                              color: primary)),
-                      if (s.shopDoc.isNotEmpty)
-                        Text('CNPJ/CPF: ${s.shopDoc}', style: small),
-                      if (s.shopAddress.isNotEmpty)
-                        Text(s.shopAddress, style: small),
+                              fontSize: 20, fontWeight: FontWeight.w800, color: primary)),
+                      if (s.shopDoc.isNotEmpty) Text('CNPJ/CPF: ${s.shopDoc}', style: small),
+                      if (s.shopAddress.isNotEmpty) Text(s.shopAddress, style: small),
                       if (s.shopPhone.isNotEmpty || s.shopEmail.isNotEmpty)
-                        Text(
-                            [s.shopPhone, s.shopEmail]
-                                .where((e) => e.isNotEmpty)
-                                .join(' · '),
+                        Text([s.shopPhone, s.shopEmail].where((e) => e.isNotEmpty).join(' · '),
                             style: small),
                     ],
                   ),
@@ -262,159 +290,221 @@ class _Paper extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(withPrices ? 'ORÇAMENTO' : 'LAUDO DE VISTORIA',
-                          style: const TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w800)),
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
                       Text('Nº ${c.number}',
                           style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                              color: primary)),
-                      Text('Emissão: ${date(DateTime.now())}', style: small),
-                      Text('Status: ${c.status.label}', style: small),
+                              fontSize: 15, fontWeight: FontWeight.w800, color: primary)),
+                      Text('Emitido em ${dateTime(DateTime.now())}', style: small),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                            color: statusColor, borderRadius: BorderRadius.circular(10)),
+                        child: Text(c.status.label,
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                      ),
                     ],
                   ),
                 ],
               ),
               const Divider(color: primary, thickness: 1.5, height: 24),
-              pair(
-                box('Cliente', [
-                  kv('Nome', c.customerName),
-                  kv('Telefone', c.customerPhone),
-                  kv('CPF/CNPJ', c.customerDoc),
-                  if (c.customerEmail.isNotEmpty) kv('E-mail', c.customerEmail),
-                  kv('Atendimento', c.type.label),
-                ]),
-                box('Veículo', [
-                  kv('Placa', c.vehicle.plate),
-                  kv('Veículo', c.vehicle.title),
-                  kv('Cor', c.vehicle.color),
-                  kv('Chassi', c.vehicle.chassis),
-                  kv('Km', c.vehicle.km),
-                  if (c.vehicle.fipeValue > 0)
-                    kv('FIPE', money(c.vehicle.fipeValue)),
+              if (vehicleTitle.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(vehicleTitle,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                ),
+              // ficha
+              Container(
+                padding: const EdgeInsets.fromLTRB(12, 12, 4, 2),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Wrap(children: [
+                  cell('Placa', c.vehicle.plate),
+                  cell('Cor', c.vehicle.color),
+                  cell('Chassi', c.vehicle.chassis, width: 190),
+                  cell('Quilometragem', c.vehicle.km),
+                  cell('Combustível', c.vehicle.fuel),
+                  if (hasInsurer) ...[
+                    cell('Seguradora', c.insurerName),
+                    cell('Sinistro', c.claimNumber),
+                    cell('Apólice', c.policyNumber),
+                    cell('Regulador / perito', c.regulatorName),
+                    cell('Data do sinistro', date(c.accidentDate)),
+                  ],
+                  cell(c.type == ClaimType.terceiro ? 'Terceiro' : 'Cliente', c.customerName, width: 190),
+                  cell('CPF/CNPJ', c.customerDoc),
+                  cell('Telefone', c.customerPhone),
+                  cell('E-mail', c.customerEmail, width: 190),
+                  if (withPrices) ...[
+                    cell('Mão de obra (funilaria)', '${money(s.rateFor(LaborType.funilaria))}/h'),
+                    cell('Pintura', '${money(s.paintRate + s.paintMaterialRate)}/h'),
+                    cell('Desconto', c.discountPct > 0 ? '${num2(c.discountPct)}%' : '—'),
+                    if (hasInsurer)
+                      cell('Franquia', c.deductible > 0 ? money(c.deductible) : '—')
+                    else
+                      cell('Atendimento', c.type.label),
+                    cell(c.vehicle.fipeCode.isEmpty ? 'Valor FIPE' : 'Valor FIPE (${c.vehicle.fipeCode})',
+                        c.vehicle.fipeValue > 0 ? money(c.vehicle.fipeValue) : '—'),
+                  ],
                 ]),
               ),
-              if (hasInsurer) ...[
+              if (items.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                box('Seguradora / regulação', [
-                  kv('Seguradora', c.insurerName),
-                  kv('Sinistro', c.claimNumber),
-                  kv('Apólice', c.policyNumber),
-                  kv('Regulador', c.regulatorName),
-                  kv('Data do sinistro', date(c.accidentDate)),
-                  kv(
-                      'Aprovação',
-                      c.approvedAt == null
-                          ? 'pendente'
-                          : '${date(c.approvedAt)}${c.approvedBy.isEmpty ? '' : ' por ${c.approvedBy}'}'),
-                ]),
+                _Legend(items: items, withPrices: withPrices, hours: s.showHours),
               ],
               if (c.description.trim().isNotEmpty) ...[
-                const SizedBox(height: 8),
-                box('Relato', [Text(c.description.trim())]),
+                band('Relato'),
+                Text(c.description.trim()),
               ],
-              if (c.damages.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                box('Avarias constatadas', [
+              if (c.damages.isNotEmpty || c.preDamages.isNotEmpty) ...[
+                band('Avarias'),
+                if (c.damages.isNotEmpty)
                   Text(c.damages.entries
                       .map((e) =>
                           '${regionById(e.key)?.label ?? e.key} (${(severityLabels[e.value] ?? '').toLowerCase()})')
                       .join(' · ')),
-                ]),
-              ],
-              if (c.preDamages.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                box('Avarias pré-existentes (já estavam no veículo)', [
+                if (c.preDamages.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  const Text('Pré-existentes (já estavam no veículo na entrada):',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
                   Text(c.preDamages.entries
                       .map((e) =>
                           '${regionById(e.key)?.label ?? e.key} (${(severityLabels[e.value] ?? '').toLowerCase()})')
                       .join(' · ')),
-                ]),
+                ],
               ],
-              if (!c.reception.isEmpty) ...[
-                const SizedBox(height: 8),
-                box('Checklist de entrada',
-                    [for (final l in receptionLines(c)) Text(l)]),
-              ],
-              const SizedBox(height: 16),
-              const Text('Peças e serviços',
-                  style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: primary)),
-              const SizedBox(height: 6),
+              band('Peças e serviços (${items.length} ${items.length == 1 ? 'item' : 'itens'})'),
               if (items.isEmpty)
                 const Text('Nenhum item lançado.')
               else
                 _ItemsTable(items: items, settings: s, withPrices: withPrices),
+              if (withPrices && items.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(spacing: 6, runSpacing: 6, children: [
+                  sumBox('Troca / R&I', money(riValue), s.showHours ? '${num2(riHours)} h' : ''),
+                  sumBox('Reparação', money(repairValue), s.showHours ? '${num2(repairHours)} h' : ''),
+                  sumBox('Pintura', money(totals.paintLabor + totals.paintMaterial),
+                      s.showHours ? '${num2(totals.paintHours)} h' : ''),
+                  if (totals.pieceLabor > 0) sumBox('M.O. por peça', money(totals.pieceLabor), ''),
+                  sumBox('Serviços', money(totals.services), ''),
+                  sumBox('Peças', money(totals.parts), ''),
+                  sumBox('Total', money(totals.total), ''),
+                ]),
+              ],
               if (withPrices) ...[
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Container(
-                    constraints: const BoxConstraints(maxWidth: 340),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE8F0F3),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Column(
-                      children: [
-                        KeyValue('Peças', money(totals.parts)),
-                        KeyValue(
-                            s.showHours
-                                ? 'Mão de obra (${num2(totals.laborHours)} h)'
-                                : 'Mão de obra',
-                            money(totals.labor)),
-                        KeyValue(
-                            s.showHours
-                                ? 'Pintura (${num2(totals.paintHours)} h)'
-                                : 'Pintura',
-                            // material de pintura vai junto, sem linha própria
-                            money(totals.paintLabor + totals.paintMaterial)),
-                        KeyValue('Serviços', money(totals.services)),
-                        if (totals.pieceLabor > 0)
-                          KeyValue('Mão de obra por peça',
-                              money(totals.pieceLabor)),
-                        if (totals.extra > 0)
-                          KeyValue('Outros custos', money(totals.extra)),
-                        if (totals.discount > 0)
-                          KeyValue('Desconto (${num2(c.discountPct)}%)',
-                              '- ${money(totals.discount)}'),
-                        const Divider(),
-                        KeyValue('TOTAL', money(totals.total),
-                            bold: true, color: primary),
-                        if (c.type == ClaimType.seguradora ||
-                            c.type == ClaimType.terceiro) ...[
-                          if (c.type == ClaimType.seguradora)
-                            KeyValue('Franquia (cliente)',
-                                money(totals.deductible)),
-                          KeyValue('Seguradora', money(totals.insurerPays)),
-                        ],
-                      ],
-                    ),
+                band('Resumo geral'),
+                Wrap(spacing: 20, runSpacing: 16, children: [
+                  SizedBox(
+                    width: 300,
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const Text('Mão de obra', style: TextStyle(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 6),
+                      if (laborTotal > 0)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: Row(children: [
+                            for (final (i, e) in laborList.indexed)
+                              Expanded(
+                                flex: (e.value.$1 / laborTotal * 1000).round().clamp(1, 1000),
+                                child: Container(height: 10, color: laborColors[i % laborColors.length]),
+                              ),
+                          ]),
+                        ),
+                      const SizedBox(height: 6),
+                      for (final (i, e) in laborList.indexed)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 1.5),
+                          child: Row(children: [
+                            Icon(Icons.circle, size: 9, color: laborColors[i % laborColors.length]),
+                            const SizedBox(width: 6),
+                            Expanded(
+                                child: Text(
+                                    '${e.key} (${num2(laborTotal > 0 ? e.value.$1 / laborTotal * 100 : 0)}%)')),
+                            if (s.showHours && e.value.$2 > 0)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: Text('${num2(e.value.$2)} h', style: small),
+                              ),
+                            Text(money(e.value.$1)),
+                          ]),
+                        ),
+                      if (laborList.isEmpty) const Text('—'),
+                    ]),
                   ),
+                  SizedBox(
+                    width: 220,
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const Text('Peças', style: TextStyle(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 6),
+                      KeyValue('Bruto de peças', money(partsGross)),
+                      KeyValue('Descontos',
+                          partsGross - totals.parts > 0.004 ? '- ${money(partsGross - totals.parts)}' : money(0)),
+                      KeyValue('Líquido de peças', money(totals.parts)),
+                    ]),
+                  ),
+                  Container(
+                    width: 280,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: light, borderRadius: BorderRadius.circular(6)),
+                    child: Column(children: [
+                      KeyValue('Peças', money(totals.parts)),
+                      KeyValue('Mão de obra e serviços', money(laborTotal)),
+                      if (totals.extra > 0) KeyValue('Outros custos', money(totals.extra)),
+                      if (totals.discount > 0)
+                        KeyValue('Desconto (${num2(c.discountPct)}%)', '- ${money(totals.discount)}'),
+                      const Divider(),
+                      KeyValue('TOTAL GERAL', money(totals.total), bold: true, color: primary),
+                      if (c.type == ClaimType.seguradora || c.type == ClaimType.terceiro) ...[
+                        if (c.type == ClaimType.seguradora)
+                          KeyValue('Franquia (cliente)', money(totals.deductible)),
+                        KeyValue('Seguradora', money(totals.insurerPays)),
+                      ],
+                    ]),
+                  ),
+                ]),
+              ],
+              band('Conclusão'),
+              Text.rich(TextSpan(children: [
+                const TextSpan(text: 'Situação: ', style: TextStyle(fontWeight: FontWeight.w700)),
+                TextSpan(text: c.status.label),
+                if (c.approvedAt != null) ...[
+                  const TextSpan(text: '  ·  Aprovado em: ', style: TextStyle(fontWeight: FontWeight.w700)),
+                  TextSpan(
+                      text:
+                          '${dateTime(c.approvedAt)}${c.approvedBy.isEmpty ? '' : ' por ${c.approvedBy}'}'),
+                ],
+                if (c.dueDate != null) ...[
+                  const TextSpan(text: '  ·  Previsão de entrega: ', style: TextStyle(fontWeight: FontWeight.w700)),
+                  TextSpan(text: date(c.dueDate)),
+                ],
+              ])),
+              if (!c.reception.isEmpty) ...[
+                band('Checklist de entrada'),
+                for (final l in receptionLines(c)) Text(l),
+              ],
+              const SizedBox(height: 14),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF4C4),
+                  border: Border.all(color: const Color(0xFFE9C46A)),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                const SizedBox(height: 10),
-                if (c.dueDate != null)
-                  Text('Previsão de entrega: ${date(c.dueDate)}'),
-                Text('Validade do orçamento: ${s.budgetValidityDays} dias'),
-              ],
-              if (items.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                _Legend(
-                    items: items,
-                    withPrices: withPrices,
-                    hours: s.showHours),
-              ],
-              if (withPhotos) ...[
-                const SizedBox(height: 16),
-                const Text('Fotos',
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: primary)),
-                const SizedBox(height: 6),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Observações gerais', style: TextStyle(fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 4),
+                  if (withPrices) Text('• Validade do orçamento: ${s.budgetValidityDays} dias.'),
+                  for (final l in s.budgetFooter.trim().split('\n'))
+                    if (l.trim().isNotEmpty) Text('• ${l.trim()}'),
+                ]),
+              ),
+              if (withPhotos && c.photos.isNotEmpty) ...[
+                band('Fotos'),
                 GridView.count(
                   crossAxisCount: 3,
                   shrinkWrap: true,
@@ -429,24 +519,17 @@ class _Paper extends StatelessWidget {
                           store.photoFile(p),
                           fit: BoxFit.cover,
                           cacheWidth: 300,
-                          errorBuilder: (_, __, ___) =>
-                              const Icon(Icons.broken_image),
+                          errorBuilder: (_, __, ___) => const Icon(Icons.broken_image),
                         ),
                       ),
                   ],
                 ),
               ],
-              if (s.budgetFooter.trim().isNotEmpty) ...[
-                const SizedBox(height: 16),
-                Text(s.budgetFooter.trim(), style: small),
-              ],
               const SizedBox(height: 40),
               Row(children: [
                 Expanded(child: _Signature(s.shopName)),
                 const SizedBox(width: 32),
-                Expanded(
-                    child: _Signature(
-                        c.customerName.isEmpty ? 'Cliente' : c.customerName)),
+                Expanded(child: _Signature(c.customerName.isEmpty ? 'Cliente' : c.customerName)),
               ]),
             ],
           ),
@@ -655,6 +738,10 @@ class _Legend extends StatelessWidget {
       if (withPrices && !hours)
         ('M.O.', 'mão de obra: reparo, remoção e instalação e pintura'),
       if (withPrices) ('Peça/serv.', 'valor da peça nova ou do serviço'),
+      ('PG', 'peça genuína'),
+      ('PO', 'peça original'),
+      ('PC', 'peça compatível'),
+      ('PU', 'peça usada/reuso'),
     ];
     return Container(
       width: double.infinity,
