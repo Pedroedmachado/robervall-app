@@ -92,4 +92,19 @@ void main() {
     expect(store.stock, isEmpty);
     expect(money(10), 'R\$ 10,00');
   });
+
+  test('custo da peça comprada entra no custo real da O.S.', () {
+    final s = Settings();
+    final c = Claim(number: 'X')
+      ..items = [
+        BudgetItem(description: 'Porta', op: ItemOp.troca, price: 1500, partCost: 1200),
+        BudgetItem(description: 'Farol', op: ItemOp.troca, price: 400, partCost: 250, qty: 2),
+        BudgetItem(description: 'Grade', op: ItemOp.troca, price: 100, partCost: 70, approved: false),
+      ];
+    final j = jobCost(c, s, entries: const [], contactById: (_) => null, stockById: (_) => null);
+    expect(j.boughtParts, 1200 + 500);
+    expect(j.total, 1700);
+    expect(j.profit, j.approved - 1700);
+    expect(BudgetItem.fromJson(c.items.first.toJson()).partCost, 1200);
+  });
 }

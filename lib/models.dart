@@ -207,6 +207,9 @@ class BudgetItem {
   /// Com R&I: a peça também é reparada (desmonta, recupera e monta).
   bool alsoRepair;
 
+  /// Troca: quanto a oficina paga pela peça (custo, entra no custo da O.S.).
+  double partCost;
+
   /// Peça que sai do estoque da oficina (vazio = comprar).
   String stockId;
 
@@ -251,6 +254,7 @@ class BudgetItem {
     this.note = '',
     this.removeInstall = false,
     this.alsoRepair = false,
+    this.partCost = 0,
     this.stockId = '',
     this.done = false,
     this.parentId = '',
@@ -280,6 +284,7 @@ class BudgetItem {
         'note': note,
         'ri': removeInstall,
         if (alsoRepair) 'rr': true,
+        if (partCost > 0) 'cost': partCost,
         if (stockId.isNotEmpty) 'stock': stockId,
         if (done) 'done': true,
         'parent': parentId,
@@ -310,6 +315,7 @@ class BudgetItem {
         note: _s(j['note']),
         removeInstall: j['ri'] == true,
         alsoRepair: j['rr'] == true,
+        partCost: _d(j['cost']),
         stockId: _s(j['stock']),
         done: j['done'] == true,
         parentId: _s(j['parent']),

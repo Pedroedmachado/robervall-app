@@ -302,6 +302,8 @@ class _ItemRow extends StatelessWidget {
     final extra = <String>[
       if (it.op == ItemOp.troca)
         '${qty == 1 ? '' : '${num2(qty)} × '}${money(it.price)}',
+      if (it.op == ItemOp.troca && it.partCost > 0 && gate.can(Perm.valoresVer))
+        'custo ${money(it.partCost)}',
       if (it.op == ItemOp.servico) money(it.price * qty),
       if (it.op == ItemOp.troca && it.origin != PartOrigin.nenhuma)
         it.origin.label,
@@ -659,6 +661,7 @@ class _ItemEditorState extends State<_ItemEditor> {
                   return;
                 }
                 _applyOp();
+                if (!_replace || _service) it.partCost = 0;
                 if (it.perPiece) {
                   // por peça: valor fechado, sem horas
                   it.laborHours = 0;
@@ -791,10 +794,17 @@ class _ItemEditorState extends State<_ItemEditor> {
           FieldGrid(maxColumns: 2, children: [
             if (showPrice)
               NumField(
-                label: _service ? 'Valor do serviço' : 'Preço unitário da peça',
+                label: _service ? 'Valor do serviço' : 'Preço unitário da peça (venda)',
                 prefix: 'R\$',
                 value: it.price,
                 onChanged: (n) => setState(() => it.price = n),
+              ),
+            if (_replace && !_service)
+              NumField(
+                label: 'Preço unitário da peça (custo)',
+                prefix: 'R\$',
+                value: it.partCost,
+                onChanged: (n) => setState(() => it.partCost = n),
               ),
             if (showPrice)
               NumField(
@@ -903,6 +913,11 @@ class _ItemEditorState extends State<_ItemEditor> {
           ]),
           const SizedBox(height: 8),
           if (v.parts > 0) KeyValue('Peça', money(v.parts)),
+          if (_replace && it.partCost > 0) ...[
+            KeyValue('Custo da peça', money(it.partCost * (it.qty <= 0 ? 1 : it.qty))),
+            KeyValue('Ganho na peça',
+                money(v.parts - it.partCost * (it.qty <= 0 ? 1 : it.qty))),
+          ],
           if (v.services > 0) KeyValue('Serviço', money(v.services)),
           if (v.labor > 0) KeyValue('Mão de obra', money(v.labor)),
           if (v.paintLabor > 0) KeyValue('Pintura', money(v.paintLabor)),

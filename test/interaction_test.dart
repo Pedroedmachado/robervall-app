@@ -172,9 +172,9 @@ void main() {
 
     await tap(t, find.text('Novo item'));
     await type(t, find.widgetWithText(TextField, 'Peça'), 'Farol esquerdo');
-    expect(field('Preço unitário da peça'), findsNothing); // só com troca
+    expect(field('Preço unitário da peça (venda)'), findsNothing); // só com troca
     await tap(t, find.text('Trocar a peça'));
-    await type(t, field('Preço unitário da peça'), '450,50');
+    await type(t, field('Preço unitário da peça (venda)'), '450,50');
     await type(t, field('Horas de pintura'), '2');
     await tap(t, find.text('Salvar'));
     // troca do farol oferece complementos; aqui seguimos sem eles
@@ -389,6 +389,34 @@ void main() {
     await tap(t, find.text('Salvar'));
     expect(c.items.single.paintHours, 0);
     expect(opCode(c.items.single.op, c.items.single.labFlag, c.items.single.paintFlag), 'R');
+    await settle(t);
+  });
+
+  itest('troca: preço para o cliente e custo da peça para a oficina', (t) async {
+    await start(t);
+    final c = seed();
+    await openFirstClaim(t);
+    await tab(t, 'Orçamento');
+    await tap(t, find.text('Novo item'));
+    await type(t, find.widgetWithText(TextField, 'Peça'), 'Porta dianteira direita');
+    expect(field('Preço unitário da peça (custo)'), findsNothing); // só na troca
+    await tap(t, find.text('Trocar a peça'));
+    await type(t, field('Preço unitário da peça (venda)'), '1500');
+    await type(t, field('Preço unitário da peça (custo)'), '1200');
+    await t.pumpAndSettle();
+    await tap(t, find.text('Salvar'));
+    if (find.text('Agora não').evaluate().isNotEmpty) {
+      await tap(t, find.text('Agora não'));
+    }
+    final it = c.items.single;
+    expect(it.price, 1500);
+    expect(it.partCost, 1200);
+    expect(find.textContaining('custo ${money(1200)}'), findsOneWidget);
+    it.approved = true;
+    store.setStatus(c, ClaimStatus.aprovado);
+    await settle(t);
+    await tab(t, 'O.S.');
+    expect(find.text('Peças compradas (custo)', skipOffstage: false), findsOneWidget);
     await settle(t);
   });
 
@@ -843,7 +871,7 @@ void main() {
     await tap(t, find.text('Novo item'));
     await type(t, find.widgetWithText(TextField, 'Peça'), 'Porta dianteira esquerda');
     await tap(t, find.text('Trocar a peça'));
-    await type(t, field('Preço unitário da peça'), '900');
+    await type(t, field('Preço unitário da peça (venda)'), '900');
     await tap(t, find.text('Salvar'));
     expect(find.text('Peças complementares'), findsOneWidget);
     expect(find.text('Máquina de vidro'), findsOneWidget);
