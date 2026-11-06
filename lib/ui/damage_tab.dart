@@ -134,45 +134,46 @@ class _DamageTabState extends State<DamageTab> {
       onSelectionChanged: (sel) => setState(() => _pre = sel.first),
     );
 
+    final howTo = SectionCard(
+      title: 'Como usar',
+      icon: Icons.touch_app_outlined,
+      children: [
+        Text(_pre
+            ? 'Marcando o que JÁ ESTAVA no carro quando chegou (risco, amassado antigo…). Isso protege a oficina e não entra no orçamento.'
+            : 'Toque nas partes do carro para marcar a avaria do sinistro. Cada toque muda a intensidade: leve → média → pesada → sem avaria.'),
+        const SizedBox(height: 12),
+        Wrap(spacing: 12, runSpacing: 8, children: [
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+              width: 14,
+              height: 14,
+              decoration: BoxDecoration(
+                  color: preDamageColor,
+                  borderRadius: BorderRadius.circular(4)),
+            ),
+            const SizedBox(width: 6),
+            const Text('Pré-existente (PE)'),
+          ]),
+          for (final e in severityLabels.entries)
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                    color: severityColor(e.key),
+                    borderRadius: BorderRadius.circular(4)),
+              ),
+              const SizedBox(width: 6),
+              Text(e.value),
+            ]),
+        ]),
+      ],
+    );
+
     final side = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ReceptionCard(claim: c),
-        SectionCard(
-          title: 'Como usar',
-          icon: Icons.touch_app_outlined,
-          children: [
-            Text(_pre
-                ? 'Marcando o que JÁ ESTAVA no carro quando chegou (risco, amassado antigo…). Isso protege a oficina e não entra no orçamento.'
-                : 'Toque nas partes do carro para marcar a avaria do sinistro. Cada toque muda a intensidade: leve → média → pesada → sem avaria.'),
-            const SizedBox(height: 12),
-            Wrap(spacing: 12, runSpacing: 8, children: [
-              Row(mainAxisSize: MainAxisSize.min, children: [
-                Container(
-                  width: 14,
-                  height: 14,
-                  decoration: BoxDecoration(
-                      color: preDamageColor,
-                      borderRadius: BorderRadius.circular(4)),
-                ),
-                const SizedBox(width: 6),
-                const Text('Pré-existente (PE)'),
-              ]),
-              for (final e in severityLabels.entries)
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  Container(
-                    width: 14,
-                    height: 14,
-                    decoration: BoxDecoration(
-                        color: severityColor(e.key),
-                        borderRadius: BorderRadius.circular(4)),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(e.value),
-                ]),
-            ]),
-          ],
-        ),
         SectionCard(
           title: 'Avarias marcadas (${marked.length})',
           icon: Icons.car_crash_outlined,
@@ -253,7 +254,10 @@ class _DamageTabState extends State<DamageTab> {
       if (cons.maxWidth >= 760) {
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
-          child: Row(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          // "Como usar" no topo, visível logo de cara
+          howTo,
+          Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SizedBox(
@@ -267,11 +271,13 @@ class _DamageTabState extends State<DamageTab> {
               Expanded(child: side),
             ],
           ),
+          ]),
         );
       }
       return ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          howTo,
           modeBar,
           const SizedBox(height: 12),
           Center(child: SizedBox(width: 300, child: diagram)),
