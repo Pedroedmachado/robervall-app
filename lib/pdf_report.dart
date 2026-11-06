@@ -36,17 +36,6 @@ String _t(String s) {
 Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
     {bool withPhotos = true, bool withPrices = true}) async {
   final s = store.settings;
-  final pdfWidths = <pw.TableColumnWidth>[
-    const pw.FixedColumnWidth(38),
-    const pw.FlexColumnWidth(4),
-    const pw.FixedColumnWidth(50),
-    const pw.FixedColumnWidth(24),
-    if (s.showHours) const pw.FixedColumnWidth(44),
-    if (s.showHours) const pw.FixedColumnWidth(44),
-    if (withPrices && !s.showHours) const pw.FixedColumnWidth(62),
-    if (withPrices) const pw.FixedColumnWidth(62),
-    if (withPrices) const pw.FixedColumnWidth(66),
-  ];
   final totals = computeTotals(c, s);
   final doc = pw.Document(
     title: _t('Orçamento ${c.number}'),
@@ -75,36 +64,6 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
     }
   }
 
-  pw.Widget box(String title, List<pw.Widget> children) => pw.Container(
-        padding: const pw.EdgeInsets.all(8),
-        decoration: pw.BoxDecoration(
-          border: pw.Border.all(color: PdfColors.grey400, width: 0.6),
-          borderRadius: pw.BorderRadius.circular(4),
-        ),
-        child: pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Text(_t(title),
-                style: pw.TextStyle(
-                    fontSize: 9,
-                    fontWeight: pw.FontWeight.bold,
-                    color: primary)),
-            pw.SizedBox(height: 4),
-            ...children,
-          ],
-        ),
-      );
-
-  pw.Widget kv(String k, String v) => pw.Padding(
-        padding: const pw.EdgeInsets.only(bottom: 1.5),
-        child: pw.RichText(
-          text: pw.TextSpan(children: [
-            pw.TextSpan(text: _t('$k: '), style: bold),
-            pw.TextSpan(text: _t(v.isEmpty ? '-' : v), style: normal),
-          ]),
-        ),
-      );
-
   pw.Widget totalRow(String k, String v, {bool strong = false}) => pw.Padding(
         padding: const pw.EdgeInsets.symmetric(vertical: 1.5),
         child: pw.Row(children: [
@@ -121,59 +80,164 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
       );
 
   final items = c.items.where((e) => e.approved).toList();
+  const accent = PdfColor.fromInt(0xFF1B7F5B);
+  const amber = PdfColor.fromInt(0xFFFFF4C4);
+  const amberLine = PdfColor.fromInt(0xFFE9C46A);
+  final statusColor = switch (c.status) {
+    ClaimStatus.aprovado || ClaimStatus.emReparo => accent,
+    ClaimStatus.concluido || ClaimStatus.entregue => primary,
+    ClaimStatus.cancelado => PdfColors.red700,
+    ClaimStatus.aguardandoAprovacao => PdfColors.orange700,
+    _ => PdfColors.grey700,
+  };
 
-  final legendBox = pw.Container(
-            padding: const pw.EdgeInsets.all(8),
-            decoration: pw.BoxDecoration(
-              border: pw.Border.all(color: PdfColors.grey300, width: 0.6),
-              borderRadius: pw.BorderRadius.circular(4),
-            ),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Text('Legenda',
-                    style: pw.TextStyle(
-                        fontSize: 8.5,
-                        fontWeight: pw.FontWeight.bold,
-                        color: primary)),
-                pw.SizedBox(height: 3),
-                pw.Wrap(
-                  spacing: 14,
-                  runSpacing: 3,
-                  children: [
-                    for (final (code, meaning) in [
-                      ...legendFor(items),
-                      if (s.showHours) ('M.O.', 'horas de mão de obra'),
-                      if (s.showHours) ('Pint.', 'horas de pintura'),
-                      if (withPrices && !s.showHours)
-                        ('M.O.',
-                            'mão de obra: reparo, remoção e instalação e pintura'),
-                      if (withPrices)
-                        ('Peça/serv.', 'valor da peça nova ou do serviço'),
-                    ])
-                      pw.RichText(
-                        text: pw.TextSpan(children: [
-                          pw.TextSpan(
-                              text: '$code  ',
-                              style: pw.TextStyle(
-                                  fontSize: 8,
-                                  fontWeight: pw.FontWeight.bold,
-                                  color: primary)),
-                          pw.TextSpan(
-                              text: _t(meaning),
-                              style: const pw.TextStyle(fontSize: 8)),
-                        ]),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          );
+  // ---- blocos de rótulo em cima / valor embaixo (estilo ficha)
+  pw.Widget cell(String label, String value, {int flex = 1}) => pw.Expanded(
+        flex: flex,
+        child: pw.Padding(
+          padding: const pw.EdgeInsets.only(right: 6, bottom: 6),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(_t(label),
+                  style: pw.TextStyle(
+                      fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: PdfColors.grey700)),
+              pw.SizedBox(height: 1),
+              pw.Text(_t(value.trim().isEmpty ? '-' : value.trim()),
+                  style: const pw.TextStyle(fontSize: 9), maxLines: 3),
+            ],
+          ),
+        ),
+      );
+  pw.Widget cells(List<pw.Widget> c) =>
+      pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: c);
+
+  pw.Widget band(String title) => pw.Container(
+        width: double.infinity,
+        margin: const pw.EdgeInsets.only(top: 10, bottom: 4),
+        padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: pw.BoxDecoration(color: primary, borderRadius: pw.BorderRadius.circular(6)),
+        child: pw.Text(_t(title.toUpperCase()),
+            style: pw.TextStyle(
+                fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.white)),
+      );
+
+  // ---- operações de cada item: "T  R&I 0,5  R 2,0  P 3,0"
+  String ops(BudgetItem it) {
+    if (it.op == ItemOp.servico) return 'S';
+    String h(double v) => s.showHours && !it.perPiece && v > 0 ? ' ${num2(v)}' : '';
+    final out = <String>[];
+    if (it.op == ItemOp.troca) {
+      out.add('T');
+      if (it.laborHours > 0) out.add('R&I${h(it.laborHours)}');
+    } else if (it.hasLabor) {
+      if (it.removeInstall && !it.alsoRepair) {
+        out.add('R&I${h(it.laborHours)}');
+      } else if (it.removeInstall) {
+        out.add('R&I+R${h(it.laborHours)}');
+      } else {
+        out.add('R${h(it.laborHours)}');
+      }
+    }
+    if (it.hasPaint) out.add('P${h(it.paintHours)}');
+    return out.isEmpty ? 'R' : out.join('  ');
+  }
+
+  String partType(PartOrigin o) => switch (o) {
+        PartOrigin.genuina => 'PG',
+        PartOrigin.original => 'PO',
+        PartOrigin.paralela => 'PC',
+        PartOrigin.usada => 'PU',
+        PartOrigin.nenhuma => '',
+      };
+
+  // ---- mão de obra por tipo (com % e horas) e peças
+  final labor = <String, (double, double)>{}; // tipo -> (valor, horas)
+  void addLabor(String k, double v, double hrs) {
+    if (v <= 0 && hrs <= 0) return;
+    final o = labor[k] ?? (0.0, 0.0);
+    labor[k] = (o.$1 + v, o.$2 + hrs);
+  }
+
+  var partsGross = 0.0, repairValue = 0.0, repairHours = 0.0, riValue = 0.0, riHours = 0.0;
+  for (final it in items) {
+    final v = itemValues(it, s);
+    final hrs = it.perPiece ? 0.0 : it.laborHours;
+    addLabor(it.laborType.label, v.labor, hrs);
+    addLabor('Pintura', v.paintLabor + v.paintMaterial, it.perPiece ? 0 : it.paintHours);
+    addLabor('Mão de obra por peça', v.pieceLabor, 0);
+    addLabor('Serviços', v.services, 0);
+    if (it.op == ItemOp.troca) partsGross += it.price * (it.qty <= 0 ? 1 : it.qty);
+    if (it.op == ItemOp.troca || (it.removeInstall && !it.alsoRepair)) {
+      riValue += v.labor;
+      riHours += hrs;
+    } else {
+      repairValue += v.labor;
+      repairHours += hrs;
+    }
+  }
+  final laborTotal = labor.values.fold(0.0, (a, e) => a + e.$1);
+  const laborColors = [
+    PdfColor.fromInt(0xFF2F80ED), PdfColor.fromInt(0xFF27AE60), PdfColor.fromInt(0xFFE74C3C),
+    PdfColor.fromInt(0xFFF2994A), PdfColor.fromInt(0xFF9B51E0), PdfColor.fromInt(0xFF56CCF2),
+    PdfColor.fromInt(0xFF6FCF97), PdfColor.fromInt(0xFFBB6BD9), PdfColor.fromInt(0xFF828282),
+  ];
+  final laborList = labor.entries.toList()..sort((a, b) => b.value.$1.compareTo(a.value.$1));
+
+  pw.Widget summaryBox(String title, String value, String hours) => pw.Expanded(
+        child: pw.Container(
+          margin: const pw.EdgeInsets.only(right: 4),
+          padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+          decoration: pw.BoxDecoration(color: light, borderRadius: pw.BorderRadius.circular(4)),
+          child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+            pw.Text(_t(title), style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700)),
+            pw.Text(_t(value), style: bold),
+            if (hours.isNotEmpty) pw.Text(_t(hours), style: small),
+          ]),
+        ),
+      );
+
+  final legendLine = pw.Container(
+    padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+    decoration: pw.BoxDecoration(
+      border: pw.Border.all(color: PdfColors.grey300, width: 0.6),
+      borderRadius: pw.BorderRadius.circular(4),
+    ),
+    child: pw.Wrap(spacing: 12, runSpacing: 2, children: [
+      for (final (code, meaning) in [
+        ('T', 'troca'),
+        ('R&I', 'remoção e instalação'),
+        ('R', 'reparação'),
+        ('P', 'pintura'),
+        ('S', 'serviço'),
+        ('PG', 'peça genuína'),
+        ('PO', 'peça original'),
+        ('PC', 'peça compatível'),
+        ('PU', 'peça usada/reuso'),
+      ])
+        pw.RichText(
+          text: pw.TextSpan(children: [
+            pw.TextSpan(
+                text: '$code ',
+                style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: primary)),
+            pw.TextSpan(text: _t(meaning), style: const pw.TextStyle(fontSize: 7.5)),
+          ]),
+        ),
+    ]),
+  );
+
+  final vehicleTitle = [
+    c.vehicle.brand,
+    c.vehicle.model,
+    c.vehicle.year,
+  ].where((e) => e.trim().isNotEmpty).join(' - ').toUpperCase();
+  final isThird = c.type == ClaimType.terceiro;
+  final lastNotes = c.timeline.reversed.take(4).toList();
 
   doc.addPage(
     pw.MultiPage(
       pageFormat: PdfPageFormat.a4,
-      margin: const pw.EdgeInsets.fromLTRB(28, 28, 28, 36),
+      margin: const pw.EdgeInsets.fromLTRB(28, 26, 28, 34),
       header: (ctx) => pw.Column(children: [
         pw.Row(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -183,18 +247,10 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
                   pw.Text(_t(s.shopName),
-                      style: pw.TextStyle(
-                          fontSize: 16,
-                          fontWeight: pw.FontWeight.bold,
-                          color: primary)),
-                  if (s.shopDoc.isNotEmpty)
-                    pw.Text(_t('CNPJ/CPF: ${s.shopDoc}'), style: small),
-                  if (s.shopAddress.isNotEmpty)
-                    pw.Text(_t(s.shopAddress), style: small),
-                  pw.Text(
-                      _t([s.shopPhone, s.shopEmail]
-                          .where((e) => e.isNotEmpty)
-                          .join(' - ')),
+                      style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold, color: primary)),
+                  if (s.shopDoc.isNotEmpty) pw.Text(_t('CNPJ/CPF: ${s.shopDoc}'), style: small),
+                  if (s.shopAddress.isNotEmpty) pw.Text(_t(s.shopAddress), style: small),
+                  pw.Text(_t([s.shopPhone, s.shopEmail].where((e) => e.isNotEmpty).join(' - ')),
                       style: small),
                 ],
               ),
@@ -203,15 +259,19 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
               crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: [
                 pw.Text(withPrices ? 'ORÇAMENTO' : 'LAUDO DE VISTORIA',
-                    style: pw.TextStyle(
-                        fontSize: 13, fontWeight: pw.FontWeight.bold)),
+                    style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
                 pw.Text(_t('Nº ${c.number}'),
-                    style: pw.TextStyle(
-                        fontSize: 12,
-                        fontWeight: pw.FontWeight.bold,
-                        color: primary)),
-                pw.Text(_t('Emissão: ${date(DateTime.now())}'), style: small),
-                pw.Text(_t('Status: ${c.status.label}'), style: small),
+                    style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: primary)),
+                pw.Text(_t('Emitido em ${dateTime(DateTime.now())}'), style: small),
+                pw.SizedBox(height: 3),
+                pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: pw.BoxDecoration(
+                      color: statusColor, borderRadius: pw.BorderRadius.circular(8)),
+                  child: pw.Text(_t(c.status.label),
+                      style: pw.TextStyle(
+                          fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: PdfColors.white)),
+                ),
               ],
             ),
           ],
@@ -220,110 +280,104 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
       ]),
       footer: (ctx) => pw.Row(children: [
         pw.Expanded(
-            child: pw.Text(_t('${s.shopName} - ${c.number}'),
-                style: const pw.TextStyle(
-                    fontSize: 7, color: PdfColors.grey600))),
+            child: pw.Text(
+                _t('Status: ${c.status.label} | Gerado em ${dateTime(DateTime.now())} pelo Funilar | ${s.shopName} - ${c.number}'),
+                style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey600))),
         pw.Text('Página ${ctx.pageNumber} de ${ctx.pagesCount}',
             style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey600)),
       ]),
       build: (ctx) => [
-        pw.Row(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Expanded(
-              child: box('Cliente', [
-                kv('Nome', c.customerName),
-                kv('Telefone', c.customerPhone),
-                kv('CPF/CNPJ', c.customerDoc),
-                if (c.customerEmail.isNotEmpty) kv('E-mail', c.customerEmail),
-                kv('Atendimento', c.type.label),
+        // ---- veículo em destaque
+        if (vehicleTitle.isNotEmpty)
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(bottom: 6),
+            child: pw.Text(_t(vehicleTitle),
+                style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+          ),
+        // ---- ficha: veículo, seguro, cliente/terceiro, oficina
+        pw.Container(
+          padding: const pw.EdgeInsets.fromLTRB(8, 8, 2, 2),
+          decoration: pw.BoxDecoration(
+            border: pw.Border.all(color: PdfColors.grey300, width: 0.6),
+            borderRadius: pw.BorderRadius.circular(6),
+          ),
+          child: pw.Column(children: [
+            cells([
+              cell('Placa', c.vehicle.plate),
+              cell('Cor', c.vehicle.color),
+              cell('Chassi', c.vehicle.chassis, flex: 2),
+              cell('Quilometragem', c.vehicle.km),
+              cell('Combustível', c.vehicle.fuel),
+            ]),
+            if (hasInsurer)
+              cells([
+                cell('Seguradora', c.insurerName),
+                cell('Sinistro', c.claimNumber),
+                cell('Apólice', c.policyNumber),
+                cell('Regulador / perito', c.regulatorName),
+                cell('Data do sinistro', date(c.accidentDate)),
               ]),
-            ),
-            pw.SizedBox(width: 8),
-            pw.Expanded(
-              child: box('Veículo', [
-                kv('Placa', c.vehicle.plate),
-                kv('Veículo', c.vehicle.title),
-                kv('Cor', c.vehicle.color),
-                kv('Chassi', c.vehicle.chassis),
-                kv('Km', c.vehicle.km),
-                if (c.vehicle.fipeValue > 0)
-                  kv('FIPE', '${money(c.vehicle.fipeValue)}${c.vehicle.fipeCode.isEmpty ? '' : ' (${c.vehicle.fipeCode})'}'),
+            cells([
+              cell(isThird ? 'Terceiro' : 'Cliente', c.customerName, flex: 2),
+              cell('CPF/CNPJ', c.customerDoc),
+              cell('Telefone', c.customerPhone),
+              cell('E-mail', c.customerEmail),
+            ]),
+            if (withPrices)
+              cells([
+                cell('Mão de obra (funilaria)', '${money(s.rateFor(LaborType.funilaria))}/h'),
+                cell('Pintura', '${money(s.paintRate)}/h + ${money(s.paintMaterialRate)} mat.'),
+                cell('Desconto', c.discountPct > 0 ? '${num2(c.discountPct)}%' : '-'),
+                cell(hasInsurer ? 'Franquia' : 'Atendimento',
+                    hasInsurer ? (c.deductible > 0 ? money(c.deductible) : '-') : c.type.label),
+                cell(
+                    c.vehicle.fipeCode.isEmpty ? 'Valor FIPE' : 'Valor FIPE (${c.vehicle.fipeCode})',
+                    c.vehicle.fipeValue > 0 ? money(c.vehicle.fipeValue) : '-'),
               ]),
-            ),
-          ],
-        ),
-        pw.SizedBox(height: 8),
-        if (hasInsurer) ...[
-          box('Seguradora / regulação', [
-            pw.Row(children: [
-              pw.Expanded(child: kv('Seguradora', c.insurerName)),
-              pw.Expanded(child: kv('Sinistro', c.claimNumber)),
-            ]),
-            pw.Row(children: [
-              pw.Expanded(child: kv('Apólice', c.policyNumber)),
-              pw.Expanded(child: kv('Regulador', c.regulatorName)),
-            ]),
-            pw.Row(children: [
-              pw.Expanded(child: kv('Data do sinistro', date(c.accidentDate))),
-              pw.Expanded(
-                  child: kv(
-                      'Aprovação',
-                      c.approvedAt == null
-                          ? 'pendente'
-                          : '${date(c.approvedAt)}${c.approvedBy.isEmpty ? '' : ' por ${c.approvedBy}'}')),
-            ]),
           ]),
-          pw.SizedBox(height: 8),
-        ],
+        ),
+        pw.SizedBox(height: 6),
+        legendLine,
         if (c.description.trim().isNotEmpty) ...[
-          box('Relato', [pw.Text(_t(c.description.trim()), style: normal)]),
-          pw.SizedBox(height: 8),
+          band('Relato'),
+          pw.Text(_t(c.description.trim()), style: normal),
         ],
-        if (c.damages.isNotEmpty) ...[
-          box('Avarias constatadas', [
+        if (c.damages.isNotEmpty || c.preDamages.isNotEmpty) ...[
+          band('Avarias'),
+          if (c.damages.isNotEmpty)
             pw.Wrap(spacing: 10, runSpacing: 2, children: [
               for (final e in c.damages.entries)
-                pw.Text(
-                    _t('- ${regionById(e.key)?.label ?? e.key} (${severityLabels[e.value] ?? ''})'),
+                pw.Text(_t('- ${regionById(e.key)?.label ?? e.key} (${severityLabels[e.value] ?? ''})'),
                     style: normal),
             ]),
-          ]),
-          pw.SizedBox(height: 8),
-        ],
-        if (c.preDamages.isNotEmpty) ...[
-          box('Avarias pré-existentes (já estavam no veículo na entrada)', [
+          if (c.preDamages.isNotEmpty) ...[
+            pw.SizedBox(height: 3),
+            pw.Text('Pré-existentes (já estavam no veículo na entrada):', style: bold),
             pw.Wrap(spacing: 10, runSpacing: 2, children: [
               for (final e in c.preDamages.entries)
-                pw.Text(
-                    _t('- ${regionById(e.key)?.label ?? e.key} (${severityLabels[e.value] ?? ''})'),
+                pw.Text(_t('- ${regionById(e.key)?.label ?? e.key} (${severityLabels[e.value] ?? ''})'),
                     style: normal),
             ]),
-          ]),
-          pw.SizedBox(height: 8),
+          ],
         ],
         if (!c.reception.isEmpty) ...[
-          box('Checklist de entrada', [
-            for (final l in receptionLines(c)) pw.Text(_t(l), style: normal),
-          ]),
-          pw.SizedBox(height: 8),
+          band('Checklist de entrada'),
+          for (final l in receptionLines(c)) pw.Text(_t(l), style: normal),
         ],
-        pw.Text('Peças e serviços',
-            style: pw.TextStyle(
-                fontSize: 11, fontWeight: pw.FontWeight.bold, color: primary)),
-        pw.SizedBox(height: 4),
+        // ---- itens
+        band('Peças e serviços (${items.length} ${items.length == 1 ? 'item' : 'itens'})'),
         if (items.isEmpty)
           pw.Text('Nenhum item lançado.', style: normal)
         else
           pw.TableHelper.fromTextArray(
             headers: [
-              'Sigla',
-              'Peça / serviço',
-              'Origem',
+              'Operações',
               'Qtd',
-              if (s.showHours) 'M.O. (h)',
-              if (s.showHours) 'Pint. (h)',
-              if (withPrices && !s.showHours) 'M.O.',
+              'Código',
+              'Tipo',
+              'Peça / serviço',
+              'Fornec.',
+              if (withPrices) 'M.O.',
               if (withPrices) 'Peça/serv.',
               if (withPrices) 'Total',
             ],
@@ -331,118 +385,148 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
               for (final it in items)
                 () {
                   final v = itemValues(it, s);
-                  final priced =
-                      it.op == ItemOp.troca || it.op == ItemOp.servico;
+                  final priced = it.op == ItemOp.troca || it.op == ItemOp.servico;
+                  final l = v.labor + v.paintLabor + v.paintMaterial + v.pieceLabor;
                   return <String>[
-                    opCode(it.op, it.labFlag, it.paintFlag,
-                        removeInstall: it.removeInstall, alsoRepair: it.alsoRepair),
-                    _t((it.parentId.isEmpty ? '' : '      \u00b7 ') +
+                    _t(ops(it)),
+                    priced ? num2(it.qty <= 0 ? 1 : it.qty) : '1',
+                    _t(it.partNumber),
+                    it.op == ItemOp.troca ? partType(it.origin) : '',
+                    _t((it.parentId.isEmpty ? '' : '    > ') +
                         it.description +
-                        (it.partNumber.isEmpty ? '' : '  (${it.partNumber})')),
-                    _t(it.op == ItemOp.troca ? _originShort(it.origin) : ''),
-                    priced ? num2(it.qty <= 0 ? 1 : it.qty) : '',
-                    if (s.showHours)
-                      it.laborHours > 0 ? num2(it.laborHours) : '',
-                    if (s.showHours)
-                      it.paintHours > 0 ? num2(it.paintHours) : '',
-                    if (withPrices && !s.showHours)
-                      () {
-                        final l = v.labor +
-                            v.paintLabor +
-                            v.paintMaterial +
-                            v.pieceLabor;
-                        return l > 0 ? _t(money(l)) : '';
-                      }(),
-                    if (withPrices)
-                      priced ? _t(money(v.parts + v.services)) : '',
+                        (it.discountPct > 0 ? '  (desc. ${num2(it.discountPct)}%)' : '')),
+                    _t(it.op == ItemOp.troca
+                        ? (it.supplier.trim().isEmpty ? 'Oficina' : it.supplier.trim())
+                        : ''),
+                    if (withPrices) l > 0 ? _t(money(l)) : '-',
+                    if (withPrices) priced ? _t(money(v.parts + v.services)) : '-',
                     if (withPrices) _t(money(v.total)),
                   ];
                 }(),
             ],
             border: const pw.TableBorder(
-              horizontalInside:
-                  pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+              horizontalInside: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
               bottom: pw.BorderSide(color: PdfColors.grey400, width: 0.6),
             ),
-            headerStyle: pw.TextStyle(
-                fontSize: 8,
-                fontWeight: pw.FontWeight.bold,
-                color: PdfColors.white),
-            headerDecoration: const pw.BoxDecoration(color: primary),
+            headerStyle: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: primary),
+            headerDecoration: const pw.BoxDecoration(color: light),
             headerAlignment: pw.Alignment.centerLeft,
-            cellStyle: const pw.TextStyle(fontSize: 8.5),
-            cellPadding:
-                const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 4),
-            oddRowDecoration: const pw.BoxDecoration(color: light),
+            cellStyle: const pw.TextStyle(fontSize: 8),
+            cellPadding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            oddRowDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF7FAFB)),
             cellAlignment: pw.Alignment.centerLeft,
             headerAlignments: {
-              for (var i = 3; i < pdfWidths.length; i++)
-                i: pw.Alignment.centerRight,
-              0: pw.Alignment.center,
+              1: pw.Alignment.center,
+              if (withPrices) ...{6: pw.Alignment.centerRight, 7: pw.Alignment.centerRight, 8: pw.Alignment.centerRight},
             },
             cellAlignments: {
-              for (var i = 3; i < pdfWidths.length; i++)
-                i: pw.Alignment.centerRight,
-              0: pw.Alignment.center,
+              1: pw.Alignment.center,
+              if (withPrices) ...{6: pw.Alignment.centerRight, 7: pw.Alignment.centerRight, 8: pw.Alignment.centerRight},
             },
             columnWidths: {
-              for (final (i, w) in pdfWidths.indexed) i: w,
+              0: const pw.FixedColumnWidth(74),
+              1: const pw.FixedColumnWidth(22),
+              2: const pw.FixedColumnWidth(48),
+              3: const pw.FixedColumnWidth(24),
+              4: const pw.FlexColumnWidth(4),
+              5: const pw.FixedColumnWidth(46),
+              if (withPrices) ...{
+                6: const pw.FixedColumnWidth(52),
+                7: const pw.FixedColumnWidth(54),
+                8: const pw.FixedColumnWidth(56),
+              },
             },
           ),
+        // ---- faixa de subtotais por operação
+        if (withPrices && items.isNotEmpty) ...[
+          pw.SizedBox(height: 6),
+          pw.Row(children: [
+            summaryBox('Troca / R&I', money(riValue), s.showHours ? '${num2(riHours)} h' : ''),
+            summaryBox('Reparação', money(repairValue), s.showHours ? '${num2(repairHours)} h' : ''),
+            summaryBox('Pintura', money(totals.paintLabor + totals.paintMaterial),
+                s.showHours ? '${num2(totals.paintHours)} h' : ''),
+            if (totals.pieceLabor > 0) summaryBox('M.O. por peça', money(totals.pieceLabor), ''),
+            summaryBox('Serviços', money(totals.services), ''),
+            summaryBox('Peças', money(totals.parts), ''),
+            summaryBox('Total', money(totals.total), ''),
+          ]),
+        ],
+        // ---- resumo geral: mão de obra por tipo, peças e total
         if (withPrices) ...[
-          pw.SizedBox(height: 10),
+          band('Resumo geral'),
           pw.Row(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               pw.Expanded(
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text(
-                        _t('Valor hora: ${[for (final lt in LaborType.values) '${lt.label} ${money(s.rateFor(lt))}'].join(' - ')} - Pintura ${money(s.paintRate)} + material ${money(s.paintMaterialRate)}'),
-                        style: small),
-                    pw.SizedBox(height: 4),
-                    if (c.dueDate != null)
-                      pw.Text(_t('Previsão de entrega: ${date(c.dueDate)}'), style: normal),
-                    pw.Text(
-                        _t('Validade do orçamento: ${s.budgetValidityDays} dias'),
-                        style: normal),
-                    if (items.isNotEmpty) ...[
-                      pw.SizedBox(height: 8),
-                      legendBox,
-                    ],
-                  ],
-                ),
+                flex: 5,
+                child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                  pw.Text('Mão de obra', style: bold),
+                  pw.SizedBox(height: 4),
+                  if (laborTotal > 0)
+                    pw.ClipRRect(
+                      horizontalRadius: 3,
+                      verticalRadius: 3,
+                      child: pw.Row(children: [
+                        for (final (i, e) in laborList.indexed)
+                          pw.Expanded(
+                            flex: (e.value.$1 / laborTotal * 1000).round().clamp(1, 1000),
+                            child: pw.Container(
+                                height: 8,
+                                decoration: pw.BoxDecoration(color: laborColors[i % laborColors.length])),
+                          ),
+                      ]),
+                    ),
+                  pw.SizedBox(height: 4),
+                  for (final (i, e) in laborList.indexed)
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.symmetric(vertical: 1.2),
+                      child: pw.Row(children: [
+                        pw.Container(
+                            width: 6,
+                            height: 6,
+                            decoration: pw.BoxDecoration(
+                                color: laborColors[i % laborColors.length],
+                                borderRadius: pw.BorderRadius.circular(3))),
+                        pw.SizedBox(width: 4),
+                        pw.Expanded(
+                            child: pw.Text(
+                                _t('${e.key} (${num2(laborTotal > 0 ? e.value.$1 / laborTotal * 100 : 0)}%)'),
+                                style: normal)),
+                        if (s.showHours && e.value.$2 > 0)
+                          pw.SizedBox(width: 34, child: pw.Text(_t('${num2(e.value.$2)} h'), style: small)),
+                        pw.SizedBox(
+                            width: 62,
+                            child: pw.Text(_t(money(e.value.$1)),
+                                style: normal, textAlign: pw.TextAlign.right)),
+                      ]),
+                    ),
+                  if (laborList.isEmpty) pw.Text('-', style: normal),
+                ]),
               ),
-              pw.SizedBox(width: 12),
+              pw.SizedBox(width: 10),
+              pw.Expanded(
+                flex: 4,
+                child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                  pw.Text('Peças', style: bold),
+                  pw.SizedBox(height: 4),
+                  totalRow('Bruto de peças', money(partsGross)),
+                  totalRow('Descontos', partsGross - totals.parts > 0.004 ? '- ${money(partsGross - totals.parts)}' : money(0)),
+                  totalRow('Líquido de peças', money(totals.parts)),
+                ]),
+              ),
+              pw.SizedBox(width: 10),
               pw.Container(
-                width: 220,
+                width: 170,
                 padding: const pw.EdgeInsets.all(8),
-                decoration: pw.BoxDecoration(
-                  color: light,
-                  borderRadius: pw.BorderRadius.circular(4),
-                ),
+                decoration: pw.BoxDecoration(color: light, borderRadius: pw.BorderRadius.circular(4)),
                 child: pw.Column(children: [
                   totalRow('Peças', money(totals.parts)),
-                  totalRow(
-                      s.showHours
-                          ? 'Mão de obra (${num2(totals.laborHours)} h)'
-                          : 'Mão de obra',
-                      money(totals.labor)),
-                  totalRow(
-                      s.showHours
-                          ? 'Pintura (${num2(totals.paintHours)} h)'
-                          : 'Pintura',
-                      money(totals.paintLabor)),
-                  totalRow('Material de pintura', money(totals.paintMaterial)),
-                  totalRow('Serviços', money(totals.services)),
-                  if (totals.pieceLabor > 0)
-                    totalRow('Mão de obra por peça', money(totals.pieceLabor)),
+                  totalRow('Mão de obra e serviços', money(laborTotal)),
                   if (totals.extra > 0) totalRow('Outros custos', money(totals.extra)),
                   if (totals.discount > 0)
                     totalRow('Desconto (${num2(c.discountPct)}%)', '- ${money(totals.discount)}'),
                   pw.Divider(thickness: 0.6),
-                  totalRow('TOTAL', money(totals.total), strong: true),
+                  totalRow('TOTAL GERAL', money(totals.total), strong: true),
                   if (c.type == ClaimType.seguradora || c.type == ClaimType.terceiro) ...[
                     if (c.type == ClaimType.seguradora)
                       totalRow('Franquia (cliente)', money(totals.deductible)),
@@ -453,14 +537,55 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
             ],
           ),
         ],
-        if (!withPrices && items.isNotEmpty) ...[
-          pw.SizedBox(height: 10),
-          legendBox,
-        ],
-        if (images.isNotEmpty) ...[
-          pw.SizedBox(height: 14),
-          pw.Text('Fotos', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: primary)),
+        // ---- conclusão e últimos registros
+        band('Conclusão'),
+        pw.RichText(
+          text: pw.TextSpan(children: [
+            pw.TextSpan(text: 'Situação: ', style: bold),
+            pw.TextSpan(text: _t(c.status.label), style: normal),
+            if (c.approvedAt != null) ...[
+              pw.TextSpan(text: '  |  Aprovado em: ', style: bold),
+              pw.TextSpan(
+                  text: _t('${dateTime(c.approvedAt)}${c.approvedBy.isEmpty ? '' : ' por ${c.approvedBy}'}'),
+                  style: normal),
+            ],
+            if (c.dueDate != null) ...[
+              pw.TextSpan(text: '  |  Previsão de entrega: ', style: bold),
+              pw.TextSpan(text: _t(date(c.dueDate)), style: normal),
+            ],
+          ]),
+        ),
+        if (lastNotes.isNotEmpty) ...[
           pw.SizedBox(height: 6),
+          pw.Text('Últimos registros', style: bold),
+          for (final e in lastNotes)
+            pw.Padding(
+              padding: const pw.EdgeInsets.only(top: 2),
+              child: pw.Text(_t('${dateTime(e.at)} - ${e.text}'), style: small),
+            ),
+        ],
+        // ---- observações gerais
+        pw.SizedBox(height: 10),
+        pw.Container(
+          width: double.infinity,
+          padding: const pw.EdgeInsets.all(8),
+          decoration: pw.BoxDecoration(
+            color: amber,
+            border: pw.Border.all(color: amberLine, width: 0.8),
+            borderRadius: pw.BorderRadius.circular(6),
+          ),
+          child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+            pw.Text('Observações gerais', style: bold),
+            pw.SizedBox(height: 3),
+            if (withPrices)
+              pw.Text(_t('- Validade do orçamento: ${s.budgetValidityDays} dias.'), style: normal),
+            if (s.budgetFooter.trim().isNotEmpty)
+              for (final l in s.budgetFooter.trim().split('\n'))
+                if (l.trim().isNotEmpty) pw.Text(_t('- ${l.trim()}'), style: normal),
+          ]),
+        ),
+        if (images.isNotEmpty) ...[
+          band('Fotos'),
           pw.Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -471,11 +596,7 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
                   child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      pw.Container(
-                        height: 120,
-                        width: 170,
-                        child: pw.Image(img, fit: pw.BoxFit.cover),
-                      ),
+                      pw.Container(height: 120, width: 170, child: pw.Image(img, fit: pw.BoxFit.cover)),
                       pw.Text(cap, style: small, maxLines: 2),
                     ],
                   ),
@@ -483,17 +604,11 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
             ],
           ),
         ],
-        pw.SizedBox(height: 16),
-        if (s.budgetFooter.trim().isNotEmpty)
-          pw.Text(_t(s.budgetFooter.trim()), style: small),
         pw.SizedBox(height: 36),
         pw.Row(children: [
           pw.Expanded(child: _signature(_t(s.shopName))),
           pw.SizedBox(width: 40),
-          pw.Expanded(
-              child: _signature(_t(c.customerName.isEmpty
-                  ? 'Cliente'
-                  : c.customerName))),
+          pw.Expanded(child: _signature(_t(c.customerName.isEmpty ? 'Cliente' : c.customerName))),
         ]),
       ],
     ),
@@ -501,20 +616,6 @@ Future<Uint8List> buildClaimPdf(AppStore store, Claim c,
   return doc.save();
 }
 
-String _originShort(PartOrigin o) {
-  switch (o) {
-    case PartOrigin.nenhuma:
-      return '';
-    case PartOrigin.original:
-      return 'Original';
-    case PartOrigin.genuina:
-      return 'Genuína';
-    case PartOrigin.paralela:
-      return 'Paralela';
-    case PartOrigin.usada:
-      return 'Usada';
-  }
-}
 
 pw.Widget _signature(String name) => pw.Column(children: [
       pw.Divider(thickness: 0.6),
