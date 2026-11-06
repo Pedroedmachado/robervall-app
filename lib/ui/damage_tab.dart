@@ -56,28 +56,9 @@ class _DamageTabState extends State<DamageTab> {
           final exists = c.items.any((it) =>
               it.description.trim().toLowerCase() == desc.toLowerCase());
           if (exists) return;
-          // avaria pesada em lataria vira troca da peça
-          final replace = ops.contains(ItemOp.troca) ||
-              (ops.contains(ItemOp.reparo) && sev == 3);
-          final labor = replace
-              ? suggestedLaborHours(ItemOp.troca, sev)
-              : (ops.contains(ItemOp.reparo)
-                  ? suggestedLaborHours(ItemOp.reparo, sev)
-                  : 0.0);
-          final paint = ops.contains(ItemOp.pintura)
-              ? suggestedPaintHours(ItemOp.pintura, sev)
-              : 0.0;
-          final part = BudgetItem(
-            description: desc,
-            region: id,
-            op: opFor(
-                service: false,
-                replace: replace,
-                laborHours: labor,
-                paintHours: paint),
-            laborHours: labor,
-            paintHours: paint,
-          );
+          // só a avaria pesada (3) vira troca; leve e média são reparo
+          final part = itemForDamage(desc, ops, sev, id);
+          final replace = part.op == ItemOp.troca;
           c.items.add(part);
           added++;
           // troca: já entram os complementos (vidro, forro, chicote...)

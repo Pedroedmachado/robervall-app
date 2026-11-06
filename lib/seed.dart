@@ -118,6 +118,27 @@ double suggestedLaborHours(ItemOp op, int severity) {
   }
 }
 
+/// Item do orçamento gerado por uma avaria do mapa. Só a avaria pesada (3)
+/// vira troca da peça; leve e média são reparo (e pintura, se for o caso).
+BudgetItem itemForDamage(String desc, Set<ItemOp> ops, int severity, String regionId) {
+  final replace = severity >= 3 && (ops.contains(ItemOp.troca) || ops.contains(ItemOp.reparo));
+  final labor = replace
+      ? suggestedLaborHours(ItemOp.troca, severity)
+      : (ops.contains(ItemOp.reparo) || ops.contains(ItemOp.troca)
+          ? suggestedLaborHours(ItemOp.reparo, severity)
+          : 0.0);
+  final paint = ops.contains(ItemOp.pintura)
+      ? suggestedPaintHours(ItemOp.pintura, severity)
+      : 0.0;
+  return BudgetItem(
+    description: desc,
+    region: regionId,
+    op: opFor(service: false, replace: replace, laborHours: labor, paintHours: paint),
+    laborHours: labor,
+    paintHours: paint,
+  );
+}
+
 double suggestedPaintHours(ItemOp op, int severity) =>
     op == ItemOp.pintura ? [0, 2.0, 3.0, 4.0][severity.clamp(1, 3)].toDouble() : 0;
 

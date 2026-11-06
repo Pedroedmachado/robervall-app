@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:funilar/calc.dart';
 import 'package:funilar/format.dart';
 import 'package:funilar/models.dart';
+import 'package:funilar/seed.dart';
 
 void main() {
   final s = Settings(
@@ -216,5 +217,23 @@ void main() {
             removeInstall: true, alsoRepair: true, perPiece: true),
         ['Remoção e instalação', 'Reparo', 'Pintura', 'Por peça']);
     expect(BudgetItem.fromJson(it.toJson()).alsoRepair, isTrue);
+  });
+
+  test('mapa de avarias: só a pesada (3) vira troca; leve e média são reparo', () {
+    final r = regionById('parachoque_d')!;
+    final ops = {for (final (_, op) in r.suggestions) op};
+    final leve = itemForDamage('Para-choque dianteiro', ops, 1, r.id);
+    expect(leve.op, isNot(ItemOp.troca));
+    expect(leve.laborHours, greaterThan(0));
+    final media = itemForDamage('Para-choque dianteiro', ops, 2, r.id);
+    expect(media.op, isNot(ItemOp.troca));
+    expect(itemForDamage('Para-choque dianteiro', ops, 3, r.id).op, ItemOp.troca);
+    final traseiro = regionById('parachoque_t')!;
+    final opsT = {for (final (_, op) in traseiro.suggestions) op};
+    expect(itemForDamage('Para-choque traseiro', opsT, 1, traseiro.id).op, isNot(ItemOp.troca));
+    expect(itemForDamage('Para-choque traseiro', opsT, 2, traseiro.id).op, isNot(ItemOp.troca));
+    expect(itemForDamage('Para-choque traseiro', opsT, 3, traseiro.id).op, ItemOp.troca);
+    expect(itemForDamage('Farol esquerdo', {ItemOp.troca}, 1, 'farol_e').op, ItemOp.reparo);
+    expect(itemForDamage('Farol esquerdo', {ItemOp.troca}, 3, 'farol_e').op, ItemOp.troca);
   });
 }
