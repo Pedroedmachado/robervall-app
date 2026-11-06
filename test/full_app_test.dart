@@ -1,7 +1,9 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:funilar/calc.dart';
 import 'package:funilar/cash.dart';
 import 'package:funilar/finance.dart';
 import 'package:funilar/licensing.dart';
@@ -223,6 +225,49 @@ void main() {
       expect(b.entries.where(isCrewEntry).length, 2);
       b.dispose();
     });
+  });
+
+  test('backup leva tudo: orçamentos, fotos, estoque, equipe, caixa e ajustes', () async {
+    final a = await openStore();
+    final sh = seedShop(a);
+    final c = sh.claim;
+    c.items[0].partCost = 260;
+    c.discountPct = 5;
+    a.setStatus(c, ClaimStatus.concluido);
+    final foto = await a.addPhoto(c, Uint8List.fromList(List.filled(300, 7)), 'jpg');
+    a.upsertCash(CashEntry(isIn: false, amount: 300, category: 'Energia'));
+    final orcamento2 = a.newClaim()
+      ..customerName = 'Bruno'
+      ..items = [BudgetItem(description: 'Capô', op: ItemOp.pintura, paintHours: 3)];
+    a.touch(orcamento2);
+    a.settings.shopName = 'Funilaria Teste';
+    a.changed();
+
+    final zip = await a.exportBackup();
+    final b = await openStore();
+    await b.importBackup(zip);
+
+    expect(b.claims.length, 2);
+    final c2 = b.claims.firstWhere((e) => e.id == c.id);
+    expect(c2.number, c.number);
+    expect(c2.status, ClaimStatus.concluido);
+    expect(c2.items.length, c.items.length);
+    expect(c2.items[0].partCost, 260);
+    expect(c2.discountPct, 5);
+    expect(c2.damages, c.damages);
+    expect(c2.crew.length, 2);
+    expect(c2.supplies.single.workerName, 'Luan');
+    expect(c2.photos.single.fileName, foto.fileName);
+    expect(await b.photoFile(c2.photos.single).length(), 300); // a foto vem junto
+    expect(computeTotals(c2, b.settings).total, computeTotals(c, a.settings).total);
+    expect(b.claims.any((e) => e.customerName == 'Bruno' && e.items.single.paintHours == 3), isTrue);
+    expect(b.stock.length, a.stock.length);
+    expect(b.contacts.length, a.contacts.length);
+    expect(b.cash.length, a.cash.length);
+    expect(b.entries.length, a.entries.length);
+    expect(b.settings.shopName, 'Funilaria Teste');
+    a.dispose();
+    b.dispose();
   });
 
   group('cadastros, catálogo e ajustes (dados)', () {
