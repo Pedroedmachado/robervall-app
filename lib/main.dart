@@ -1,5 +1,4 @@
 import 'edition.dart';
-import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -16,9 +15,9 @@ import 'ui/shell.dart';
 final messengerKey = GlobalKey<ScaffoldMessengerState>();
 final navigatorKey = GlobalKey<NavigatorState>();
 
-/// Ao abrir, confere se saiu versão nova (Windows e Android) e avisa.
+/// Ao abrir, confere no GitHub se saiu versão nova e avisa.
 Future<void> _checkUpdateQuietly() async {
-  if (appVersion == 'dev' || !(Platform.isWindows || Platform.isAndroid)) return;
+  if (appVersion == 'dev') return;
   try {
     await Future<void>.delayed(const Duration(seconds: 4));
     final rel = await fetchLatestRelease();

@@ -21,6 +21,11 @@ if [ -f "$manifest" ]; then
     rm -f "$manifest.bak"
   fi
   sed -i.bak "s#android:label=\"[^\"]*\"#android:label=\"$APP_TITLE\"#" "$manifest" && rm -f "$manifest.bak"
+  # atualização pelo próprio app: abrir o instalador do APK baixado
+  if ! grep -q 'REQUEST_INSTALL_PACKAGES' "$manifest"; then
+    sed -i.bak 's#<application#<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>\n    <application#' "$manifest"
+    rm -f "$manifest.bak"
+  fi
   grep -q 'android.permission.INTERNET' "$manifest" || { echo "ERRO: permissão INTERNET não foi aplicada"; exit 1; }
   echo "AndroidManifest:"; grep -E 'uses-permission|android:label' "$manifest"
 fi

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:funilar/updater.dart';
@@ -46,5 +47,31 @@ void main() {
     expect(s, contains(r"'C:\Users\Zé d''Oficina\Funilar'"));
     expect(s, contains("'v1.0.60'"));
     expect(s, contains('funilar.exe'));
+  });
+
+  test('Linux: baixa o .tar.gz, troca os arquivos e grava a versão', () async {
+    if (!Platform.isLinux) return;
+    final src = await Directory.systemTemp.createTemp('funilar_src');
+    await File('${src.path}/bundle/funilar').create(recursive: true);
+    await File('${src.path}/bundle/funilar').writeAsString('novo');
+    await File('${src.path}/bundle/data/flutter_assets/a.txt').create(recursive: true);
+    final made = await Process.run('tar', ['-C', src.path, '-czf', '${src.path}/x.tar.gz', 'bundle']);
+    expect(made.exitCode, 0);
+    final tgz = await File('${src.path}/x.tar.gz').readAsBytes();
+    final install = await Directory.systemTemp.createTemp('funilar_inst');
+    await File('${install.path}/funilar').writeAsString('velho');
+    final script = await prepareLinuxUpdate(
+      const ReleaseInfo('v1.0.200', '', {}),
+      tarGzBytes: tgz,
+      installDir: install.path,
+      waitPid: 999999,
+      relaunch: false,
+    );
+    expect(await script.readAsString(), contains('cp -a'));
+    final r = await Process.run('sh', [script.path]);
+    expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
+    expect(await File('${install.path}/funilar').readAsString(), 'novo');
+    expect(await File('${install.path}/data/flutter_assets/a.txt').exists(), isTrue);
+    expect((await File('${install.path}/versao.txt').readAsString()).trim(), 'v1.0.200');
   });
 }

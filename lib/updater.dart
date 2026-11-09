@@ -209,3 +209,118 @@ Future<List<int>> downloadAsset(
     client.close();
   }
 }
+
+/// Baixa direto para um arquivo (o APK passa de 100 MB: não cabe bem na
+/// memória do celular).
+Future<File> downloadToFile(String url, int size, File into,
+    void Function(double)? onProgress) async {
+  final client = http.Client();
+  IOSink? sink;
+  try {
+    final req = http.Request('GET', Uri.parse(url))
+      ..headers['User-Agent'] = edition.asset;
+    final res = await client.send(req);
+    if (res.statusCode != 200) {
+      throw HttpException('Download falhou (${res.statusCode})');
+    }
+    final total = res.contentLength ?? size;
+    await into.parent.create(recursive: true);
+    sink = into.openWrite();
+    var got = 0;
+    await for (final chunk in res.stream) {
+      sink.add(chunk);
+      got += chunk.length;
+      if (total > 0) onProgress?.call(got / total);
+    }
+    await sink.flush();
+    await sink.close();
+    sink = null;
+    if (size > 0 && got != size) {
+      throw HttpException('Download incompleto ($got de $size bytes)');
+    }
+    return into;
+  } finally {
+    await sink?.close();
+    client.close();
+  }
+}
+
+/// Linux: arquivo publicado em cada versão.
+String get linuxAsset => '${edition.asset}-linux-x64.tar.gz';
+
+/// Script do Linux: espera o app fechar, copia a pasta nova por cima e
+/// abre de novo.
+String linuxSwapScript({
+  required int pid,
+  required String from,
+  required String to,
+  required String tag,
+  bool relaunch = true,
+}) {
+  String q(String s) => "'${s.replaceAll("'", "'\\''")}'";
+  final exe = '$to/${edition.package}';
+  return '''#!/bin/sh
+log="\${TMPDIR:-/tmp}/${edition.package}-atualizacao.log"
+echo "\$(date '+%F %T') atualizando para $tag" >> "\$log"
+i=0
+while kill -0 $pid 2>/dev/null && [ \$i -lt 60 ]; do sleep 1; i=\$((i+1)); done
+if cp -a ${q(from)}/. ${q(to)}/; then
+  chmod +x ${q(exe)} 2>/dev/null
+  echo ${q(tag)} > ${q('$to/versao.txt')}
+  rm -rf ${q(from)}
+  echo OK >> "\$log"
+else
+  echo FALHOU >> "\$log"
+fi
+${relaunch ? 'nohup ${q(exe)} >/dev/null 2>&1 &' : 'echo "sem reabrir (teste)" >> "\$log"'}
+''';
+}
+
+/// Linux: baixa o .tar.gz, descompacta e deixa o script pronto.
+Future<File> prepareLinuxUpdate(
+  ReleaseInfo rel, {
+  void Function(double progress)? onProgress,
+  List<int>? tarGzBytes,
+  String? installDir,
+  int? waitPid,
+  bool relaunch = true,
+}) async {
+  List<int> bytes;
+  if (tarGzBytes != null) {
+    bytes = tarGzBytes;
+  } else {
+    final a = rel.asset(linuxAsset);
+    if (a == null) throw StateError('Esta versão não tem o arquivo do Linux.');
+    bytes = await downloadAsset(a.$1, a.$2, onProgress);
+  }
+  final tmp = await Directory.systemTemp.createTemp('funilar_update');
+  final files = Directory('${tmp.path}/novo');
+  await files.create();
+  final tar = TarDecoder().decodeBytes(GZipDecoder().decodeBytes(bytes));
+  var hasExe = false;
+  for (final f in tar.files) {
+    var name = f.name.replaceAll('\\', '/');
+    if (name.startsWith('./')) name = name.substring(2);
+    if (name.startsWith('bundle/')) name = name.substring(7);
+    if (name.isEmpty || name.contains('..') || name.startsWith('/')) continue;
+    final out = '${files.path}/$name';
+    if (f.isFile) {
+      await File(out).create(recursive: true);
+      await File(out).writeAsBytes(f.content as List<int>, flush: true);
+      if (name == edition.package) hasExe = true;
+    } else {
+      await Directory(out).create(recursive: true);
+    }
+  }
+  if (!hasExe) throw StateError('O arquivo baixado não tem o ${edition.package}.');
+  final to = installDir ?? File(Platform.resolvedExecutable).parent.path;
+  final script = File('${tmp.path}/trocar.sh');
+  await script.writeAsString(linuxSwapScript(
+      pid: waitPid ?? pid, from: files.path, to: to, tag: rel.tag, relaunch: relaunch));
+  return script;
+}
+
+/// Roda o script do Linux em segundo plano.
+Future<void> launchLinuxSwapScript(File script) async {
+  await Process.start('sh', [script.path], mode: ProcessStartMode.detached);
+}

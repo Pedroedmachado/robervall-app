@@ -28,6 +28,18 @@ jobs:
         with:
           channel: stable
           cache: true
+      - name: Chave fixa de assinatura do Android
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          # Com a mesma chave em toda versão, o APK novo instala por cima do
+          # antigo (atualização pelo próprio app, sem perder os dados).
+          if [ -n "$KS" ]; then
+            mkdir -p ~/.android && echo "$KS" | base64 -d > ~/.android/debug.keystore
+            echo "Chave fixa aplicada."
+          else
+            echo "::warning::Sem o segredo ANDROID_KEYSTORE_B64: o APK sai com chave temporária e não instala por cima da versão anterior."
+          fi
       - name: Dependências do Linux
         run: |
           sudo apt-get update -y

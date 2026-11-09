@@ -2,6 +2,8 @@ import '../edition.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../theme.dart';
@@ -67,13 +69,63 @@ class _UpdateCardState extends State<UpdateCard> {
       }
       return;
     }
-    // Android (APK) e Linux: baixa o arquivo novo; iPhone: página da versão
-    final name = assetForPlatform();
-    final a = name == null ? null : rel.asset(name);
-    final url = a?.$1 ?? releasesPage;
-    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-    if (mounted && Platform.isAndroid) {
-      toast(context, 'Abra o arquivo baixado para instalar por cima (seus dados ficam).');
+    if (Platform.isLinux) {
+      final ok = await confirm(context, 'Atualizar para ${rel.tag}?',
+          'O ${edition.title} vai baixar a versão nova, fechar e abrir de novo sozinho. Seus dados ficam como estão.',
+          ok: 'Atualizar');
+      if (!ok || !mounted) return;
+      setState(() => _progress = 0);
+      try {
+        final script = await prepareLinuxUpdate(rel,
+            onProgress: (p) => mounted ? setState(() => _progress = p) : null);
+        if (!mounted) return;
+        await StoreScope.read(context).flush();
+        await launchLinuxSwapScript(script);
+        exit(0);
+      } catch (e) {
+        if (mounted) {
+          setState(() => _progress = null);
+          toast(context, 'Não foi possível atualizar: $e');
+        }
+      }
+      return;
+    }
+    if (Platform.isAndroid) {
+      final a = rel.asset('${edition.asset}-android.apk');
+      if (a == null) {
+        await launchUrl(Uri.parse(releasesPage), mode: LaunchMode.externalApplication);
+        return;
+      }
+      setState(() => _progress = 0);
+      try {
+        await StoreScope.read(context).flush();
+        final dir = await getTemporaryDirectory();
+        final apk = await downloadToFile(
+            a.$1, a.$2, File('${dir.path}/${edition.asset}-${rel.tag}.apk'),
+            (p) => mounted ? setState(() => _progress = p) : null);
+        if (!mounted) return;
+        setState(() => _progress = null);
+        final r = await OpenFilex.open(apk.path,
+            type: 'application/vnd.android.package-archive');
+        if (!mounted) return;
+        if (r.type != ResultType.done) {
+          toast(context,
+              'Não abriu o instalador (${r.message}). Libere "Instalar apps desconhecidos" para o ${edition.title} nas configurações e tente de novo.');
+        } else {
+          toast(context, 'Toque em "Atualizar" no instalador. Seus dados ficam.');
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() => _progress = null);
+          toast(context, 'Não foi possível baixar: $e');
+        }
+      }
+      return;
+    }
+    // iPhone: o .ipa sem assinatura é instalado pelo AltStore/Sideloadly
+    await launchUrl(Uri.parse(releasesPage), mode: LaunchMode.externalApplication);
+    if (mounted) {
+      toast(context, 'Baixe o arquivo .ipa e instale pelo AltStore/Sideloadly, como da primeira vez.');
     }
   }
 
@@ -117,9 +169,7 @@ class _UpdateCardState extends State<UpdateCard> {
             FilledButton.icon(
               onPressed: _progress != null ? null : () => _update(rel),
               icon: const Icon(Icons.download),
-              label: Text(Platform.isWindows
-                  ? 'Atualizar agora'
-                  : (Platform.isAndroid ? 'Baixar APK novo' : 'Baixar versão nova')),
+              label: Text(Platform.isIOS ? 'Baixar versão nova' : 'Atualizar agora'),
             ),
           OutlinedButton.icon(
             onPressed: _checking || _progress != null ? null : _check,
