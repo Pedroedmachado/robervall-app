@@ -1,0 +1,257 @@
+// Entrada de material no estoque a partir da nota de compra: foto (OCR),
+// XML da NF-e ou PDF (DANFE).
+
+import 'models.dart';
+import 'quote_import.dart' show PdfWord;
+import 'receipt_parser.dart';
+import 'stock.dart';
+
+/// Lê o XML da NF-e (o arquivo que o fornecedor manda junto da nota).
+/// Devolve null se não for uma NF-e.
+ReceiptData? parseNfeXml(String xml) {
+  if (!xml.contains('<infNFe') && !xml.contains('<NFe')) return null;
+  String tag(String src, String name) {
+    final m = RegExp('<(?:\\w+:)?$name(?:\\s[^>]*)?>([\\s\\S]*?)</(?:\\w+:)?$name>').firstMatch(src);
+    return m == null ? '' : _unescape(m.group(1)!.trim());
+  }
+
+  final emit = tag(xml, 'emit');
+  final supplier = tag(emit, 'xFant').isNotEmpty ? tag(emit, 'xFant') : tag(emit, 'xNome');
+  final ide = tag(xml, 'ide');
+  final dt = tag(ide, 'dhEmi').isNotEmpty ? tag(ide, 'dhEmi') : tag(ide, 'dEmi');
+  final date = DateTime.tryParse(dt.length >= 10 ? dt.substring(0, 10) : dt);
+  final nNF = tag(ide, 'nNF');
+  final items = <ReceiptItem>[];
+  for (final m in RegExp(r'<(?:\w+:)?det\b[^>]*>([\s\S]*?)</(?:\w+:)?det>').allMatches(xml)) {
+    final prod = tag(m.group(1)!, 'prod');
+    double n(String t) => double.tryParse(tag(prod, t)) ?? 0;
+    final qty = n('qCom');
+    final total = n('vProd') - n('vDesc');
+    items.add(ReceiptItem(
+      tag(prod, 'xProd'),
+      qty,
+      tag(prod, 'uCom'),
+      qty > 0 ? total / qty : n('vUnCom'),
+      total,
+      code: tag(prod, 'cProd'),
+    ));
+  }
+  final vNF = double.tryParse(tag(tag(xml, 'ICMSTot'), 'vNF')) ?? 0;
+  final pag = tag(xml, 'tPag');
+  final payment = switch (pag) {
+    '01' => 'Dinheiro',
+    '03' => 'Cartão de crédito',
+    '04' => 'Cartão de débito',
+    '15' => 'Boleto',
+    '17' => 'Pix',
+    _ => '',
+  };
+  final all = items.map((e) => e.description.toUpperCase()).join(' ');
+  return ReceiptData(
+    supplier: supplier,
+    date: date,
+    total: vNF > 0 ? vNF : items.fold(0.0, (a, e) => a + e.total),
+    items: items,
+    category: _looksLikeMaterial(all) ? ExpenseCategory.materiais : ExpenseCategory.fornecedor,
+    rawText: '',
+    docNumber: nNF.isEmpty ? '' : 'NF-e $nNF',
+    payment: payment,
+  );
+}
+
+String _unescape(String s) => s
+    .replaceAll('&amp;', '&')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&apos;', "'")
+    .replaceAll('&#39;', "'");
+
+/// PDF da nota (DANFE ou orçamento/cupom em PDF): o texto vira linhas e passa
+/// pelo mesmo leitor das fotos.
+ReceiptData parseReceiptPdfWords(List<PdfWord> words) {
+  final byPage = <int, List<OcrPiece>>{};
+  for (final w in words) {
+    byPage.putIfAbsent(w.page, () => []).add(OcrPiece(w.text, w.x, w.y, w.x1, w.y + 7));
+  }
+  final lines = <String>[];
+  for (final p in (byPage.keys.toList()..sort())) {
+    lines.addAll(_joinWords(byPage[p]!));
+  }
+  return parseReceipt(lines);
+}
+
+/// Junta as palavras em linhas, com um espaço entre palavras e três entre
+/// colunas (como as linhas do OCR).
+List<String> _joinWords(List<OcrPiece> pieces) {
+  final sorted = [...pieces]..sort((a, b) {
+      final y = a.top.compareTo(b.top);
+      return y != 0 ? y : a.left.compareTo(b.left);
+    });
+  final rows = <List<OcrPiece>>[];
+  for (final p in sorted) {
+    if (rows.isNotEmpty && (p.top - rows.last.first.top).abs() <= 2.2) {
+      rows.last.add(p);
+    } else {
+      rows.add([p]);
+    }
+  }
+  return [
+    for (final r in rows)
+      () {
+        r.sort((a, b) => a.left.compareTo(b.left));
+        final b = StringBuffer(r.first.text);
+        for (var i = 1; i < r.length; i++) {
+          b.write(r[i].left - r[i - 1].right > 8 ? '   ' : ' ');
+          b.write(r[i].text);
+        }
+        return b.toString();
+      }()
+  ];
+}
+
+const _material = [
+  'TINTA', 'VERNIZ', 'PRIMER', 'MASSA', 'LIXA', 'THINNER', 'SOLVENTE',
+  'CATALIS', 'ACELERADOR', 'FITA', 'ESTOPA', 'DILUENTE', 'POLIDOR', 'COMPOSTO',
+  'CERA', 'FUNDO', 'ADESIVO', 'COLA', 'MASCARAMENTO', 'PAPEL', 'LUVA',
+  'DISCO', 'ESMALTE', 'ANTICORROS', 'BASE', 'BOINA', 'PANO', 'SELADOR',
+];
+
+bool _looksLikeMaterial(String upper) => _material.any(upper.contains);
+
+/// Unidade da nota → unidade do estoque.
+String stockUnitFor(String raw) {
+  final u = raw.trim().toUpperCase().replaceAll('.', '');
+  return switch (u) {
+    'L' || 'LT' || 'LTS' || 'LITRO' || 'LITROS' => 'litro',
+    'ML' => 'ml',
+    'KG' || 'KILO' || 'QUILO' => 'kg',
+    'G' || 'GR' => 'g',
+    'M' || 'MT' || 'MTS' || 'METRO' => 'm',
+    'RL' || 'ROLO' || 'ROLOS' => 'rolo',
+    'PR' || 'PAR' => 'par',
+    'FL' || 'FLS' || 'FOLHA' || 'FOLHAS' => 'folha',
+    'DISCO' || 'DISCOS' => 'disco',
+    _ => 'un',
+  };
+}
+
+/// Uma linha da nota a caminho do estoque (o usuário confere e ajusta).
+class StockEntryLine {
+  StockEntryLine({
+    required this.name,
+    required this.code,
+    required this.qty,
+    required this.unit,
+    required this.unitCost,
+    required this.kind,
+    this.match,
+  });
+
+  String name;
+  String code;
+  double qty;
+  String unit;
+
+  /// Custo de cada unidade da nota (já com desconto).
+  double unitCost;
+  StockKind kind;
+
+  /// Item do estoque que vai receber a quantidade (null = cria um novo).
+  StockItem? match;
+  bool include = true;
+}
+
+String _key(String s) => normCode(s);
+
+/// Monta as linhas da entrada, achando o item do estoque quando já existe
+/// (mesmo código ou mesmo nome).
+List<StockEntryLine> planStockEntry(ReceiptData d, List<StockItem> stock) {
+  final out = <StockEntryLine>[];
+  for (final it in d.items) {
+    final name = it.description.trim();
+    if (name.isEmpty && it.code.isEmpty) continue;
+    StockItem? match;
+    final code = _key(it.code);
+    if (code.isNotEmpty) {
+      for (final s in stock) {
+        if (s.kind == StockKind.cliente) continue;
+        if ([s.partNumber, s.mfrCode, s.sku].any((c) => c.isNotEmpty && _key(c) == code)) {
+          match = s;
+          break;
+        }
+      }
+    }
+    if (match == null && name.isNotEmpty) {
+      final k = _key(name);
+      for (final s in stock) {
+        if (s.kind == StockKind.cliente) continue;
+        if (_key(s.name) == k) {
+          match = s;
+          break;
+        }
+      }
+    }
+    out.add(StockEntryLine(
+      name: name.isEmpty ? it.code : name,
+      code: it.code,
+      qty: it.qty <= 0 ? 1 : it.qty,
+      unit: stockUnitFor(it.unit),
+      unitCost: it.unitPrice > 0 ? it.unitPrice : (it.qty > 0 ? it.total / it.qty : it.total),
+      kind: match?.kind ??
+          (_looksLikeMaterial(name.toUpperCase()) ? StockKind.material : StockKind.peca),
+      match: match,
+    ));
+  }
+  return out;
+}
+
+/// Aplica a entrada: soma no item que já existe (custo passa a ser o da nota)
+/// ou cria um item novo. Devolve os itens criados.
+List<StockItem> applyStockEntry(List<StockEntryLine> lines, {String docLabel = ''}) {
+  final created = <StockItem>[];
+  final stamp = docLabel.isEmpty ? 'Entrada pela nota' : 'Entrada pela nota $docLabel';
+  for (final l in lines) {
+    if (!l.include || l.qty <= 0) continue;
+    final s = l.match;
+    if (s != null) {
+      if (s.hasPack) {
+        // a nota fala em embalagens (latas, caixas…); o estoque conta na
+        // unidade de uso (ml, folha…)
+        s.qty += l.qty * s.packSize;
+        if (l.unitCost > 0) {
+          s.packCost = l.unitCost;
+          s.syncPackCost();
+        }
+      } else {
+        s.qty += l.qty;
+        if (l.unitCost > 0) s.cost = l.unitCost;
+      }
+      if (s.partNumber.isEmpty && l.code.isNotEmpty && s.kind == StockKind.peca) {
+        s.partNumber = l.code;
+      }
+      s.notes = [s.notes, '$stamp: +${_q(l.qty)}${s.hasPack ? ' ${s.packName}' : ''}']
+          .where((e) => e.trim().isNotEmpty)
+          .join('\n');
+    } else {
+      final n = StockItem(
+        kind: l.kind,
+        name: l.name,
+        partNumber: l.kind == StockKind.peca ? l.code : '',
+        qty: l.qty,
+        unit: l.unit,
+        cost: l.unitCost,
+        notes: stamp,
+      );
+      if (l.kind == StockKind.material && l.code.isNotEmpty) n.mfrCode = l.code;
+      created.add(n);
+    }
+  }
+  return created;
+}
+
+String _q(double v) {
+  var s = v.toStringAsFixed(2).replaceAll(RegExp(r'0+$'), '');
+  if (s.endsWith('.')) s = s.substring(0, s.length - 1);
+  return s.replaceAll('.', ',');
+}

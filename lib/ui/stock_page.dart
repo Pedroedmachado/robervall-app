@@ -13,6 +13,7 @@ import '../stock.dart';
 import '../store.dart';
 import '../theme.dart';
 import 'access.dart';
+import 'stock_entry_ui.dart' show stockEntryFromNote;
 import 'widgets.dart';
 
 /// Aba Estoque: peças e materiais guardados na oficina, com foto.
@@ -47,8 +48,26 @@ class _StockPageState extends State<StockPage> {
     final value = store.stock.fold(0.0, (a, e) => a + e.stockValue);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Estoque')),
-      floatingActionButton: FloatingActionButton.extended(
+      appBar: AppBar(title: const Text('Estoque'), actions: [
+        IconButton(
+          tooltip: 'Entrada pela nota de compra',
+          icon: const Icon(Icons.receipt_long_outlined),
+          onPressed: () => stockEntryFromNote(context),
+        ),
+      ]),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton.extended(
+            heroTag: 'entrada-nota',
+            onPressed: () => stockEntryFromNote(context),
+            icon: const Icon(Icons.receipt_long_outlined),
+            label: const Text('Ler nota'),
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton.extended(
+        heroTag: 'estoque-adicionar',
         onPressed: () async {
           if (!await authorize(context, Perm.estoqueEditar,
               reason: 'Só o gestor/almoxarife mexe no estoque.')) {
@@ -61,6 +80,8 @@ class _StockPageState extends State<StockPage> {
         },
         icon: const Icon(Icons.add),
         label: const Text('Adicionar'),
+      ),
+        ],
       ),
       body: Column(
         children: [

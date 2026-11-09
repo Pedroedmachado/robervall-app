@@ -41,8 +41,12 @@ class ReceiptItem {
   final String unit;
   final double unitPrice;
   final double total;
+
+  /// Código do produto no fornecedor (NF-e: cProd).
+  final String code;
   const ReceiptItem(
-      this.description, this.qty, this.unit, this.unitPrice, this.total);
+      this.description, this.qty, this.unit, this.unitPrice, this.total,
+      {this.code = ''});
 }
 
 class ReceiptData {
