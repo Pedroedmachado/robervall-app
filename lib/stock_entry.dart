@@ -115,9 +115,18 @@ const _material = [
   'CATALIS', 'ACELERADOR', 'FITA', 'ESTOPA', 'DILUENTE', 'POLIDOR', 'COMPOSTO',
   'CERA', 'FUNDO', 'ADESIVO', 'COLA', 'MASCARAMENTO', 'PAPEL', 'LUVA',
   'DISCO', 'ESMALTE', 'ANTICORROS', 'BASE', 'BOINA', 'PANO', 'SELADOR',
+  'DESENGRAX', 'SOLUCAO', 'METALIC', ' MET.', ' MET ', 'PEROLIZ',
 ];
 
 bool _looksLikeMaterial(String upper) => _material.any(upper.contains);
+
+const _part = [
+  'PARA-CHOQUE', 'PARACHOQUE', 'PARA CHOQUE', 'FAROL', 'LANTERNA', 'PORTA ',
+  'CAPO', 'PARALAMA', 'PARA-LAMA', 'RETROVISOR', 'GRADE', 'RADIADOR',
+  'AMORTECEDOR', 'PASTILHA', 'MACANETA', 'SUPORTE',
+];
+
+bool _looksLikePart(String upper) => _part.any(upper.contains);
 
 /// Unidade da nota → unidade do estoque.
 String stockUnitFor(String raw) {
@@ -136,6 +145,36 @@ String stockUnitFor(String raw) {
   };
 }
 
+/// Embalagem lida na nota: "750GR", "900ML", "1KG", ou "QUART" (lata de
+/// 900 ml; o tamanho também pode vir na descrição: "VERNIZ … 900ML").
+({double size, String unit, String name})? packFrom(String rawUnit, String desc) {
+  final u = rawUnit.trim().toUpperCase();
+  ({double size, String unit, String name})? parse(String t, String name) {
+    final m = RegExp(r'(\d+(?:[.,]\d+)?)\s*(ML|LTS?|LITROS?|L|KG|GRS?|G)\b').firstMatch(t);
+    if (m == null) return null;
+    final n = double.tryParse(m.group(1)!.replaceAll(',', '.')) ?? 0;
+    if (n <= 0) return null;
+    return switch (m.group(2)!) {
+      'ML' => (size: n, unit: 'ml', name: name),
+      'KG' => (size: n * 1000, unit: 'g', name: name),
+      'G' || 'GR' || 'GRS' => (size: n, unit: 'g', name: name),
+      _ => (size: n * 1000, unit: 'ml', name: name), // litro
+    };
+  }
+
+  final fromUnit = parse(u, 'embalagem');
+  if (fromUnit != null) {
+    // "1,00 1KG" de massa de polir: pote; "750GR" de massa: lata
+    return (size: fromUnit.size, unit: fromUnit.unit, name: fromUnit.unit == 'g' ? 'pote' : 'frasco');
+  }
+  if (u == 'QUART' || u == 'QT' || u == 'QUARTO') {
+    final d = parse(desc.toUpperCase(), 'lata');
+    return (size: d?.size ?? 900, unit: d?.unit ?? 'ml', name: 'lata');
+  }
+  if (u == 'GL' || u == 'GALAO') return (size: 3600, unit: 'ml', name: 'galão');
+  return null;
+}
+
 /// Uma linha da nota a caminho do estoque (o usuário confere e ajusta).
 class StockEntryLine {
   StockEntryLine({
@@ -146,7 +185,14 @@ class StockEntryLine {
     required this.unitCost,
     required this.kind,
     this.match,
+    this.packSize = 0,
+    this.packName = '',
   });
+
+  /// Embalagem (ex.: lata de 900 ml): a nota conta latas e o estoque conta
+  /// na unidade de uso. 0 = sem embalagem.
+  double packSize;
+  String packName;
 
   String name;
   String code;
@@ -192,14 +238,21 @@ List<StockEntryLine> planStockEntry(ReceiptData d, List<StockItem> stock) {
         }
       }
     }
+    final pack = packFrom(it.unit, name);
+    final up = name.toUpperCase();
     out.add(StockEntryLine(
       name: name.isEmpty ? it.code : name,
       code: it.code,
       qty: it.qty <= 0 ? 1 : it.qty,
-      unit: stockUnitFor(it.unit),
+      unit: pack?.unit ?? stockUnitFor(it.unit),
+      packSize: pack?.size ?? 0,
+      packName: pack?.name ?? '',
       unitCost: it.unitPrice > 0 ? it.unitPrice : (it.qty > 0 ? it.total / it.qty : it.total),
       kind: match?.kind ??
-          (_looksLikeMaterial(name.toUpperCase()) ? StockKind.material : StockKind.peca),
+          (_looksLikeMaterial(up) ||
+                  (d.category == ExpenseCategory.materiais && !_looksLikePart(up))
+              ? StockKind.material
+              : StockKind.peca),
       match: match,
     ));
   }
@@ -234,14 +287,18 @@ List<StockItem> applyStockEntry(List<StockEntryLine> lines, {String docLabel = '
           .where((e) => e.trim().isNotEmpty)
           .join('\n');
     } else {
+      final pack = l.packSize > 0;
       final n = StockItem(
         kind: l.kind,
         name: l.name,
         partNumber: l.kind == StockKind.peca ? l.code : '',
-        qty: l.qty,
+        qty: pack ? l.qty * l.packSize : l.qty,
         unit: l.unit,
-        cost: l.unitCost,
-        notes: stamp,
+        cost: pack ? l.unitCost / l.packSize : l.unitCost,
+        packName: pack ? l.packName : 'lata',
+        packSize: pack ? l.packSize : 0,
+        packCost: pack ? l.unitCost : 0,
+        notes: '$stamp: +${_q(l.qty)}${pack ? ' ${l.packName}' : ''}',
       );
       if (l.kind == StockKind.material && l.code.isNotEmpty) n.mfrCode = l.code;
       created.add(n);

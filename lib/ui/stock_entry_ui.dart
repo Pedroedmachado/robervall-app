@@ -254,7 +254,7 @@ class _EntryPageState extends State<_EntryPage> {
               padding: const EdgeInsets.only(left: 12),
               child: Text(
                 m == null
-                    ? 'Item novo no estoque${l.code.isEmpty ? '' : ' · cód. ${l.code}'}'
+                    ? 'Item novo no estoque${l.packSize > 0 ? ' · ${l.packName} de ${qtyText(l.packSize, l.unit)}' : ''}${l.code.isEmpty ? '' : ' · cód. ${l.code}'}'
                     : 'Soma em "${m.name}" (tem ${m.qtyLabel})',
                 style: t.textTheme.bodySmall?.copyWith(
                     color: m == null ? t.colorScheme.primary : Colors.green.shade700),
@@ -267,7 +267,9 @@ class _EntryPageState extends State<_EntryPage> {
                 SizedBox(
                   width: 120,
                   child: NumField(
-                    label: m != null && m.hasPack ? 'Qtd (${m.packName})' : 'Qtd (${l.unit})',
+                    label: m != null
+                        ? (m.hasPack ? 'Qtd (${m.packName})' : 'Qtd (${m.unit})')
+                        : (l.packSize > 0 ? 'Qtd (${l.packName})' : 'Qtd (${l.unit})'),
                     value: l.qty,
                     onChanged: (v) => setState(() => l.qty = v),
                   ),
@@ -275,7 +277,7 @@ class _EntryPageState extends State<_EntryPage> {
                 SizedBox(
                   width: 150,
                   child: NumField(
-                    label: 'Custo unitário',
+                    label: l.packSize > 0 && m == null ? 'Custo por ${l.packName}' : 'Custo unitário',
                     prefix: 'R\$',
                     value: l.unitCost,
                     onChanged: (v) => setState(() => l.unitCost = v),

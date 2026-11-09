@@ -244,9 +244,9 @@ ReceiptData parseReceipt(List<String> rawLines) {
   // itens: descrição seguida de "qtd unidade preço total" (ou tudo na mesma linha)
   final items = <ReceiptItem>[];
   final qtyLine = RegExp(
-      r'^\s*(\d+(?:[,.]\d+)?)\s*([A-Z]{1,6})?\.?\s+.*?(\d[\d.\s]*[,.]\d{2})\s+.*?(\d[\d.\s]*[,.]\d{2})\s*$');
+      r'^\s*(\d+(?:[,.]\d+)?)\s*(\d*[A-Z]{1,6})?\.?\s+.*?(\d[\d.\s]*[,.]\d{2})\s+.*?(\d[\d.\s]*[,.]\d{2})\s*$');
   final sameLine = RegExp(
-      r'^(.*?[A-Z].*?)\s(\d+(?:[,.]\d+)?)\s*([A-Z]{1,6})?\.?\s+[\d.\s]*[,.]\d{2}\s+[\d.\s]*[,.]\d{2}\s*$');
+      r'^(.*?[A-Z].*?)\s(\d+(?:[,.]\d+)?)\s*(\d*[A-Z]{1,6})?\.?\s+[\d.\s]*[,.]\d{2}\s+[\d.\s]*[,.]\d{2}\s*$');
   for (var i = 0; i < up.length; i++) {
     final l = _fixDigits(up[i]);
     if (l.contains('TOTAL') || l.contains('QTDE')) continue;
