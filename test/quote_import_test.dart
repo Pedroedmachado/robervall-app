@@ -21,7 +21,62 @@ List<PdfWord> ciliaWords() {
   return raw.map((e) => PdfWord.fromJson(Map<String, dynamic>.from(e as Map))).toList();
 }
 
+List<PdfWord> portoWords() {
+  final raw =
+      jsonDecode(File('test/fixtures/porto_soma_words.json').readAsStringSync()) as List;
+  return raw.map((e) => PdfWord.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+}
+
 void main() {
+  test('orçamento detalhado da Porto (SOMA): cabeçalho, itens e total', () {
+    final q = parseInsurerQuote(portoWords());
+    final c = q.claim;
+    expect(q.system, 'Porto (SOMA)');
+    expect(c.type, ClaimType.seguradora);
+    expect(c.claimNumber, '1234567890123');
+    expect(c.policyNumber, '1111111');
+    expect(c.customerName, 'MARIA TESTE DE EXEMPLO SILVA');
+    expect(c.customerPhone, '(11) 90000-0000');
+    expect(c.insurerName, 'PORTO SEGURO');
+    expect(c.regulatorName, 'REGULACAO NEXO 1');
+    expect(c.vehicle.brand, 'RENAULT');
+    expect(c.vehicle.model, 'SANDERO STEPWAY 1.6 8V HI');
+    expect(c.vehicle.plate, 'ABC1D23');
+    expect(c.vehicle.chassis, '93Y5SRD6GHJ000000');
+    expect(c.vehicle.color, 'CINZA');
+    expect(c.vehicle.year, '2016/2017');
+    expect(c.laborRate, 62);
+    expect(c.paintRate, 62);
+    expect(q.partsDiscountPct, 14);
+    expect(c.deductible, 6875);
+    expect(c.notes, contains('10000001'));
+    expect(c.notes, contains('LIBERADO'));
+
+    final troca = c.items.where((e) => e.op == ItemOp.troca).toList();
+    expect(troca.length, 9);
+    final tampa = troca.firstWhere((e) => e.partNumber == '901008080R');
+    expect(tampa.description, 'TAMPA TRAS.S/FURO AEROFOLIO');
+    expect(tampa.price, 2345.10);
+    expect(tampa.discountPct, 14);
+    expect(tampa.laborHours, 2);
+    expect(tampa.paintHours, 4);
+    expect(tampa.note, contains('EQ.E0,E1,E2,E3'));
+    expect(troca.firstWhere((e) => e.partNumber == '265604000R').description,
+        'REFLETOR P/CHOQUE TRA');
+    expect(troca.firstWhere((e) => e.partNumber == '265509406R').description,
+        'LANTERNA TRAS.LD C/M.NEG');
+    // mão de obra extra da tampa (amortecedor, fechadura…)
+    final ri = c.items.where((e) => e.op == ItemOp.reparo && e.removeInstall).toList();
+    expect(ri.map((e) => e.description), contains('amortecedor da tampa'));
+    expect(ri.length, 4 + 3);
+    // recuperar + restaurar emblemas
+    expect(c.items.where((e) => e.op == ItemOp.reparo && !e.removeInstall).length, 3);
+    expect(c.items.where((e) => e.op == ItemOp.servico).length, 3);
+
+    expect(q.pdfTotal, 7292);
+    expect(computeTotals(c, Settings()).total, closeTo(7292, 0.05));
+  });
+
   test('números no formato brasileiro', () {
     expect(parseBrNumber('R\$ 1.500,05'), 1500.05);
     expect(parseBrNumber('26,00%'), 26);

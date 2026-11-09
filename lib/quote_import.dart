@@ -137,6 +137,7 @@ bool _isLabel(String seg, String label) {
 ImportedQuote parseInsurerQuote(List<PdfWord> words) {
   final rows = _rows(words);
   final full = rows.map((r) => r.text).join('\n');
+  if (_isSoma(full)) return _parseSoma(words, rows);
   final isCilia = RegExp(r'cilia', caseSensitive: false).hasMatch(full);
   final hasTable = rows.any((r) => r.text.contains('OPERAÇÕES') && r.text.contains('TÍTULO'));
   final c = Claim(status: ClaimStatus.orcamento);
@@ -509,3 +510,270 @@ const _brands = {
   'DODGE', 'JAC', 'LIFAN', 'PORSCHE', 'MINI', 'YAMAHA', 'IVECO', 'SCANIA',
   'TROLLER', 'SMART', 'JAGUAR', 'LEXUS',
 };
+
+
+// ======================================================================
+// Porto Seguro / Azul / Itaú — "Orçamento Detalhado" do sistema SOMA
+// (relatório Jasper). Números no formato americano (2,345.10).
+
+bool _isSoma(String full) =>
+    full.contains('PEÇAS - TROCA') ||
+    full.contains('PEÇAS - RECUPERAR') ||
+    full.contains('MONTAGEM - DESMONTAGEM') ||
+    (full.contains('DETALHADO') && full.contains('Licença:'));
+
+/// "2,345.10" → 2345.10; "14.00" → 14.
+double? parseUsNumber(String raw) {
+  final m = RegExp(r'-?\d[\d,]*(\.\d+)?').firstMatch(raw.replaceAll('R\$', ''));
+  if (m == null) return null;
+  return double.tryParse(m.group(0)!.replaceAll(',', ''));
+}
+
+final _usNum = RegExp(r'^\d{1,3}(,\d{3})*(\.\d+)?$|^\d+(\.\d+)?$');
+
+/// "(MOLDURA INF.P/CHOQUE TRAS) - Val. 2015/" → ("MOLDURA INF.P/CHOQUE TRAS",
+/// "Val. 2015/"); "REFLETOR REFLETOR REFLETOR P/CHOQUE" → "REFLETOR P/CHOQUE".
+(String, String) _somaDesc(String raw) {
+  var t = raw.trim();
+  var note = '';
+  final v = RegExp(r'\s+-\s+(Val\..*)$').firstMatch(t);
+  if (v != null) {
+    note = v.group(1)!.replaceAll(RegExp(r'\s*\*\s*$'), '').trim();
+    t = t.substring(0, v.start).trim();
+  }
+  t = t.replaceAll(RegExp(r'^\(\d+\)\s*'), '').replaceAll(RegExp(r'\s*\*$'), '');
+  if (t.startsWith('(') && t.endsWith(')')) t = t.substring(1, t.length - 1);
+  if (t.startsWith('(') && !t.contains(')')) t = t.substring(1);
+  final out = <String>[];
+  for (final w in t.split(RegExp(r'\s+'))) {
+    if (out.isNotEmpty && out.last == w) continue;
+    out.add(w);
+  }
+  return (out.join(' ').trim(), note == 'Val.' ? '' : note);
+}
+
+ImportedQuote _parseSoma(List<PdfWord> words, List<_Row> rows) {
+  final c = Claim(status: ClaimStatus.orcamento, type: ClaimType.seguradora);
+  final q = ImportedQuote(c, system: 'Porto (SOMA)');
+
+  // ---- cabeçalho "Rótulo: valor" (o valor fica à direita, quase na mesma
+  // altura do rótulo)
+  final head = words.where((w) => w.page == 0 && w.y < 185).toList();
+  String label(String name, {bool left = true}) {
+    for (final l in head) {
+      if (l.text != name) continue;
+      if (left && l.x > 300 || !left && l.x < 300) continue;
+      final limit = left ? 350.0 : 1000.0;
+      final vals = head
+          .where((w) => (w.y - l.y).abs() <= 3.5 && w.x > l.x1 - 0.5 && w.x < limit && w != l)
+          .toList()
+        ..sort((a, b) => a.x.compareTo(b.x));
+      final out = <String>[];
+      for (final w in vals) {
+        if (w.text.endsWith(':') && out.isNotEmpty) break; // próximo rótulo
+        if (w.text.endsWith(':')) continue;
+        out.add(w.text);
+      }
+      return out.join(' ').trim();
+    }
+    return '';
+  }
+
+  final v = c.vehicle;
+  c.claimNumber = label('Sinistro:');
+  c.policyNumber = label('Apólice:');
+  c.customerName = label('Segurado:');
+  c.customerPhone = label('Telefone:');
+  final veh = label('Veículo:').replaceAll(RegExp(r'[\s-]+$'), '');
+  if (veh.isNotEmpty) {
+    final parts = veh.split(' ');
+    if (_brands.contains(parts.first.toUpperCase()) && parts.length > 1) {
+      v.brand = parts.first;
+      v.model = parts.sublist(1).join(' ');
+    } else {
+      v.model = veh;
+    }
+  }
+  v.chassis = label('Chassi:').toUpperCase();
+  v.plate = label('Licença:').toUpperCase();
+  v.color = label('Impregnação:');
+  if (v.color.isEmpty) v.color = label('Cor:');
+  final fab = label('Fabricação:');
+  final mod = label('Modelo:');
+  v.year = [fab, mod].where((e) => e.isNotEmpty).toSet().join('/');
+  final kmW = head.where((w) => w.text.startsWith('Atual:')).toList();
+  if (kmW.isNotEmpty) {
+    var k = kmW.first.text.substring(6);
+    if (k.isEmpty) k = label('Atual:');
+    final n = parseUsNumber(k);
+    if (n != null && n > 1) v.km = n.round().toString();
+  }
+  final emp = label('Empresa:', left: false);
+  c.insurerName = emp.contains(' - ') ? emp.substring(emp.indexOf(' - ') + 3).trim() : emp;
+  final autor = label('Autor:', left: false);
+  c.regulatorName = autor.replaceFirst(RegExp(r'^\d+\s*-\s*'), '');
+  final notes = <String>[];
+  final num = label('Orçamento:', left: false);
+  final ver = label('Versão:', left: false);
+  if (num.isNotEmpty) {
+    notes.add('Orçamento ${q.system}: $num${ver.isEmpty ? '' : ' (versão $ver)'}');
+  }
+
+  // ---- situação, índices, franquia e total
+  for (final r in rows) {
+    final t = r.text;
+    final sit = RegExp(r'^ORÇAMENTO \d+ - .* - ([A-ZÇÃÕÉ ]+)$').firstMatch(t);
+    if (sit != null && notes.every((n) => !n.startsWith('Situação'))) {
+      notes.add('Situação na seguradora: ${sit.group(1)!.trim()}');
+    }
+    final fr = RegExp(r'-\(\$\s*([\d,]+\.\d{2})\)').firstMatch(t);
+    if (fr != null && c.deductible == 0) c.deductible = parseUsNumber(fr.group(1)!) ?? 0;
+    final lr = RegExp(r'Funilaria\s+R\$\s*([\d,]+\.\d+)').firstMatch(t);
+    if (lr != null && c.laborRate == 0) c.laborRate = parseUsNumber(lr.group(1)!) ?? 0;
+    final pr = RegExp(r'^Pintura\s+R\$\s*([\d,]+\.\d+)').firstMatch(t);
+    if (pr != null && c.paintRate == 0) c.paintRate = parseUsNumber(pr.group(1)!) ?? 0;
+    final dc = RegExp(r'^Funilaria\s+([\d.]+)\s*%').firstMatch(t);
+    if (dc != null && q.partsDiscountPct == 0) q.partsDiscountPct = parseUsNumber(dc.group(1)!) ?? 0;
+  }
+  for (var i = 0; i < rows.length && q.pdfTotal == 0; i++) {
+    if (!rows[i].text.contains('Total do Orçamento')) continue;
+    for (var j = i; j < rows.length && rows[j].page == rows[i].page && rows[j].y - rows[i].y < 20; j++) {
+      final m = RegExp(r'R\$\s*([\d,]+\.\d{2})').firstMatch(rows[j].text);
+      if (m != null) {
+        q.pdfTotal = parseUsNumber(m.group(1)!) ?? 0;
+        break;
+      }
+    }
+  }
+
+  // ---- itens
+  String section = '';
+  BudgetItem? last;
+  for (final r in rows) {
+    final t = r.text;
+    if (t.startsWith('RESUMO') || t.startsWith('ANOTAÇÕES') || t.startsWith('ÍNDICES')) {
+      section = '';
+      continue;
+    }
+    if (t.contains('PEÇAS - TROCA') && t.length < 30) {
+      section = 'troca';
+      continue;
+    }
+    if (t.contains('PEÇAS - RECUPERAR') && t.length < 30) {
+      section = 'recuperar';
+      continue;
+    }
+    if (t.contains('MONTAGEM - DESMONTAGEM') && t.length < 35) {
+      section = 'md';
+      continue;
+    }
+    if (section.isEmpty) continue;
+    if (t.startsWith('Código') || t.startsWith('Total:') || RegExp(r'Page \d+ of \d+').hasMatch(t)) {
+      continue;
+    }
+    final ws = [...r.words]..sort((a, b) => a.x.compareTo(b.x));
+    if (ws.isEmpty) continue;
+    final first = ws.first;
+    // números do fim da linha
+    final nums = <double>[];
+    var k = ws.length;
+    while (k > 1 && _usNum.hasMatch(ws[k - 1].text)) {
+      k--;
+    }
+    for (var i = k; i < ws.length; i++) {
+      nums.add(parseUsNumber(ws[i].text) ?? 0);
+    }
+    if (first.x > 250) continue; // linha de totais da seção
+
+    final need = switch (section) { 'troca' => 6, 'recuperar' => 6, _ => 3 };
+    final isItem = first.x < 45 && nums.length >= need && k >= 2;
+    final isSub = section == 'troca' && first.x >= 60 && RegExp(r'^\d+$').hasMatch(first.text) && nums.length >= 2 && k >= 2;
+    if (!isItem && !isSub) {
+      // continuação da descrição do item de cima
+      if (last != null && first.x >= 60 && nums.isEmpty) {
+        final extra = ws.map((w) => w.text).join(' ').trim();
+        if (extra.isNotEmpty && extra != '*') {
+          last.note = [last.note, extra].where((e) => e.isNotEmpty).join(' ');
+        }
+      }
+      continue;
+    }
+    final take = isSub ? 2 : need;
+    final tail = nums.sublist(nums.length - take);
+    final code = first.text;
+    final (desc, note) =
+        _somaDesc(ws.sublist(1, ws.length - take).map((w) => w.text).join(' '));
+    if (isSub) {
+      final it = BudgetItem(
+        op: ItemOp.reparo,
+        description: desc.isEmpty ? 'Montagem/desmontagem' : desc,
+        partNumber: code,
+        removeInstall: true,
+        laborHours: tail[0],
+        paintHours: tail[1],
+      );
+      c.items.add(it);
+      last = it;
+      continue;
+    }
+    switch (section) {
+      case 'troca':
+        final it = BudgetItem(
+          op: ItemOp.troca,
+          description: desc,
+          partNumber: code,
+          qty: tail[0] <= 0 ? 1 : tail[0],
+          price: tail[1],
+          discountPct: tail[2],
+          laborHours: tail[4],
+          paintHours: tail[5],
+          note: note,
+        );
+        c.items.add(it);
+        last = it;
+      case 'recuperar':
+        final restaurar = tail[5];
+        final hasWork = tail[1] > 0 || tail[3] > 0;
+        if (hasWork) {
+          final it = BudgetItem(
+            op: ItemOp.reparo,
+            description: desc,
+            partNumber: code,
+            qty: tail[0] <= 0 ? 1 : tail[0],
+            laborHours: tail[1],
+            paintHours: tail[3],
+            note: note,
+          );
+          c.items.add(it);
+          last = it;
+        }
+        if (restaurar > 0) {
+          final it = BudgetItem(
+            op: ItemOp.servico,
+            description: hasWork ? 'Restaurar $desc' : desc,
+            partNumber: code,
+            price: restaurar,
+            note: ['Restaurar', note].where((e) => e.isNotEmpty).join(' · '),
+          );
+          c.items.add(it);
+          last = it;
+        }
+      default:
+        final it = BudgetItem(
+          op: ItemOp.reparo,
+          description: desc,
+          partNumber: code,
+          qty: tail[0] <= 0 ? 1 : tail[0],
+          removeInstall: true,
+          laborHours: tail[1],
+          note: note,
+        );
+        c.items.add(it);
+        last = it;
+    }
+  }
+
+  if (notes.isNotEmpty) c.notes = notes.join('\n');
+  if (c.items.isEmpty) q.warnings.add('Nenhum item foi encontrado nas tabelas de peças.');
+  return q;
+}
