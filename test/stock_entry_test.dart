@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:funilar/licensing.dart';
 import 'package:funilar/main.dart';
+import 'package:funilar/docs.dart';
 import 'package:funilar/models.dart';
 import 'package:funilar/receipt_parser.dart';
 import 'package:funilar/stock.dart';
 import 'package:funilar/stock_entry.dart';
 import 'package:funilar/store.dart';
+import 'package:funilar/ui/docs_page.dart';
 import 'package:funilar/ui/stock_entry_ui.dart';
 
 const _nfe = '''<?xml version="1.0" encoding="UTF-8"?>
@@ -67,7 +69,10 @@ void main() {
     expect(verniz.cost, closeTo(89 / 900, 1e-9));
     expect(lixa.qty, 60);
     expect(lixa.cost, 1.2);
-    expect(lixa.notes, contains('NF-e 48213'));
+    expect(lixa.ins.single.label, 'NF-e 48213');
+    expect(lixa.ins.single.qty, 50);
+    expect(verniz.ins.single.qty, 3600); // na unidade do estoque (ml)
+    expect(verniz.ins.single.noteQty, 4); // como veio na nota (latas)
     expect(created.length, 1);
     expect(created.first.name, 'PARA-CHOQUE DIANT & GRADE');
     expect(created.first.partNumber, '52080055');
@@ -216,7 +221,131 @@ void main() {
     expect(stock.firstWhere((s) => s.name.toUpperCase().startsWith('FITA')).qty, 11);
   });
 
-  testWidgets('conferir e dar entrada (com gasto no Financeiro)', (t) async {
+  Future<AppStore> newStore(String tag) async {
+    final dir = await Directory.systemTemp.createTemp('funilar_$tag');
+    return AppStore.open(assumeLicense: License.full(), dir: dir);
+  }
+
+  test('nota lançada: documento guardado e ligado ao estoque, Financeiro e fornecedor', () async {
+    final store = await newStore('doc1');
+    final d = parseReceipt(nota1);
+    final lines = planStockEntry(d, store.stock);
+    final doc = await store.registerPurchase(d,
+        lines: lines, source: DocSource.xml, fileBytes: [60, 62], ext: 'xml', toFinance: true);
+
+    expect(store.docs.single, same(doc));
+    expect(doc.party, 'Art Color Tintas');
+    expect(doc.number, 'Reserva 0823147'); // "RESERVA A PRAZO 0823147"
+    expect(doc.total, closeTo(486.75, 0.001));
+    expect(doc.file, endsWith('.xml'));
+    expect(await store.docFile(doc).exists(), isTrue);
+    // estoque: 3 itens novos, cada um com a entrada apontando para a nota
+    expect(store.stock.length, 3);
+    for (final i in doc.items) {
+      final s = store.stock.firstWhere((s) => s.id == i.stockId);
+      expect(s.ins.single.docId, doc.id);
+      expect(s.ins.single.label, contains('Art Color Tintas'));
+    }
+    // Financeiro: gasto ligado ao documento
+    final e = store.entryForDoc(doc)!;
+    expect(e.amount, closeTo(486.75, 0.001));
+    expect(store.docForEntry(e), same(doc));
+    // Cadastros: fornecedor criado sozinho (uma vez só)
+    expect(store.contacts.where((c) => c.kind == ContactKind.fornecedor).single.name,
+        'Art Color Tintas');
+
+    // a mesma nota de novo é reconhecida
+    expect(store.sameNote(parseReceipt(nota1)), same(doc));
+    expect(store.sameNote(parseReceipt(nota2)), isNull);
+
+    // segunda nota: soma no que já existe e não duplica o fornecedor
+    final d2 = parseReceipt(nota2);
+    await store.registerPurchase(d2, lines: planStockEntry(d2, store.stock), toFinance: true);
+    expect(store.docs.length, 2);
+    expect(store.contacts.where((c) => c.kind == ContactKind.fornecedor).length, 1);
+    final verniz = store.stock.firstWhere((s) => s.name.toUpperCase().startsWith('VERNIZ'));
+    expect(verniz.ins.length, 2);
+    expect(verniz.qty, 6 * 900);
+    expect(store.docsOfParty('art color tintas').length, 2);
+
+    // tudo volta igual depois de fechar e abrir (e no backup)
+    await store.flush();
+    final again = await AppStore.open(assumeLicense: License.full(), dir: store.baseDir);
+    expect(again.docs.length, 2);
+    final doc1 = again.docById(doc.id)!;
+    expect(doc1.items.length, 3);
+    expect(doc1.financeId, e.id);
+    expect(again.stock.firstWhere((s) => s.name.toUpperCase().startsWith('VERNIZ')).ins.length, 2);
+
+    // excluir o gasto solta a ligação; excluir o documento apaga o arquivo
+    store.removeEntry(e);
+    expect(doc.financeId, '');
+    await store.removeDoc(doc);
+    expect(await store.docFile(doc).exists(), isFalse);
+    expect(store.stock.every((s) => s.ins.every((i) => i.docId != doc.id)), isTrue);
+    await store.flush();
+  });
+
+  test('nota guardada pelo Financeiro pode dar entrada no estoque depois', () async {
+    final store = await newStore('doc2');
+    final d = parseReceipt(nota1);
+    // só Financeiro
+    final doc = await store.registerPurchase(d, toFinance: true, file: 'nota_x.jpg');
+    expect(doc.inStock, isFalse);
+    expect(store.stock, isEmpty);
+    final e = store.entryForDoc(doc)!;
+    expect(e.receiptFile, 'nota_x.jpg');
+    // depois, pela tela do documento: entrada no estoque sem lançar o gasto de novo
+    await store.registerPurchase(doc.toReceipt(),
+        lines: planStockEntry(doc.toReceipt(), store.stock), doc: doc, toFinance: true);
+    expect(store.docs.length, 1);
+    expect(store.entries.length, 1);
+    expect(doc.inStock, isTrue);
+    expect(store.stock.length, 3);
+    await store.flush();
+  });
+
+  test('dados antigos entram sozinhos no arquivo de documentos', () async {
+    final store = await newStore('doc3');
+    // lançamento com foto anexada (como nas versões anteriores)
+    store.entries.add(FinanceEntry(
+        description: 'Tintas', amount: 100, contact: 'Loja X', receiptFile: 'nota_velha.jpg'));
+    store.claims.add(Claim(insurerName: 'Tokio Marine', claimNumber: '123')
+      ..sourcePdf = 'x_original.pdf'
+      ..sourceSystem = 'Cilia');
+    store.changed();
+    await store.flush();
+    final again = await AppStore.open(assumeLicense: License.full(), dir: store.baseDir);
+    expect(again.docs.length, 2);
+    final nota = again.docs.firstWhere((d) => d.kind == DocKind.notaCompra);
+    expect(nota.file, 'nota_velha.jpg');
+    expect(again.entryForDoc(nota)!.description, 'Tintas');
+    final orc = again.docs.firstWhere((d) => d.kind == DocKind.orcamentoSeguradora);
+    expect(orc.party, 'Tokio Marine');
+    expect(orc.number, '123');
+    expect(again.claimById(orc.claimId), isNotNull);
+    // abrir de novo não duplica
+    await again.flush();
+    final third = await AppStore.open(assumeLicense: License.full(), dir: store.baseDir);
+    expect(third.docs.length, 2);
+  });
+
+  test('foto anexada num gasto vira documento com os itens lidos', () async {
+    final store = await newStore('doc4');
+    final read = parseReceipt(nota1);
+    store.readReceipts['nota_a.jpg'] = read;
+    final e = read.applyTo(FinanceEntry(receiptFile: 'nota_a.jpg'));
+    store.upsertEntry(e);
+    final doc = store.docs.single;
+    expect(doc.items.length, 3);
+    expect(doc.financeId, e.id);
+    expect(doc.source, DocSource.foto);
+    store.upsertEntry(e); // salvar de novo não duplica
+    expect(store.docs.length, 1);
+    await store.flush();
+  });
+
+  testWidgets('conferir e lançar a nota (estoque + Financeiro + documento)', (t) async {
     t.view.physicalSize = const Size(390, 844);
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.reset);
@@ -230,12 +359,14 @@ void main() {
     final entriesBefore = store.entries.length;
 
     final ctx = t.element(find.byType(Scaffold).first);
-    reviewStockEntry(ctx, parseNfeXml(_nfe)!);
+    reviewPurchaseNote(ctx, parseNfeXml(_nfe)!, source: DocSource.xml);
     await t.pumpAndSettle();
-    expect(find.text('Entrada pela nota'), findsOneWidget);
+    expect(find.text('Conferir nota'), findsOneWidget);
+    expect(find.text('Dar entrada no estoque'), findsOneWidget);
+    expect(find.text('Lançar como gasto no Financeiro'), findsOneWidget);
     expect(find.textContaining('Soma em "Lixa P320"', skipOffstage: false), findsOneWidget);
 
-    await t.tap(find.text('Dar entrada'));
+    await t.tap(find.text('Lançar'));
     await t.pumpAndSettle();
     expect(store.stock.length, 3);
     expect(store.stock.firstWhere((s) => s.name == 'Lixa P320').qty, 60);
@@ -243,6 +374,21 @@ void main() {
     final e = store.entries.firstWhere((e) => e.invoiceNumber == 'NF-e 48213');
     expect(e.amount, 866);
     expect(e.isIncome, isFalse);
+    // a nota ficou guardada e ligada a tudo
+    final doc = store.docs.single;
+    expect(doc.source, DocSource.xml);
+    expect(doc.financeId, e.id);
+    expect(doc.items.every((i) => i.stockId.isNotEmpty), isTrue);
+    expect(store.contacts.any((c) => c.kind == ContactKind.fornecedor && c.name == 'Tintas Exemplo'),
+        isTrue);
+    expect(find.textContaining('Nota guardada em Documentos'), findsOneWidget);
+
+    // Documentos: abre a nota e mostra as ligações
+    openDoc(ctx, doc);
+    await t.pumpAndSettle();
+    expect(find.text('Tintas Exemplo'), findsWidgets);
+    expect(find.textContaining('3 de 3 itens deram entrada'), findsOneWidget);
+    expect(find.textContaining('Financeiro: '), findsOneWidget);
 
     await t.pumpWidget(const SizedBox());
     await t.pump(const Duration(seconds: 7));

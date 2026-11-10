@@ -1,6 +1,7 @@
 // Entrada de material no estoque a partir da nota de compra: foto (OCR),
 // XML da NF-e ou PDF (DANFE).
 
+import 'docs.dart';
 import 'models.dart';
 import 'quote_import.dart' show PdfWord;
 import 'receipt_parser.dart';
@@ -187,7 +188,11 @@ class StockEntryLine {
     this.match,
     this.packSize = 0,
     this.packName = '',
+    this.itemIndex = -1,
   });
+
+  /// Posição do item na nota (liga a linha ao documento guardado).
+  final int itemIndex;
 
   /// Embalagem (ex.: lata de 900 ml): a nota conta latas e o estoque conta
   /// na unidade de uso. 0 = sem embalagem.
@@ -214,7 +219,7 @@ String _key(String s) => normCode(s);
 /// (mesmo código ou mesmo nome).
 List<StockEntryLine> planStockEntry(ReceiptData d, List<StockItem> stock) {
   final out = <StockEntryLine>[];
-  for (final it in d.items) {
+  for (final (index, it) in d.items.indexed) {
     final name = it.description.trim();
     if (name.isEmpty && it.code.isEmpty) continue;
     StockItem? match;
@@ -254,61 +259,72 @@ List<StockEntryLine> planStockEntry(ReceiptData d, List<StockItem> stock) {
               ? StockKind.material
               : StockKind.peca),
       match: match,
+      itemIndex: index,
     ));
   }
   return out;
 }
 
 /// Aplica a entrada: soma no item que já existe (custo passa a ser o da nota)
-/// ou cria um item novo. Devolve os itens criados.
-List<StockItem> applyStockEntry(List<StockEntryLine> lines, {String docLabel = ''}) {
+/// ou cria um item novo. Cada entrada fica no histórico do item, ligada ao
+/// documento guardado ([doc]). Devolve os itens criados.
+List<StockItem> applyStockEntry(List<StockEntryLine> lines,
+    {String docLabel = '', StoredDoc? doc, DateTime? date}) {
   final created = <StockItem>[];
-  final stamp = docLabel.isEmpty ? 'Entrada pela nota' : 'Entrada pela nota $docLabel';
+  final label = docLabel.isNotEmpty
+      ? docLabel
+      : (doc == null
+          ? ''
+          : [doc.party, doc.number].where((e) => e.isNotEmpty).join(' · '));
   for (final l in lines) {
     if (!l.include || l.qty <= 0) continue;
-    final s = l.match;
+    var s = l.match;
+    final double added;
     if (s != null) {
       if (s.hasPack) {
         // a nota fala em embalagens (latas, caixas…); o estoque conta na
         // unidade de uso (ml, folha…)
-        s.qty += l.qty * s.packSize;
+        added = l.qty * s.packSize;
         if (l.unitCost > 0) {
           s.packCost = l.unitCost;
           s.syncPackCost();
         }
       } else {
-        s.qty += l.qty;
+        added = l.qty;
         if (l.unitCost > 0) s.cost = l.unitCost;
       }
+      s.qty += added;
       if (s.partNumber.isEmpty && l.code.isNotEmpty && s.kind == StockKind.peca) {
         s.partNumber = l.code;
       }
-      s.notes = [s.notes, '$stamp: +${_q(l.qty)}${s.hasPack ? ' ${s.packName}' : ''}']
-          .where((e) => e.trim().isNotEmpty)
-          .join('\n');
     } else {
       final pack = l.packSize > 0;
-      final n = StockItem(
+      added = pack ? l.qty * l.packSize : l.qty;
+      s = StockItem(
         kind: l.kind,
         name: l.name,
         partNumber: l.kind == StockKind.peca ? l.code : '',
-        qty: pack ? l.qty * l.packSize : l.qty,
+        qty: added,
         unit: l.unit,
         cost: pack ? l.unitCost / l.packSize : l.unitCost,
         packName: pack ? l.packName : 'lata',
         packSize: pack ? l.packSize : 0,
         packCost: pack ? l.unitCost : 0,
-        notes: '$stamp: +${_q(l.qty)}${pack ? ' ${l.packName}' : ''}',
       );
-      if (l.kind == StockKind.material && l.code.isNotEmpty) n.mfrCode = l.code;
-      created.add(n);
+      if (l.kind == StockKind.material && l.code.isNotEmpty) s.mfrCode = l.code;
+      created.add(s);
+    }
+    s.ins.add(StockIn(
+      date: date ?? doc?.date,
+      qty: added,
+      noteQty: l.qty,
+      unitCost: l.unitCost,
+      docId: doc?.id ?? '',
+      label: label,
+    ));
+    if (doc != null && l.itemIndex >= 0 && l.itemIndex < doc.items.length) {
+      doc.items[l.itemIndex].stockId = s.id;
     }
   }
   return created;
-}
-
-String _q(double v) {
-  var s = v.toStringAsFixed(2).replaceAll(RegExp(r'0+$'), '');
-  if (s.endsWith('.')) s = s.substring(0, s.length - 1);
-  return s.replaceAll('.', ',');
 }

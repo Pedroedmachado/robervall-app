@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:funilar/calc.dart';
+import 'package:funilar/docs.dart';
 import 'package:funilar/licensing.dart';
 import 'package:funilar/main.dart';
 import 'package:funilar/models.dart';
@@ -268,6 +269,17 @@ void main() {
     expect(c.sourceSystem, 'Cilia');
     expect(c.vehicle.plate, 'ABC-1D23');
     expect(c.timeline.any((e) => e.text.contains('importado do PDF')), isTrue);
+    // o PDF vira documento ligado ao orçamento; os cadastros entram sozinhos
+    final doc = store.docs.single;
+    expect(doc.kind, DocKind.orcamentoSeguradora);
+    expect(doc.claimId, c.id);
+    expect(doc.party, 'Tokio Marine');
+    expect(doc.total, closeTo(1500.06, 0.02));
+    expect(store.contacts.any((x) => x.kind == ContactKind.seguradora && x.name == 'Tokio Marine'),
+        isTrue);
+    expect(store.contacts.any((x) => x.kind == ContactKind.cliente && x.name == 'MARIA TESTE EXEMPLO'),
+        isTrue);
+    expect(store.sameInsurerQuote(parseInsurerQuote(ciliaWords()).claim), same(c));
     expect(computeTotals(c, store.settings).total, closeTo(1500.06, 0.02));
 
     await t.pumpWidget(const SizedBox());

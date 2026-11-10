@@ -13,6 +13,8 @@ import '../theme.dart';
 import 'cash_page.dart';
 import 'claims_page.dart';
 import 'team_page.dart';
+import 'docs_page.dart' show openDoc, openDocs;
+import 'stock_entry_ui.dart' show readPurchaseNote;
 import 'widgets.dart';
 
 enum _View {
@@ -65,28 +67,6 @@ class _FinancePageState extends State<FinancePage> {
     final e = await editFinanceEntry(
         context, FinanceEntry(isIncome: income, date: inPeriod));
     if (e != null) store.upsertEntry(e);
-  }
-
-  /// Foto da nota → lê valor, data, loja e itens → abre para conferir.
-  Future<void> _readReceipt() async {
-    final store = StoreScope.read(context);
-    final scan = await scanReceiptPhoto(context);
-    if (scan == null || !mounted) return;
-    final entry = FinanceEntry(receiptFile: scan.file);
-    scan.data?.applyTo(entry);
-    final saved =
-        await editFinanceEntry(context, entry, banner: scan.message);
-    if (saved == null) {
-      final f = File('${store.photosDir.path}/${scan.file}');
-      if (await f.exists()) await f.delete();
-      return;
-    }
-    store.upsertEntry(saved);
-    if (!_period.contains(saved.date) && mounted) {
-      setState(() =>
-          _period = Period.month(saved.date.year, saved.date.month));
-    }
-    if (mounted) toast(context, 'Gasto lançado em ${date(saved.date)}.');
   }
 
   @override
@@ -186,11 +166,10 @@ class _FinancePageState extends State<FinancePage> {
         const SizedBox(height: 8),
         if (gate.can(Perm.financeiroEditar))
         Wrap(spacing: 8, runSpacing: 8, children: [
-          if (gate.active(Mod.ocr))
           FilledButton.icon(
-            onPressed: _readReceipt,
+            onPressed: () => readPurchaseNote(context),
             icon: const Icon(Icons.document_scanner_outlined),
-            label: const Text('Ler nota (foto)'),
+            label: const Text('Ler nota'),
           ),
           FilledButton.tonalIcon(
             onPressed: () => _newEntry(),
@@ -289,6 +268,11 @@ class _FinancePageState extends State<FinancePage> {
           Tab(text: 'Equipe', icon: Icon(Icons.engineering_outlined)),
         ]),
         actions: [
+          IconButton(
+            tooltip: 'Documentos (notas guardadas)',
+            icon: const Icon(Icons.folder_copy_outlined),
+            onPressed: () => openDocs(context),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: SegmentedButton<bool>(
@@ -669,6 +653,7 @@ Future<ReceiptScan?> scanReceiptPhoto(BuildContext context) async {
   ReceiptScan scan;
   try {
     final data = parseReceipt(await reader(path));
+    store.readReceipts[name] = data; // para guardar o documento com os itens
     final n = data.items.length;
     scan = ReceiptScan(
       name,
@@ -743,6 +728,19 @@ Future<FinanceEntry?> editFinanceEntry(BuildContext context, FinanceEntry e,
           if (e.receiptFile.isNotEmpty) ...[
             _ReceiptThumb(
                 file: File('${store.photosDir.path}/${e.receiptFile}')),
+            const SizedBox(height: 8),
+          ],
+          if (store.docForEntry(e) != null) ...[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => openDoc(ctx, store.docForEntry(e)!),
+                icon: const Icon(Icons.folder_copy_outlined, size: 18),
+                label: Text(store.docForEntry(e)!.inStock
+                    ? 'Ver a nota guardada (deu entrada no estoque)'
+                    : 'Ver a nota guardada'),
+              ),
+            ),
             const SizedBox(height: 8),
           ],
           if (!e.isIncome && gate.active(Mod.ocr)) ...[

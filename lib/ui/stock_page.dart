@@ -13,7 +13,8 @@ import '../stock.dart';
 import '../store.dart';
 import '../theme.dart';
 import 'access.dart';
-import 'stock_entry_ui.dart' show stockEntryFromNote;
+import 'docs_page.dart' show StockInsList, openDocs;
+import 'stock_entry_ui.dart' show readPurchaseNote;
 import 'widgets.dart';
 
 /// Aba Estoque: peças e materiais guardados na oficina, com foto.
@@ -50,9 +51,9 @@ class _StockPageState extends State<StockPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('Estoque'), actions: [
         IconButton(
-          tooltip: 'Entrada pela nota de compra',
-          icon: const Icon(Icons.receipt_long_outlined),
-          onPressed: () => stockEntryFromNote(context),
+          tooltip: 'Documentos (notas guardadas)',
+          icon: const Icon(Icons.folder_copy_outlined),
+          onPressed: () => openDocs(context),
         ),
       ]),
       floatingActionButton: Column(
@@ -61,7 +62,7 @@ class _StockPageState extends State<StockPage> {
         children: [
           FloatingActionButton.extended(
             heroTag: 'entrada-nota',
-            onPressed: () => stockEntryFromNote(context),
+            onPressed: () => readPurchaseNote(context),
             icon: const Icon(Icons.receipt_long_outlined),
             label: const Text('Ler nota'),
           ),
@@ -561,6 +562,10 @@ Future<StockItem?> editStockItem(BuildContext context, StockItem s,
           maxLines: 2,
           onChanged: (t) => s.notes = t,
         ),
+        if (s.ins.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          StockInsList(item: s),
+        ],
         if (canDelete) ...[
           const SizedBox(height: 12),
           Align(

@@ -68,9 +68,23 @@ Future<void> reviewImportedQuote(BuildContext context, ImportedQuote q,
   ));
   if (ok != true || !context.mounted) return;
   final store = StoreScope.read(context);
+  final same = store.sameInsurerQuote(q.claim);
+  if (same != null) {
+    final again = await confirm(
+        context,
+        'Este sinistro já foi importado',
+        'O orçamento ${same.number} já tem o sinistro ${same.claimNumber}${same.insurerName.isEmpty ? '' : ' (${same.insurerName})'}. Importar de novo cria outro orçamento.',
+        ok: 'Importar de novo');
+    if (!context.mounted) return;
+    if (!again) {
+      await openClaim(context, same);
+      return;
+    }
+  }
   final c = await store.addImportedClaim(q.claim, pdf: pdf, system: q.system);
   if (!context.mounted) return;
-  toast(context, 'Orçamento ${c.number} criado. Pode editar à vontade.');
+  toast(context,
+      'Orçamento ${c.number} criado. O PDF ficou guardado em Documentos e os cadastros foram atualizados.');
   await openClaim(context, c);
 }
 

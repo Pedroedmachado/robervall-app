@@ -11,6 +11,57 @@ enum StockKind {
   final String label;
 }
 
+/// Uma entrada no estoque (compra): quanto entrou, a que custo e de qual
+/// nota (documento guardado) veio.
+class StockIn {
+  StockIn({
+    DateTime? date,
+    this.qty = 0,
+    this.noteQty = 0,
+    this.unitCost = 0,
+    this.docId = '',
+    this.label = '',
+  }) : date = date ?? DateTime.now();
+
+  DateTime date;
+
+  /// Quanto entrou, na unidade do estoque (ml, folha, un…).
+  double qty;
+
+  /// Quantidade como veio na nota (ex.: 4 latas).
+  double noteQty;
+
+  /// Custo de cada unidade da nota.
+  double unitCost;
+
+  /// Documento guardado (nota) de onde veio.
+  String docId;
+
+  /// Ex.: "Art Color Tintas · Reserva 0823147".
+  String label;
+
+  Map<String, dynamic> toJson() => {
+        'date': date.toIso8601String(),
+        'qty': qty,
+        'noteQty': noteQty,
+        'unitCost': unitCost,
+        if (docId.isNotEmpty) 'doc': docId,
+        if (label.isNotEmpty) 'label': label,
+      };
+
+  factory StockIn.fromJson(Map<String, dynamic> j) {
+    double d(Object? v) => v is num ? v.toDouble() : double.tryParse('$v') ?? 0;
+    return StockIn(
+      date: DateTime.tryParse('${j['date']}'),
+      qty: d(j['qty']),
+      noteQty: d(j['noteQty']),
+      unitCost: d(j['unitCost']),
+      docId: j['doc'] == null ? '' : '${j['doc']}',
+      label: j['label'] == null ? '' : '${j['label']}',
+    );
+  }
+}
+
 /// Peça ou material guardado na oficina.
 class StockItem {
   String id;
@@ -56,6 +107,9 @@ class StockItem {
 
   /// Foto (arquivo na pasta de fotos).
   String photo;
+
+  /// Histórico de entradas (compras lidas das notas).
+  List<StockIn> ins = [];
 
   StockItem({
     String? id,
@@ -153,6 +207,7 @@ class StockItem {
         if (condition.isNotEmpty) 'condition': condition,
         if (applications.isNotEmpty)
           'apps': applications.map((a) => a.toJson()).toList(),
+        if (ins.isNotEmpty) 'ins': ins.map((e) => e.toJson()).toList(),
       };
 
   factory StockItem.fromJson(Map<String, dynamic> j) {
@@ -190,7 +245,10 @@ class StockItem {
         for (final a in (j['apps'] as List? ?? const []))
           if (a is Map) VehicleFit.fromJson(Map<String, dynamic>.from(a))
       ],
-    );
+    )..ins = [
+        for (final a in (j['ins'] as List? ?? const []))
+          if (a is Map) StockIn.fromJson(Map<String, dynamic>.from(a))
+      ];
   }
 }
 

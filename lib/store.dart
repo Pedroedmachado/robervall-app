@@ -8,13 +8,17 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'models.dart';
+import 'calc.dart';
 import 'cash.dart';
+import 'docs.dart';
 import 'finance.dart';
 import 'format.dart' show hideMoney, num2;
 import 'licensing.dart';
 import 'modules.dart';
+import 'receipt_parser.dart';
 import 'seed.dart';
 import 'stock.dart';
+import 'stock_entry.dart';
 
 /// Armazenamento local (offline) em JSON + pasta de fotos.
 class AppStore extends ChangeNotifier {
@@ -27,6 +31,12 @@ class AppStore extends ChangeNotifier {
   final List<CatalogItem> catalog = [];
   final List<FinanceEntry> entries = [];
   final List<StockItem> stock = [];
+
+  /// Notas de compra e orçamentos de seguradora lidos e guardados.
+  final List<StoredDoc> docs = [];
+
+  /// O que o leitor achou em cada foto de nota (até o lançamento ser salvo).
+  final Map<String, ReceiptData> readReceipts = {};
 
   /// Caixa: entradas e saídas de dinheiro (e os previstos).
   final List<CashEntry> cash = [];
@@ -131,7 +141,7 @@ class AppStore extends ChangeNotifier {
 
   static const _knownKeys = {
     'app', 'version', 'savedAt', 'settings', 'claims', 'contacts',
-    'catalog', 'entries', 'stock', 'users', 'cash',
+    'catalog', 'entries', 'stock', 'users', 'cash', 'docs',
   };
 
   void _fromJson(Map<String, dynamic> j) {
@@ -170,6 +180,10 @@ class AppStore extends ChangeNotifier {
     cash
       ..clear()
       ..addAll(list(j['cash']).map(CashEntry.fromJson));
+    docs
+      ..clear()
+      ..addAll(list(j['docs']).map(StoredDoc.fromJson));
+    _archiveOldFiles();
   }
 
   Map<String, dynamic> toJson() => {
@@ -185,6 +199,7 @@ class AppStore extends ChangeNotifier {
         'stock': stock.map((e) => e.toJson()).toList(),
         'users': users.map((e) => e.toJson()).toList(),
         'cash': cash.map((e) => e.toJson()).toList(),
+        'docs': docs.map((e) => e.toJson()).toList(),
       };
 
   Future<void> _write() async {
@@ -310,6 +325,10 @@ class AppStore extends ChangeNotifier {
       }
     }
     claims[claims.indexOf(c)] = n;
+    // guarda o documento e liga ao orçamento; cliente, seguradora e
+    // regulador entram sozinhos nos Cadastros
+    docs.insert(0, _docFromClaim(n));
+    rememberContactsFrom(n);
     changed();
     return n;
   }
@@ -529,6 +548,11 @@ class AppStore extends ChangeNotifier {
     gate.require(Mod.estoque);
     gate.requireWrite();
     stock.remove(s);
+    for (final d in docs) {
+      for (final i in d.items) {
+        if (i.stockId == s.id) i.stockId = '';
+      }
+    }
     for (final c in claims) {
       for (final it in c.items) {
         if (it.stockId == s.id) it.stockId = '';
@@ -605,6 +629,10 @@ class AppStore extends ChangeNotifier {
       if (await f.exists()) await f.delete();
     }
     claims.remove(c);
+    docs.removeWhere((d) => d.claimId == c.id && d.kind == DocKind.orcamentoSeguradora);
+    for (final d in docs) {
+      if (d.claimId == c.id) d.claimId = '';
+    }
     syncStock(c); // devolve as peças ao estoque
     entries.removeWhere((e) => e.claimId == c.id && isCrewEntry(e));
     cash.removeWhere((e) => e.claimId == c.id && e.autoKey == cashProfitKey);
@@ -777,6 +805,7 @@ class AppStore extends ChangeNotifier {
     if (!entries.contains(e)) entries.add(e);
     entries.sort((a, b) => b.date.compareTo(a.date));
     _resyncProfit(e.claimId);
+    _archiveEntry(e);
     changed();
   }
 
@@ -784,8 +813,232 @@ class AppStore extends ChangeNotifier {
     gate.require(Mod.financeiro);
     gate.requirePerm(Perm.financeiroEditar);
     entries.remove(e);
+    for (final d in docs) {
+      if (d.financeId == e.id) d.financeId = '';
+    }
     _resyncProfit(e.claimId);
     changed();
+  }
+
+  // -------------------------------------------------------------- documentos
+
+  StoredDoc? docById(String id) {
+    for (final d in docs) {
+      if (d.id == id) return d;
+    }
+    return null;
+  }
+
+  File docFile(StoredDoc d) => File('${photosDir.path}/${d.file}');
+
+  /// Documento (nota) deste lançamento do Financeiro.
+  StoredDoc? docForEntry(FinanceEntry e) {
+    for (final d in docs) {
+      if (d.financeId == e.id) return d;
+    }
+    if (e.receiptFile.isEmpty) return null;
+    for (final d in docs) {
+      if (d.file == e.receiptFile) return d;
+    }
+    return null;
+  }
+
+  FinanceEntry? entryForDoc(StoredDoc d) {
+    for (final e in entries) {
+      if (e.id == d.financeId) return e;
+    }
+    return null;
+  }
+
+  /// Documentos de um fornecedor ou seguradora.
+  List<StoredDoc> docsOfParty(String name) {
+    final n = name.trim().toLowerCase();
+    return docs.where((d) => d.party.trim().toLowerCase() == n).toList();
+  }
+
+  /// A mesma nota já foi lançada?
+  StoredDoc? sameNote(ReceiptData d) => findSameNote(docs, d);
+
+  /// Orçamento já importado com este nº de sinistro (mesma seguradora).
+  Claim? sameInsurerQuote(Claim c) {
+    final n = c.claimNumber.trim();
+    if (n.isEmpty) return null;
+    for (final x in claims) {
+      if (x.claimNumber.trim() == n &&
+          x.insurerName.trim().toLowerCase() == c.insurerName.trim().toLowerCase()) {
+        return x;
+      }
+    }
+    return null;
+  }
+
+  /// Grava o arquivo do documento (.xml, .pdf, imagem) na pasta de fotos.
+  Future<String> saveDocFile(List<int> bytes, String ext) async {
+    await photosDir.create(recursive: true);
+    final name = 'doc_${newId()}.${ext.replaceAll('.', '').toLowerCase()}';
+    await File('${photosDir.path}/$name').writeAsBytes(bytes, flush: true);
+    return name;
+  }
+
+  /// Fornecedor da nota entra sozinho nos Cadastros.
+  void rememberSupplier(String name) {
+    final n = name.trim();
+    if (n.isEmpty) return;
+    if (contacts.any((e) =>
+        e.kind == ContactKind.fornecedor && e.name.trim().toLowerCase() == n.toLowerCase())) {
+      return;
+    }
+    contacts.add(Contact(kind: ContactKind.fornecedor, name: n));
+    contacts.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  }
+
+  /// Nota de compra lida: guarda o documento e liga tudo de uma vez —
+  /// entrada no estoque ([lines]), gasto no Financeiro ([toFinance] ou um
+  /// lançamento já feito em [entry]) e fornecedor nos Cadastros.
+  Future<StoredDoc> registerPurchase(
+    ReceiptData data, {
+    List<StockEntryLine>? lines,
+    DocSource source = DocSource.foto,
+    String file = '',
+    List<int>? fileBytes,
+    String ext = '',
+    bool toFinance = false,
+    FinanceEntry? entry,
+    StoredDoc? doc,
+  }) async {
+    gate.requireWrite();
+    final isNew = doc == null;
+    final d = doc ?? StoredDoc.fromReceipt(data, source: source, file: file);
+    if (d.file.isEmpty && fileBytes != null && fileBytes.isNotEmpty) {
+      try {
+        d.file = await saveDocFile(fileBytes, ext);
+      } catch (_) {
+        // sem o arquivo o que foi lido continua guardado
+      }
+    }
+    if (lines != null && gate.active(Mod.estoque)) {
+      final created = applyStockEntry(lines, doc: d, date: DateTime.now());
+      stock.addAll(created);
+      stock.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    }
+    var e = entry;
+    if (e == null && toFinance && d.financeId.isEmpty && gate.active(Mod.financeiro)) {
+      e = data.toEntry();
+      if (d.isImage) e.receiptFile = d.file;
+      entries.add(e);
+      entries.sort((a, b) => b.date.compareTo(a.date));
+    }
+    if (e != null) d.financeId = e.id;
+    rememberSupplier(d.party);
+    if (isNew) docs.insert(0, d);
+    changed();
+    return d;
+  }
+
+  /// Apaga o documento guardado (o estoque e o Financeiro ficam como estão).
+  Future<void> removeDoc(StoredDoc d) async {
+    gate.requireWrite();
+    docs.remove(d);
+    if (d.file.isNotEmpty) {
+      for (final e in entries) {
+        if (e.receiptFile == d.file) e.receiptFile = '';
+      }
+      for (final c in claims) {
+        if (c.sourcePdf == d.file) c.sourcePdf = '';
+      }
+      try {
+        final f = docFile(d);
+        if (await f.exists()) await f.delete();
+      } catch (_) {}
+    }
+    for (final s in stock) {
+      for (final i in s.ins) {
+        if (i.docId == d.id) i.docId = '';
+      }
+    }
+    changed();
+  }
+
+  StoredDoc _docFromClaim(Claim c) => StoredDoc(
+        kind: DocKind.orcamentoSeguradora,
+        source: c.sourcePdf.isEmpty ? DocSource.manual : DocSource.pdf,
+        file: c.sourcePdf,
+        date: c.createdAt,
+        party: c.insurerName.isEmpty ? c.sourceSystem : c.insurerName,
+        number: c.claimNumber,
+        total: computeTotals(c, settings).total,
+        claimId: c.id,
+        items: [
+          for (final it in c.items)
+            DocItem(
+              description: it.description,
+              code: it.partNumber,
+              qty: it.qty,
+              unitPrice: it.price,
+              total: itemValues(it, settings.forClaim(c)).total,
+            )
+        ],
+      );
+
+  /// Nota anexada a um lançamento que ainda não está no arquivo.
+  void _archiveEntry(FinanceEntry e) {
+    if (e.receiptFile.isEmpty || docForEntry(e) != null) return;
+    final read = readReceipts.remove(e.receiptFile);
+    if (read != null && read.items.isNotEmpty) {
+      // o lançamento vale mais que a leitura (a pessoa conferiu e corrigiu)
+      docs.insert(
+          0,
+          StoredDoc.fromReceipt(read, source: DocSource.foto, file: e.receiptFile)
+            ..date = e.date
+            ..party = e.contact.isEmpty ? read.supplier : e.contact
+            ..number = e.invoiceNumber.isEmpty ? read.docNumber : e.invoiceNumber
+            ..total = e.amount
+            ..payment = e.paymentMethod
+            ..financeId = e.id);
+      if (!e.isIncome) rememberSupplier(e.contact);
+      return;
+    }
+    docs.insert(
+        0,
+        StoredDoc(
+          kind: DocKind.notaCompra,
+          source: DocSource.foto,
+          file: e.receiptFile,
+          date: e.date,
+          party: e.contact,
+          number: e.invoiceNumber,
+          total: e.amount,
+          payment: e.paymentMethod,
+          financeId: e.id,
+        ));
+    if (!e.isIncome) rememberSupplier(e.contact);
+  }
+
+  /// Dados de versões anteriores: notas anexadas no Financeiro e PDFs de
+  /// seguradora já importados entram no arquivo de documentos.
+  void _archiveOldFiles() {
+    for (final e in entries) {
+      if (e.receiptFile.isNotEmpty && docForEntry(e) == null) {
+        docs.add(StoredDoc(
+          kind: DocKind.notaCompra,
+          source: DocSource.foto,
+          file: e.receiptFile,
+          date: e.date,
+          createdAt: e.date,
+          party: e.contact,
+          number: e.invoiceNumber,
+          total: e.amount,
+          payment: e.paymentMethod,
+          financeId: e.id,
+        ));
+      }
+    }
+    for (final c in claims) {
+      if (c.sourcePdf.isNotEmpty && docs.every((d) => d.claimId != c.id)) {
+        docs.add(_docFromClaim(c)..createdAt = c.createdAt);
+      }
+    }
+    docs.sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
   /// Gasto do carro mudou: atualiza o lucro dele no Caixa.

@@ -332,7 +332,7 @@ ReceiptData parseReceipt(List<String> rawLines) {
   // nº da nota / reserva / pedido
   var doc = '';
   final docRe = RegExp(
-      r'\b(RESERVA|PEDIDO|CUPOM|NFC-?E|NF-?E|NOTA FISCAL|NOTA|FATURA|VENDA|ORCAMENTO|DOCUMENTO)\b\s*(?:N[O°º]?\.?|NUMERO)?\s*[:#-]?\s*(\d{3,})');
+      r'\b(RESERVA|PEDIDO|CUPOM|NFC-?E|NF-?E|NOTA FISCAL|NOTA|FATURA|VENDA|ORCAMENTO|DOCUMENTO)\b(?:\s+A\s+(?:PRAZO|VISTA))?\s*(?:N[O°º]?\.?|NUMERO)?\s*[:#-]?\s*(\d{3,})');
   for (final l in up) {
     if (l.contains('SEM VALOR')) continue;
     final m = docRe.firstMatch(_fixDigits(l));

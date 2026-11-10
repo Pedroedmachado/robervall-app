@@ -5,6 +5,7 @@ import '../format.dart';
 import '../models.dart';
 import '../theme.dart';
 import 'claims_page.dart';
+import 'docs_page.dart' show openDocs;
 import 'widgets.dart';
 
 class ContactsPage extends StatefulWidget {
@@ -181,6 +182,19 @@ class _ContactsPageState extends State<ContactsPage> {
                 const SizedBox(height: 8),
                 Text(c.notes),
               ],
+              if (StoreScope.read(ctx).docsOfParty(c.name).isNotEmpty)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.folder_copy_outlined),
+                  title: Text(
+                      'Documentos guardados (${StoreScope.read(ctx).docsOfParty(c.name).length})'),
+                  subtitle: const Text('Notas de compra e orçamentos lidos'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    openDocs(context, party: c.name);
+                  },
+                ),
               const Divider(height: 24),
               Text('Registros (${related.length})',
                   style: const TextStyle(fontWeight: FontWeight.w700)),
