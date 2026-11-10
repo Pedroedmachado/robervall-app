@@ -37,6 +37,29 @@ if [ -d android/app ]; then
   for lang in chinese devanagari japanese korean; do
     grep -q "mlkit.vision.text.$lang" "$rules" || echo "-dontwarn com.google.mlkit.vision.text.$lang.**" >> "$rules"
   done
+  # o leitor de notas (ML Kit) quebra no celular quando o código é encolhido
+  # ("getClass() on a null object reference"): mantém as classes dele…
+  grep -q 'keep class com.google.mlkit' "$rules" || cat >> "$rules" <<'RULES'
+-keep class com.google.mlkit.** { *; }
+-keep class com.google.android.gms.internal.mlkit_** { *; }
+-keep class com.google.android.gms.vision.** { *; }
+-keep class com.google_mlkit_text_recognition.** { *; }
+-keep class com.google_mlkit_commons.** { *; }
+RULES
+  # …e desliga o encolhimento do código no APK
+  for g in android/app/build.gradle.kts android/app/build.gradle; do
+    [ -f "$g" ] || continue
+    if ! grep -q -i 'minifyEnabled' "$g"; then
+      if [ "${g##*.}" = "kts" ]; then
+        sed -i.bak -E 's#^( *)signingConfig = signingConfigs\.getByName\("debug"\)#&\n\1isMinifyEnabled = false\n\1isShrinkResources = false#' "$g"
+      else
+        sed -i.bak -E 's#^( *)signingConfig (= )?signingConfigs\.debug#&\n\1minifyEnabled false\n\1shrinkResources false#' "$g"
+      fi
+      rm -f "$g.bak"
+    fi
+    grep -q -i 'minifyEnabled' "$g" && echo "Android: encolhimento de código desligado ($g)" \
+      || echo "aviso: não consegui desligar o encolhimento em $g (ficam valendo as regras de keep)"
+  done
 fi
 
 # Linux: título da janela

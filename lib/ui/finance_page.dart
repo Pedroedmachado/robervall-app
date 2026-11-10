@@ -667,8 +667,9 @@ Future<ReceiptScan?> scanReceiptPhoto(BuildContext context) async {
           : 'Não consegui achar o total nesta foto. Preencha o valor (a foto fica anexada).',
     );
   } catch (e) {
+    debugPrint('Leitura da nota falhou: $e');
     scan = ReceiptScan(name, null,
-        'Não consegui ler a nota ($e). Preencha à mão; a foto fica anexada.');
+        'Não consegui ler a nota neste aparelho (${shortError(e)}). Preencha à mão; a foto fica anexada.');
   }
   if (context.mounted) Navigator.of(context).pop(); // fecha "Lendo a nota…"
   return scan;
@@ -1071,4 +1072,12 @@ class _ReceiptThumb extends StatelessWidget {
       ]),
     );
   }
+}
+
+
+/// Primeira linha do erro, sem a pilha de chamadas.
+String shortError(Object e) {
+  var t = e.toString().split('\n').first.trim();
+  t = t.replaceFirst(RegExp(r'^PlatformException\((\w+), '), '');
+  return t.length > 90 ? '${t.substring(0, 90)}…' : t;
 }
