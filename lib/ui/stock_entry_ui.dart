@@ -58,7 +58,7 @@ Future<NoteRead?> pickAndReadNote(BuildContext context) async {
             title: const Text('Foto da nota'),
             subtitle: Text(mobile
                 ? 'Tire uma foto ou escolha da galeria'
-                : 'A leitura da foto funciona no celular'),
+                : 'Escolha a foto ou imagem da nota (JPG, PNG) salva no computador'),
             onTap: () => Navigator.pop(ctx, 'foto'),
           ),
         ListTile(
@@ -381,6 +381,15 @@ class _EntryPageState extends State<_EntryPage> {
             ),
           ]),
           if (l.include) ...[
+            if (m == null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 0, 8),
+                child: BoundField(
+                  label: 'Nome no estoque (corrija se a leitura errou)',
+                  value: l.name,
+                  onChanged: (v) => l.name = v.trim().isEmpty ? l.name : v.trim(),
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.only(left: 12),
               child: Text(

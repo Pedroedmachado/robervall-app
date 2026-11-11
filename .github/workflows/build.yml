@@ -43,7 +43,7 @@ jobs:
       - name: Dependências do Linux
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev poppler-utils fonts-dejavu-core
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev poppler-utils fonts-dejavu-core tesseract-ocr tesseract-ocr-por
       - name: Build
         shell: bash
         run: |
@@ -107,6 +107,9 @@ jobs:
           { bash tool/prepare_platforms.sh && flutter pub get; } 2>&1 | tee ci/windows-prep.log || status=1
           flutter build windows --release --dart-define=FUNILAR_VERSION=v1.0.${{ github.run_number }} 2>&1 | tee ci/windows.log || status=1
           echo "$status" > ci/windows.status
+          echo "== leitor de notas por foto (OCR do Windows)" > ci/ocr-test.log
+          powershell -NoProfile -Command "Get-WindowsCapability -Online -Name 'Language.OCR*' | Format-Table Name, State -AutoSize | Out-String -Width 200" >> ci/ocr-test.log 2>&1 || true
+          flutter test test/ocr_desktop_test.dart -r expanded >> ci/ocr-test.log 2>&1 && echo OCR_OK >> ci/ocr-test.log || echo OCR_FAILED >> ci/ocr-test.log
           if [ -d build/windows/x64/runner/Release ]; then
             mkdir -p out
             powershell -Command "Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath out/${APP_ASSET}-windows-x64.zip"

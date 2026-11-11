@@ -636,7 +636,7 @@ Future<ReceiptScan?> scanReceiptPhoto(BuildContext context) async {
       (receiptOcrAvailable ? readReceiptLines : null);
   if (reader == null) {
     return ReceiptScan(name, null,
-        'A leitura automática funciona no celular. Aqui a foto fica anexada e você preenche os valores.');
+        'A leitura automática não existe neste sistema. A foto fica anexada e você preenche os valores.');
   }
   if (!context.mounted) return null;
   showDialog<void>(
@@ -668,8 +668,12 @@ Future<ReceiptScan?> scanReceiptPhoto(BuildContext context) async {
     );
   } catch (e) {
     debugPrint('Leitura da nota falhou: $e');
-    scan = ReceiptScan(name, null,
-        'Não consegui ler a nota neste aparelho (${shortError(e)}). Preencha à mão; a foto fica anexada.');
+    scan = ReceiptScan(
+        name,
+        null,
+        e is OcrProblem
+            ? '${e.message}. Por enquanto a foto fica anexada e você preenche à mão.'
+            : 'Não consegui ler a nota neste aparelho (${shortError(e)}). Preencha à mão; a foto fica anexada.');
   }
   if (context.mounted) Navigator.of(context).pop(); // fecha "Lendo a nota…"
   return scan;
