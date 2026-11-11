@@ -127,6 +127,11 @@ class ReceiptData {
 final _moneyRe = RegExp(r'(\d{1,3}(?:[.\s]\d{3})+|\d+)\s?[,.]\s?(\d{2})(?!\d)');
 final _dateRe = RegExp(r'(\d{2})\s?[/.-]\s?(\d{2})\s?[/.-]\s?(\d{2,4})');
 
+/// O leitor do PC às vezes separa os centavos: "267 , oo" → "267,00".
+String _tidyDecimals(String s) => s.replaceAllMapped(
+    RegExp(r'(\d) ?, ?([0-9oO]{2})(?![0-9A-Za-z])'),
+    (m) => '${m[1]},${m[2]!.replaceAll(RegExp('[oO]'), '0')}');
+
 /// Corrige confusões comuns do OCR em trechos numéricos (O→0, I/l→1, S→5).
 String _fixDigits(String s) {
   var prev = '';
@@ -223,7 +228,7 @@ const _partWords = [
 ReceiptData parseReceipt(List<String> rawLines) {
   final lines = [
     for (final l in rawLines)
-      if (l.trim().isNotEmpty) l.trim()
+      if (l.trim().isNotEmpty) _tidyDecimals(l.trim())
   ];
   final up = [for (final l in lines) _norm(l)];
 

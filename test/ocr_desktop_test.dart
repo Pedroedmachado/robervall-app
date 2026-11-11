@@ -26,6 +26,27 @@ void main() {
     expect(d.total, 267);
   });
 
+  test('linhas como o leitor do Windows devolve (centavos separados, letras soltas)', () {
+    final d = parseReceipt(const [
+      'TINTAS EXEMPLO LTDA',
+      'RESERVA 0123456',
+      '30/10/2026-13:50 VEND:   00010 -FULANO',
+      'QTDE UNID   PRC UNIT   TOTAL',
+      'VERNIZ A. SOLIDOS HS-2X1 13000 C/CAT.SKY',
+      '3,00 QUART   89,00   267 , oo',
+      'THINNER PIJ /POLIES.TH700 900ML SKY',
+      '2,00 L ITRO   41,00   82,00',
+      'L IXA DAGUA 1200 NORTON-AMARELA',
+      '5,00 FL   6,95   34,75',
+      'TOTAL   383,75',
+    ]);
+    expect(d.items.length, 3);
+    expect(d.items.first.total, 267);
+    expect(d.items[1].qty, 2);
+    expect(d.total, 383.75);
+    expect(d.date, DateTime(2026, 10, 30));
+  });
+
   test('saída tsv do Tesseract vira trechos por linha', () {
     const tsv = 'level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n'
         '4\t1\t1\t1\t1\t0\t51\t56\t341\t22\t-1\t\n'
