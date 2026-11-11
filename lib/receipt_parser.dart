@@ -247,40 +247,7 @@ ReceiptData parseReceipt(List<String> rawLines) {
   }
 
   // itens: descrição seguida de "qtd unidade preço total" (ou tudo na mesma linha)
-  final items = <ReceiptItem>[];
-  final qtyLine = RegExp(
-      r'^\s*(\d+(?:[,.]\d+)?)\s*(\d*[A-Z]{1,6})?\.?\s+.*?(\d[\d.\s]*[,.]\d{2})\s+.*?(\d[\d.\s]*[,.]\d{2})\s*$');
-  final sameLine = RegExp(
-      r'^(.*?[A-Z].*?)\s(\d+(?:[,.]\d+)?)\s*(\d*[A-Z]{1,6})?\.?\s+[\d.\s]*[,.]\d{2}\s+[\d.\s]*[,.]\d{2}\s*$');
-  for (var i = 0; i < up.length; i++) {
-    final l = _fixDigits(up[i]);
-    if (l.contains('TOTAL') || l.contains('QTDE')) continue;
-    final vals = _moneys(l);
-    if (vals.length < 2) continue;
-    final unit = vals[vals.length - 2], total = vals.last;
-    final m = qtyLine.firstMatch(l);
-    if (m != null) {
-      // linha só com números: a descrição está na linha de cima
-      final qty = double.tryParse(m[1]!.replaceAll(',', '.')) ?? 1;
-      if ((qty * unit - total).abs() > 0.05 * (total.abs() + 1)) continue;
-      var desc = '';
-      if (i > 0 && _moneys(up[i - 1]).isEmpty && !up[i - 1].contains('---')) {
-        desc = lines[i - 1];
-      }
-      items.add(ReceiptItem(
-          _cleanDesc(desc), qty, (m[2] ?? '').trim(), unit, total));
-      continue;
-    }
-    // tudo na mesma linha: "DESCRICAO  1 UN  300,00  300,00"
-    final same = sameLine.firstMatch(l);
-    if (same == null) continue;
-    final qty = double.tryParse(same[2]!.replaceAll(',', '.')) ?? 1;
-    if ((qty * unit - total).abs() > 0.05 * (total.abs() + 1)) continue;
-    // o grupo 1 começa no início da linha: a descrição tem o mesmo tamanho
-    final desc = lines[i].substring(0, same[1]!.length.clamp(0, lines[i].length));
-    items.add(ReceiptItem(
-        _cleanDesc(desc), qty, (same[3] ?? '').trim(), unit, total));
-  }
+  final items = extractReceiptItems(lines, up);
   final sum = items.fold(0.0, (a, i) => a + i.total);
 
   // total: linha com "TOTAL" que não seja débito, subtotal, impostos...
@@ -389,4 +356,305 @@ String _cleanDesc(String s) {
       .replaceAllMapped(RegExp(r'\b(Hs|Lt|Ml|Kg|Pu|Sky)\b'),
           (m) => m[0]!.toUpperCase())
       .replaceAll(' C/cat', ' c/ cat');
+}
+
+
+// ---------------------------------------------------------------- itens
+//
+// Leitura dos itens que não depende do layout da nota: cada linha é
+// separada em palavras; o "rabo" numérico da linha (quantidade, unidade,
+// preço, total — em qualquer ordem comum) é interpretado conferindo a conta
+// (qtd × preço = total). A descrição é o que vem antes; se a linha só tem
+// números, a descrição é a linha de cima. Serve para:
+//   "DESCRICAO" / "4,00 QUART 89,00 356,00"      (nota de balcão)
+//   "FAROL ESQ 1 UN 300,00 300,00"                (tudo na mesma linha)
+//   "001 7891234567890 LEITE 1L 2 UN X 4,99 9,98" (cupom fiscal / NFC-e)
+//   "PARAFUSO M8 2 x 1,50 = 3,00"                 (com "x" e "=")
+//   "LIXA 1200 5 FL 6,95 1,00 33,75"              (com desconto no meio)
+//   "ESTOPA 12,00"                                 (só o valor: qtd 1)
+
+const _unitWords = {
+  'UN', 'UND', 'UNID', 'UNI', 'U', 'PC', 'PCS', 'PCA', 'PÇ', 'PECA', 'CX', 'CJ',
+  'JG', 'KIT', 'KG', 'G', 'GR', 'GRS', 'L', 'LT', 'LTS', 'LITRO', 'LITROS',
+  'ML', 'M', 'MT', 'MTS', 'M2', 'M3', 'FL', 'FLS', 'FOLHA', 'RL', 'ROLO',
+  'PR', 'PAR', 'GL', 'GALAO', 'QT', 'QUART', 'QUARTO', 'LATA', 'TB', 'TUBO',
+  'FR', 'FRASCO', 'SC', 'SACO', 'BD', 'BALDE', 'DZ', 'POTE', 'EMB', 'BL',
+  'BLOCO', 'CT', 'DISCO',
+};
+const _fillWords = {'X', '*', '=', 'R\$', 'RS', 'QTD', 'QTDE', 'QT.', 'VL', 'VLR', 'UNIT', 'UNIT.', 'VL.'};
+final _notItem = RegExp(
+    r'\b(TOTAL|SUBTOTAL|TROCO|DESCONTO|ACRESC\w*|PAGO|PAGAMENTO|DINHEIRO|CARTAO|CREDITO|DEBITO|PIX|SALDO|TRIBUTOS?|IMPOSTOS?|LEI|APROX\w*|CNPJ|CPF|FONE|TEL|PARCELAS?|VENCIMENTO|JUROS|FRETE|ICMS|IPI|CHAVE|PROTOCOLO|CONSUMIDOR)\b|VALOR A PAGAR|QTDE UNID|PRC UNIT|VL UNIT|VALOR UNIT|BASE DE CALC');
+
+/// Número de nota: "4,00", "1.234,56", "2,000", "47.50", "3". null se não for.
+double? _num(String t) {
+  var s = t.replaceAll(RegExp(r'^R\$'), '').replaceAll(RegExp(r'[=:]$'), '');
+  if (s.startsWith('-')) return null;
+  if (!RegExp(r'^\d[\d.,]*$').hasMatch(s)) return null;
+  if (RegExp(r'^\d{1,3}(\.\d{3})+(,\d+)?$').hasMatch(s)) {
+    s = s.replaceAll('.', '').replaceAll(',', '.');
+  } else if (RegExp(r'^\d+,\d+$').hasMatch(s)) {
+    s = s.replaceAll(',', '.');
+  } else if (!RegExp(r'^\d+(\.\d+)?$').hasMatch(s)) {
+    return null;
+  }
+  return double.tryParse(s);
+}
+
+/// Tem cara de dinheiro (com centavos): "12,90", "1.234,50", "47.50".
+bool _isMoney(String t) {
+  final s = t.replaceAll(RegExp(r'^R\$'), '');
+  return RegExp(r'^\d{1,3}(\.\d{3})*,\d{2,4}$|^\d+,\d{2,4}$|^\d+\.\d{2}$').hasMatch(s) &&
+      _num(s) != null;
+}
+
+bool _isUnit(String t) {
+  final s = t.replaceAll('.', '');
+  if (_unitWords.contains(s)) return true;
+  // embalagem: "750GR", "900ML", "1KG", "18L"
+  return RegExp(r'^\d+(?:[.,]\d+)?(ML|L|LT|LTS|KG|G|GR|GRS|M|MT|MTS)$').hasMatch(s);
+}
+
+bool _close(double a, double b) => (a - b).abs() <= 0.02 + 0.03 * b.abs();
+
+/// Ajeita a linha para virar palavras: "2UNX1,50" → "2 UN X 1,50".
+List<String> _tokens(String upLine) {
+  var l = upLine
+      .replaceAll(RegExp(r'R\$\s*'), 'R\$ ')
+      .replaceAllMapped(RegExp(r'(\d)\s*[X\*]\s*(\d+[,.]\d)'), (m) => '${m[1]} X ${m[2]}')
+      .replaceAllMapped(RegExp(r'(\d)(UN|UND|PC|PCS|CX|KIT|FL)\b'), (m) => '${m[1]} ${m[2]}')
+      .replaceAllMapped(RegExp(r'\b(UN|UND|PC|PCS|CX|KIT|FL)(X)\b'), (m) => '${m[1]} ${m[2]}')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  if (l.isEmpty) return const [];
+  // OCR do PC às vezes separa uma letra: "L ITRO" → "LITRO"
+  final out = <String>[];
+  final raw = l.split(' ');
+  for (var i = 0; i < raw.length; i++) {
+    if (i + 1 < raw.length &&
+        RegExp(r'^[A-Z]$').hasMatch(raw[i]) &&
+        RegExp(r'^[A-Z]+$').hasMatch(raw[i + 1]) &&
+        _unitWords.contains(raw[i] + raw[i + 1])) {
+      out.add(raw[i] + raw[i + 1]);
+      i++;
+      continue;
+    }
+    out.add(raw[i]);
+  }
+  return out;
+}
+
+class _Tail {
+  _Tail(this.start, this.qty, this.unitPrice, this.total, this.unit, this.strong);
+  final int start; // primeira palavra que é da parte numérica
+  final double qty, unitPrice, total;
+  final String unit;
+  final bool strong; // a conta qtd × preço = total confere
+}
+
+/// Interpreta o fim da linha. null = a linha não é item.
+_Tail? _readTail(List<String> tk) {
+  if (tk.isEmpty || !_isMoney(tk.last)) return null;
+  // anda do fim para o começo enquanto for número/unidade/x/=/R$
+  final idx = <int>[]; // índices das palavras numéricas
+  var i = tk.length - 1;
+  for (; i >= 0; i--) {
+    final t = tk[i];
+    if (_num(t) != null) {
+      idx.insert(0, i);
+      continue;
+    }
+    if (_isUnit(t) || _fillWords.contains(t)) continue;
+    break;
+  }
+  if (idx.isEmpty) return null;
+  final v = [for (final k in idx) _num(tk[k])!];
+  String unitAfter(int k) {
+    for (var j = k + 1; j < tk.length && j <= k + 2; j++) {
+      if (_isUnit(tk[j])) return tk[j].replaceAll(RegExp(r'\.$'), '');
+    }
+    return '';
+  }
+
+  bool qtyOk(double q) => q > 0 && q <= 9999;
+  final n = v.length;
+  // procura, da direita para a esquerda, três números em que a conta fecha:
+  // (qtd, preço, total) ou (preço, qtd, total). Colunas de imposto depois do
+  // total (DANFE) ficam de fora.
+  for (var k = n - 1; k >= 2; k--) {
+    final t = v[k];
+    if (t <= 0 || !_isMoney(tk[idx[k]])) continue;
+    for (final (qi, pi) in [(k - 2, k - 1), (k - 1, k - 2)]) {
+      final q = v[qi], p = v[pi];
+      if (qtyOk(q) && p > 0 && _close(q * p, t)) {
+        return _Tail(idx[k - 2], q, p, t, unitAfter(idx[qi]), true);
+      }
+    }
+    // com desconto no meio: (qtd, preço, desconto, total)
+    if (k >= 3) {
+      final q = v[k - 3], p = v[k - 2], d = v[k - 1];
+      final gross = q * p;
+      if (qtyOk(q) && p > 0 && t <= gross + 0.02 && t >= gross * 0.5) {
+        final asValue = _close(gross - d, t);
+        final asPct = d > 0 && d < 100 && _close(gross * (1 - d / 100), t);
+        if (asValue || asPct) {
+          return _Tail(idx[k - 3], q, t / q, t, unitAfter(idx[k - 3]), true);
+        }
+      }
+    }
+  }
+  // pula zeros no fim (colunas de imposto vazias)
+  var m = n;
+  while (m > 1 && v[m - 1] == 0) {
+    m--;
+  }
+  if (m >= 3) {
+    for (var k = m - 1; k >= 2; k--) {
+      final t = v[k];
+      for (final (qi, pi) in [(k - 2, k - 1), (k - 1, k - 2)]) {
+        final q = v[qi], p = v[pi];
+        if (qtyOk(q) && p > 0 && t > 0 && _close(q * p, t)) {
+          return _Tail(idx[k - 2], q, p, t, unitAfter(idx[qi]), true);
+        }
+      }
+    }
+  }
+  if (m >= 2) {
+    final a = v[m - 2], t = v[m - 1];
+    final aMoney = _isMoney(tk[idx[m - 2]]);
+    // "2 UN 20,00" ou "2 x 20,00": qtd e total
+    if (!aMoney && a == a.roundToDouble() && qtyOk(a) && a <= 999 &&
+        (unitAfter(idx[m - 2]).isNotEmpty || tk.contains('X'))) {
+      return _Tail(idx[m - 2], a, t / a, t, unitAfter(idx[m - 2]), false);
+    }
+    // "1,50 3,00": preço e total → qtd = total / preço
+    if (aMoney && a > 0 && t > 0) {
+      final q = t / a;
+      if ((q - q.round()).abs() < 0.01 && q.round() >= 1 && q.round() <= 999) {
+        return _Tail(idx[m - 2], q.roundToDouble(), a, t, '', true);
+      }
+    }
+  }
+  // só o valor
+  return _Tail(idx[m - 1], 1, v[m - 1], v[m - 1], '', false);
+}
+
+bool _hasLetters(String s) => RegExp(r'[A-Z]{2,}').hasMatch(s);
+
+/// Tira da descrição o nº do item e o código (EAN/código do fornecedor).
+(String desc, String code) _splitCode(String raw) {
+  final tk = raw.trim().split(RegExp(r'\s+'));
+  var code = '';
+  var i = 0;
+  // "001" (nº do item)
+  if (tk.length > 1 && RegExp(r'^\d{1,3}$').hasMatch(tk[0])) i++;
+  // EAN ou código: só dígitos (6-14) ou código com dígito antes do nome
+  if (i < tk.length - 1 &&
+      (RegExp(r'^\d{6,14}$').hasMatch(tk[i]) ||
+          (RegExp(r'^[A-Z0-9.\-/]{4,}$').hasMatch(tk[i]) &&
+              RegExp(r'\d').hasMatch(tk[i]) &&
+              RegExp(r'^[A-Z]{3,}').hasMatch(tk[i + 1])))) {
+    code = tk[i];
+    i++;
+  }
+  return (tk.sublist(i).join(' '), code);
+}
+
+/// Itens da nota (qualquer layout comum).
+List<ReceiptItem> extractReceiptItems(List<String> lines, List<String> up) {
+  final found = <(ReceiptItem, bool)>[]; // (item, conta confere)
+  var inItems = true;
+  for (var i = 0; i < up.length; i++) {
+    final l = _fixDigits(up[i]);
+    if (_isColumnHeader(l)) {
+      inItems = true;
+      continue;
+    }
+    if (_notItem.hasMatch(l)) {
+      if (l.contains('TOTAL')) inItems = false;
+      continue;
+    }
+    if (l.contains('---') || l.contains('===')) continue;
+    final tk = _tokens(l);
+    final tail = _readTail(tk);
+    if (tail == null || tail.total <= 0) continue;
+    // o que sobrou antes da conta é a descrição (sem colunas soltas no fim:
+    // NCM, CFOP, "UN"…)
+    var end = tail.start;
+    while (end > 0 &&
+        (_unitWords.contains(tk[end - 1].replaceAll('.', '')) ||
+            _fillWords.contains(tk[end - 1]))) {
+      end--;
+    }
+    var nums = 0;
+    while (end - nums > 0 && _num(tk[end - 1 - nums]) != null) {
+      nums++;
+    }
+    if (nums >= 2) end -= nums; // colunas da DANFE (NCM, CST, CFOP)
+    var head = tk.sublist(0, end).join(' ');
+    var item = tail;
+    // "2,00 XYZ 41,00 82,00": quantidade e uma unidade desconhecida na
+    // frente; a descrição está na linha de cima
+    final lead = RegExp(r'^(\d+(?:[.,]\d+)?) ([A-Z]{1,8})$').firstMatch(head);
+    if (lead != null && i > 0 && _moneys(up[i - 1]).isEmpty) {
+      final q = _num(lead[1]!) ?? 0;
+      if (q > 0 && _close(q * tail.unitPrice, tail.total)) {
+        item = _Tail(tail.start, q, tail.total / q, tail.total, lead[2]!, true);
+        head = '';
+      }
+    }
+    var (desc, code) = _splitCode(head);
+    var text = '';
+    if (_hasLetters(desc)) {
+      // com acentos, da linha original
+      text = _splitCode(_descFromOriginal(lines[i], head)).$1;
+    } else {
+      // linha só com números: a descrição está na linha de cima
+      for (var k = i - 1; k >= 0 && k >= i - 2; k--) {
+        final prev = _fixDigits(up[k]);
+        if (_moneys(prev).isNotEmpty ||
+            prev.contains('---') ||
+            _notItem.hasMatch(prev) ||
+            _isColumnHeader(prev)) {
+          break;
+        }
+        if (!_hasLetters(prev)) continue;
+        final (d, c) = _splitCode(lines[k]);
+        text = d;
+        if (code.isEmpty) code = c;
+        break;
+      }
+      if (text.isEmpty) {
+        if (!item.strong) continue;
+        text = 'Item';
+      }
+    }
+    if (!item.strong && !inItems) continue;
+    found.add((
+      ReceiptItem(_cleanDesc(text), item.qty, item.unit,
+          double.parse(item.unitPrice.toStringAsFixed(4)), item.total,
+          code: code),
+      item.strong
+    ));
+  }
+  // com itens "certos" (qtd × preço = total), só entram os palpites que têm
+  // quantidade ou unidade (mesma lista); sem nenhum certo, valem os palpites
+  // ("PRODUTO 12,00")
+  final anyStrong = found.any((e) => e.$2);
+  return [
+    for (final (it, ok) in found)
+      if (ok || !anyStrong || it.qty > 1 || it.unit.isNotEmpty) it
+  ];
+}
+
+bool _isColumnHeader(String l) =>
+    RegExp(r'\b(DESCRI\w*|PRODUTO|QTDE?|ITEM|CODIGO|COD)\b').hasMatch(l) &&
+    RegExp(r'\b(VL|VLR|VALOR|PRC|PRECO|TOTAL|UNIT|UNID|QTDE?)\b').hasMatch(l) &&
+    _moneys(l).isEmpty;
+
+/// A mesma quantidade de palavras da linha original (com acentos).
+String _descFromOriginal(String original, String upDesc) {
+  final words = upDesc.split(' ').where((e) => e.isNotEmpty).length;
+  final ow = original.trim().split(RegExp(r'\s+'));
+  if (ow.length < words) return upDesc;
+  return ow.take(words).join(' ');
 }

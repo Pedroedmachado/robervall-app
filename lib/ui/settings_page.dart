@@ -336,19 +336,15 @@ class _BackupCardState extends State<_BackupCard> {
     if (file == null || !mounted) return;
     final ok = await confirm(
       context,
-      'Restaurar backup?',
-      'Os dados atuais deste aparelho serão substituídos pelos do arquivo ${file.name}.',
-      ok: 'Restaurar',
-      danger: true,
+      'Importar backup?',
+      'Os dados do arquivo ${file.name} serão mesclados com os deste aparelho: o que já existe é atualizado, o que é novo é acrescentado e nada daqui é apagado.',
+      ok: 'Importar',
     );
     if (!ok) return;
     setState(() => _busy = true);
     try {
-      await store.importBackup(await file.readAsBytes());
-      if (mounted) {
-        toast(context,
-            'Backup restaurado: ${store.claims.length} registros, ${store.catalog.length} itens no catálogo.');
-      }
+      final report = await store.importBackup(await file.readAsBytes());
+      if (mounted) toast(context, report.summary());
     } catch (e) {
       if (mounted) toast(context, 'Não foi possível restaurar: $e');
     } finally {

@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'models.dart';
 import 'calc.dart';
+import 'backup_merge.dart';
 import 'cash.dart';
 import 'docs.dart';
 import 'finance.dart';
@@ -767,7 +768,9 @@ class AppStore extends ChangeNotifier {
   }
 
   /// Restaura um backup .zip (substitui os dados atuais).
-  Future<void> importBackup(Uint8List zipBytes) async {
+  /// Importa o backup mesclando com o que já existe neste aparelho: o que é
+  /// igual é atualizado, o que é novo entra, nada é apagado.
+  Future<MergeReport> importBackup(Uint8List zipBytes) async {
     gate.requirePerm(Perm.ajustes);
     final archive = ZipDecoder().decodeBytes(zipBytes);
     Map<String, dynamic>? data;
@@ -789,12 +792,43 @@ class AppStore extends ChangeNotifier {
       if (name.isEmpty || name.contains('/') || name.contains('\\') || name.contains('..')) {
         continue;
       }
-      await File('${photosDir.path}/$name')
-          .writeAsBytes(f.content as List<int>, flush: true);
+      final out = File('${photosDir.path}/$name');
+      // fotos e arquivos têm nome único: o que já existe aqui é o mesmo
+      if (await out.exists() && await out.length() > 0) continue;
+      await photosDir.create(recursive: true);
+      await out.writeAsBytes(f.content as List<int>, flush: true);
     }
-    _fromJson(data);
+    final (merged, report) = mergeBackupJson(toJson(), data);
+    _fromJson(merged);
+    _fixClaimNumbers();
     changed();
     await flush();
+    return report;
+  }
+
+  /// Dois aparelhos podem ter criado orçamentos com o mesmo número: o que
+  /// veio depois ganha um número novo. O próximo número fica acima de todos.
+  void _fixClaimNumbers() {
+    final seen = <String>{};
+    var max = 0;
+    final re = RegExp(r'(\d+)\s*$');
+    for (final c in claims) {
+      final m = re.firstMatch(c.number);
+      if (m != null) {
+        final n = int.parse(m.group(1)!);
+        if (n > max) max = n;
+      }
+    }
+    if (settings.nextNumber <= max) settings.nextNumber = max + 1;
+    for (final c in claims) {
+      if (c.number.isEmpty || seen.add(c.number)) continue;
+      final old = c.number;
+      c.number =
+          '${settings.numberPrefix}-${settings.nextNumber.toString().padLeft(4, '0')}';
+      settings.nextNumber++;
+      seen.add(c.number);
+      c.timeline.add(TimelineEvent(text: 'Número $old já existia: virou ${c.number} ao importar o backup'));
+    }
   }
 
   // -------------------------------------------------------------- financeiro
