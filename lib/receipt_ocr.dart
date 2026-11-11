@@ -68,6 +68,7 @@ List<OcrPiece> parseOcrPieces(String out) {
 const windowsOcrScript = r'''
 param([string]$Path)
 $ErrorActionPreference = 'Stop'
+$step = 'inicio'
 try {
   [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
   Add-Type -AssemblyName System.Runtime.WindowsRuntime
@@ -86,6 +87,7 @@ try {
     $t.Result
   }
 
+  $step = 'idioma'
   $engine = $null
   foreach ($tag in @('pt-BR', 'pt-PT')) {
     try {
@@ -103,9 +105,11 @@ try {
   }
   if ($engine -eq $null) { [Console]::Error.WriteLine('SEM_IDIOMA'); exit 3 }
 
+  $step = 'abrir a imagem'
   $file = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($Path)) ([Windows.Storage.StorageFile])
   $stream = Await ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])
   $decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
+  $step = 'decodificar a imagem'
   $bitmap = $null
   try {
     # respeita a rotação gravada pela câmera do celular e limita o tamanho
@@ -128,6 +132,7 @@ try {
   } catch {
     $bitmap = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
   }
+  $step = 'ler o texto'
   $result = Await ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
 
   $inv = [System.Globalization.CultureInfo]::InvariantCulture
@@ -146,10 +151,15 @@ try {
   }
   exit 0
 } catch {
-  [Console]::Error.WriteLine('ERRO ' + $_.Exception.Message)
+  $e = $_.Exception
+  while ($e.InnerException -ne $null) { $e = $e.InnerException }
+  [Console]::Error.WriteLine('ERRO [' + $step + '] ' + $e.Message)
   exit 2
 }
 ''';
+
+/// Caminho completo no formato do Windows (o leitor não aceita "/").
+String windowsPath(String path) => File(path).absolute.path.replaceAll('/', r'\');
 
 /// Windows: roda o leitor do sistema pelo PowerShell (não precisa instalar
 /// nada no app).
@@ -161,7 +171,7 @@ Future<List<OcrPiece>> windowsOcrPieces(String imagePath) async {
     await script.writeAsBytes([0xEF, 0xBB, 0xBF, ...utf8.encode(windowsOcrScript)], flush: true);
     final r = await Process.run(
       'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script.path, File(imagePath).absolute.path],
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script.path, windowsPath(imagePath)],
       stdoutEncoding: utf8,
       stderrEncoding: utf8,
     ).timeout(const Duration(seconds: 60));
