@@ -15,6 +15,7 @@ import 'cash_page.dart';
 import 'claims_page.dart';
 import 'team_page.dart';
 import 'docs_page.dart' show openDoc, openDocs;
+import 'production_page.dart';
 import 'stock_entry_ui.dart' show readPurchaseNote;
 import 'widgets.dart';
 
@@ -259,7 +260,7 @@ class _FinancePageState extends State<FinancePage> {
       );
 
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
       appBar: AppBar(
         title: const Text('Financeiro'),
@@ -267,6 +268,7 @@ class _FinancePageState extends State<FinancePage> {
           Tab(text: 'Vendas', icon: Icon(Icons.request_quote_outlined)),
           Tab(text: 'Caixa', icon: Icon(Icons.point_of_sale_outlined)),
           Tab(text: 'Equipe', icon: Icon(Icons.engineering_outlined)),
+          Tab(text: 'Produção', icon: Icon(Icons.fact_check_outlined)),
         ]),
         actions: [
           IconButton(
@@ -298,6 +300,7 @@ class _FinancePageState extends State<FinancePage> {
         vendas,
         CashView(period: _period, header: periodBar),
         TeamView(period: _period, header: periodBar),
+        const ProductionView(),
       ]),
     ),
     );

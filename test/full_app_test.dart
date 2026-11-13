@@ -438,6 +438,10 @@ void main() {
       expect(find.text('Equipe no período'), findsOneWidget);
       expect(find.textContaining('Luan', skipOffstage: false), findsWidgets);
       expect(find.textContaining('Baiano', skipOffstage: false), findsWidgets);
+      await tab(t, 'Produção');
+      expect(find.textContaining('Produção nos últimos 7 dias'), findsOneWidget);
+      await segment(t, '30 dias');
+      expect(find.textContaining('Produção nos últimos 30 dias'), findsOneWidget);
 
       await tap(t, nav('Estoque'));
       expect(find.textContaining('Farol esquerdo', skipOffstage: false), findsWidgets);

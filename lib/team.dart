@@ -135,3 +135,113 @@ List<WorkerReport> teamReport({
     ..sort((a, b) => b.profit.compareTo(a.profit));
   return list;
 }
+
+// ------------------------------------------------------------- produção
+//
+// Quanto cada funcionário produziu: os carros em que foi escalado, com as
+// peças/serviços da função dele em cada um, nos últimos 7, 15 e 30 dias.
+
+/// Itens do orçamento que são trabalho da função (as mesmas peças que o app
+/// conta para pagar por peça).
+List<BudgetItem> roleItems(Claim c, OutsourcedService role) {
+  List<BudgetItem> labor(LaborType t, {bool partsOnly = false}) => c.items
+      .where((i) =>
+          i.approved &&
+          i.hasLabor &&
+          i.laborType == t &&
+          (!partsOnly || i.parentId.isEmpty))
+      .toList();
+  return switch (role) {
+    OutsourcedService.pintura => c.items.where((i) => i.approved && i.hasPaint).toList(),
+    OutsourcedService.funilaria => labor(LaborType.funilaria, partsOnly: true),
+    OutsourcedService.mecanica => labor(LaborType.mecanica),
+    OutsourcedService.eletrica => labor(LaborType.eletrica),
+    OutsourcedService.tapecaria => labor(LaborType.tapecaria),
+    OutsourcedService.vidracaria => labor(LaborType.vidracaria),
+    _ => const [],
+  };
+}
+
+/// Um trabalho do funcionário: a função dele em um carro.
+class ProductionJob {
+  ProductionJob(this.claim, this.role, this.pieces, this.items, this.date, this.done);
+  final Claim claim;
+  final OutsourcedService role;
+
+  /// Peças/serviços que contam para ele nesse carro.
+  final double pieces;
+
+  /// Os itens do orçamento que são dele (vazio quando a função não tem
+  /// itens próprios, como martelinho e polimento).
+  final List<BudgetItem> items;
+
+  /// Concluído: data da conclusão. Em andamento: data da aprovação.
+  final DateTime date;
+  final bool done;
+}
+
+class WorkerProduction {
+  WorkerProduction(this.name, this.worker);
+  final String name;
+  final Contact? worker;
+
+  /// Carros concluídos (mais recentes primeiro) e em andamento.
+  final List<ProductionJob> done = [];
+  final List<ProductionJob> open = [];
+
+  Set<OutsourcedService> get roles => {...done.map((j) => j.role), ...open.map((j) => j.role)};
+
+  /// Concluídos nos últimos [days] dias (contando de [now]).
+  List<ProductionJob> within(int days, DateTime now) {
+    final from = now.subtract(Duration(days: days));
+    return done.where((j) => !j.date.isBefore(from) && !j.date.isAfter(now)).toList();
+  }
+
+  double pieces(int days, DateTime now) =>
+      within(days, now).fold(0.0, (a, j) => a + j.pieces);
+
+  int cars(int days, DateTime now) =>
+      within(days, now).map((j) => j.claim.id).toSet().length;
+
+  double get openPieces => open.fold(0.0, (a, j) => a + j.pieces);
+}
+
+/// Produção de cada funcionário: carros concluídos nos últimos [maxDays]
+/// dias e os que estão em andamento agora.
+List<WorkerProduction> productionReport({
+  required List<Claim> claims,
+  required List<Contact> contacts,
+  DateTime? now,
+  int maxDays = 30,
+}) {
+  final at = now ?? DateTime.now();
+  final from = at.subtract(Duration(days: maxDays));
+  final byId = <String, WorkerProduction>{};
+  for (final w in contacts.where((c) => c.kind == ContactKind.funcionario)) {
+    byId[w.id] = WorkerProduction(w.name, w);
+  }
+  for (final c in claims) {
+    if (c.crew.isEmpty) continue;
+    final finished = c.status == ClaimStatus.concluido || c.status == ClaimStatus.entregue;
+    final running = c.status == ClaimStatus.aprovado || c.status == ClaimStatus.emReparo;
+    if (!finished && !running) continue;
+    final date = finished ? (c.concludedAt ?? c.updatedAt) : (c.approvedAt ?? c.updatedAt);
+    if (finished && (date.isBefore(from) || date.isAfter(at))) continue;
+    for (final m in c.crew) {
+      final r = byId[m.contactId];
+      if (r == null) continue;
+      final job = ProductionJob(c, m.role, crewPieces(c, m), roleItems(c, m.role), date, finished);
+      (finished ? r.done : r.open).add(job);
+    }
+  }
+  final list = byId.values.where((r) => r.done.isNotEmpty || r.open.isNotEmpty).toList();
+  for (final r in list) {
+    r.done.sort((a, b) => b.date.compareTo(a.date));
+    r.open.sort((a, b) => b.date.compareTo(a.date));
+  }
+  list.sort((a, b) {
+    final p = b.pieces(maxDays, at).compareTo(a.pieces(maxDays, at));
+    return p != 0 ? p : a.name.toLowerCase().compareTo(b.name.toLowerCase());
+  });
+  return list;
+}
