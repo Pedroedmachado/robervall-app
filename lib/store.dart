@@ -221,8 +221,13 @@ class AppStore extends ChangeNotifier {
       // seguinte (que leva o que mudou no meio), para o flush() só voltar
       // com tudo no disco
       _pendingSave = true;
-      await _writing;
-      return;
+      try {
+        await _writing?.timeout(const Duration(seconds: 8));
+        return;
+      } on TimeoutException {
+        // a gravação anterior travou (disco lento/removido): não fica
+        // esperando para sempre; grava de novo agora
+      }
     }
     _saving = true;
     final done = Completer<void>();
