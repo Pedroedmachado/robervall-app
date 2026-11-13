@@ -19,6 +19,12 @@ class _LoginPageState extends State<LoginPage> {
   AppUser? _who;
   final _pin = TextEditingController();
 
+  @override
+  void dispose() {
+    _pin.dispose();
+    super.dispose();
+  }
+
   Future<void> _enter() async {
     final store = StoreScope.read(context);
     final u = _who;

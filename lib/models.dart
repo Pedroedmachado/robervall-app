@@ -22,6 +22,10 @@ int _i(Object? v, [int def = 0]) {
 
 String _s(Object? v, [String def = '']) => v == null ? def : v.toString();
 
+/// Sobe a cada alteração dos dados (o AppStore incrementa): invalida contas
+/// guardadas que dependem dos Ajustes.
+int settingsEpoch = 0;
+
 /// Nome de arquivo da pasta de fotos lido do JSON (dados.json ou backup):
 /// só vale um nome simples. Qualquer coisa com cara de caminho ("../",
 /// "C:\\…") é descartada, para um backup adulterado não fazer o app ler ou
@@ -878,6 +882,21 @@ class Settings {
   /// (ex.: os da seguradora, importados do PDF) ou os da oficina.
   Settings forClaim(Claim c) {
     if (!c.hasOwnRates) return this;
+    // a cópia com os valores do orçamento é guardada enquanto os dados não
+    // mudam (listas com centenas de orçamentos importados pediam uma cópia
+    // completa dos ajustes por linha, a cada redesenho)
+    if (_claimCacheEpoch != settingsEpoch) {
+      _claimCache.clear();
+      _claimCacheEpoch = settingsEpoch;
+    }
+    final key = '${c.laborRate}|${c.paintRate}|$paintRate|$paintMaterialRate';
+    return _claimCache[key] ??= _withClaimRates(c);
+  }
+
+  final Map<String, Settings> _claimCache = {};
+  int _claimCacheEpoch = -1;
+
+  Settings _withClaimRates(Claim c) {
     final s = Settings.fromJson(toJson());
     if (c.laborRate > 0) {
       for (final t in LaborType.values) {

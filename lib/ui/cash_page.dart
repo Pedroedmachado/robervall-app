@@ -7,6 +7,7 @@ import '../models.dart';
 import '../modules.dart';
 import '../theme.dart';
 import 'claims_page.dart';
+import 'finance_page.dart' show claimLabels;
 import 'widgets.dart';
 
 const _in = Color(0xFF2E7D32);
@@ -459,11 +460,7 @@ Future<(CashEntry, int)?> editCashEntry(BuildContext context, CashEntry e,
             label: 'Vincular a um sinistro (opcional)',
             value: store.claimById(e.claimId) == null ? '' : e.claimId,
             values: ['', ...store.claims.map((c) => c.id)],
-            labelOf: (id) {
-              if (id.isEmpty) return 'Nenhum';
-              final c = store.claimById(id)!;
-              return '${c.number}${c.vehicle.plate.isEmpty ? '' : ' · ${c.vehicle.plate}'}';
-            },
+            labelOf: (id) => id.isEmpty ? 'Nenhum' : (claimLabels(store)[id] ?? id),
             onChanged: (id) => setS(() => e.claimId = id),
           ),
           if (e.planned && !canDelete) ...[

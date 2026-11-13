@@ -31,7 +31,10 @@ class ClaimFormTab extends StatelessWidget {
         Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1100),
-            child: Column(
+            // quem não edita sinistros só consulta os dados
+            child: AbsorbPointer(
+              absorbing: !gate.can(Perm.sinistroEditar),
+              child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 SectionCard(
@@ -356,6 +359,7 @@ class ClaimFormTab extends StatelessWidget {
                   ],
                 ),
               ],
+              ),
             ),
           ),
         ),

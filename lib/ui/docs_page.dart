@@ -222,8 +222,13 @@ class DocDetailPage extends StatelessWidget {
                       onTap: !canFinance
                           ? null
                           : () async {
-                              final r = await editFinanceEntry(context, entry);
-                              if (r != null) store.upsertEntry(r);
+                              // edita uma cópia: "Cancelar" não mexe em nada
+                              final r = await editFinanceEntry(
+                                  context, FinanceEntry.fromJson(entry.toJson()));
+                              if (r == null) return;
+                              final i = store.entries.indexOf(entry);
+                              if (i >= 0) store.entries[i] = r;
+                              store.upsertEntry(r);
                             },
                     )
                   else

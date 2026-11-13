@@ -150,6 +150,12 @@ class _MasterPageState extends State<MasterPage> {
   bool _busy = false;
 
   @override
+  void dispose() {
+    _response.dispose();
+    super.dispose();
+  }
+
+  @override
   void initState() {
     super.initState();
     _challenge = newMasterChallenge(StoreScope.read(context).deviceId);

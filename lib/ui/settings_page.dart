@@ -340,7 +340,7 @@ class _BackupCardState extends State<_BackupCard> {
       'Os dados do arquivo ${file.name} serão mesclados com os deste aparelho: o que já existe é atualizado, o que é novo é acrescentado e nada daqui é apagado.',
       ok: 'Importar',
     );
-    if (!ok) return;
+    if (!ok || !mounted) return;
     setState(() => _busy = true);
     try {
       final report = await store.importBackup(await file.readAsBytes());

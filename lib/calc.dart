@@ -93,7 +93,7 @@ class BudgetTotals {
   });
 
   double get subtotal =>
-      parts + labor + paintLabor + paintMaterial + services + extra;
+      parts + labor + paintLabor + paintMaterial + services + pieceLabor + extra;
 }
 
 BudgetTotals computeTotals(Claim c, Settings s, {bool onlyApproved = true}) {

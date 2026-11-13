@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../finance.dart';
 import '../format.dart';
 import '../models.dart';
+import '../store.dart';
 import '../modules.dart';
 import '../receipt_ocr.dart';
 import '../receipt_parser.dart';
@@ -639,17 +640,24 @@ Future<ReceiptScan?> scanReceiptPhoto(BuildContext context) async {
         'A leitura automática não existe neste sistema. A foto fica anexada e você preenche os valores.');
   }
   if (!context.mounted) return null;
+  // o botão "voltar" não fecha o aviso; quem fecha é o fim da leitura
+  final nav = Navigator.of(context, rootNavigator: true);
+  var reading = true;
   showDialog<void>(
     context: context,
     barrierDismissible: false,
-    builder: (_) => const AlertDialog(
-      content: Row(children: [
-        SizedBox(width: 24, height: 24, child: CircularProgressIndicator()),
-        SizedBox(width: 16),
-        Expanded(child: Text('Lendo a nota…')),
-      ]),
+    useRootNavigator: true,
+    builder: (_) => const PopScope(
+      canPop: false,
+      child: AlertDialog(
+        content: Row(children: [
+          SizedBox(width: 24, height: 24, child: CircularProgressIndicator()),
+          SizedBox(width: 16),
+          Expanded(child: Text('Lendo a nota…')),
+        ]),
+      ),
     ),
-  );
+  ).whenComplete(() => reading = false);
   ReceiptScan scan;
   try {
     final data = parseReceipt(await reader(path));
@@ -675,7 +683,7 @@ Future<ReceiptScan?> scanReceiptPhoto(BuildContext context) async {
             ? '${e.message}. Por enquanto a foto fica anexada e você preenche à mão.'
             : 'Não consegui ler a nota neste aparelho (${shortError(e)}). Preencha à mão; a foto fica anexada.');
   }
-  if (context.mounted) Navigator.of(context).pop(); // fecha "Lendo a nota…"
+  if (reading) nav.pop(); // fecha "Lendo a nota…"
   return scan;
 }
 
@@ -978,11 +986,7 @@ Future<FinanceEntry?> editFinanceEntry(BuildContext context, FinanceEntry e,
             label: 'Vincular a um sinistro (opcional)',
             value: store.claimById(e.claimId) == null ? '' : e.claimId,
             values: ['', ...store.claims.map((c) => c.id)],
-            labelOf: (id) {
-              if (id.isEmpty) return 'Nenhum';
-              final c = store.claimById(id)!;
-              return '${c.number}${c.vehicle.plate.isEmpty ? '' : ' · ${c.vehicle.plate}'}';
-            },
+            labelOf: (id) => id.isEmpty ? 'Nenhum' : (claimLabels(store)[id] ?? id),
             onChanged: (id) => setS(() => e.claimId = id),
           ),
           SwitchListTile(
@@ -1085,3 +1089,23 @@ String shortError(Object e) {
   t = t.replaceFirst(RegExp(r'^PlatformException\((\w+), '), '');
   return t.length > 90 ? '${t.substring(0, 90)}…' : t;
 }
+
+
+/// Rótulo de cada sinistro para as listas de escolha (montado uma vez por
+/// tela, e não uma busca por linha).
+Map<String, String> claimLabels(AppStore store) {
+  final cached = _claimLabels;
+  if (cached != null && identical(_claimLabelsOf, store) && _claimLabelsRev == store.revision) {
+    return cached;
+  }
+  _claimLabelsOf = store;
+  _claimLabelsRev = store.revision;
+  return _claimLabels = {
+    for (final c in store.claims)
+      c.id: '${c.number}${c.vehicle.plate.isEmpty ? '' : ' · ${c.vehicle.plate}'}'
+  };
+}
+
+Map<String, String>? _claimLabels;
+AppStore? _claimLabelsOf;
+int _claimLabelsRev = -1;

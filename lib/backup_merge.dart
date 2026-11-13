@@ -121,41 +121,79 @@ bool _empty(Object? v) =>
 /// O registro do backup atualiza o deste aparelho, sem apagar com campo
 /// vazio o que já estava preenchido. Se o daqui foi alterado depois
 /// (updatedAt mais novo), fica o daqui.
-_J _overlay(String col, _J mine, _J theirs) {
+(_J, bool) _overlay(String col, _J mine, _J theirs) {
   final a = DateTime.tryParse('${mine['updatedAt'] ?? ''}');
   final b = DateTime.tryParse('${theirs['updatedAt'] ?? ''}');
-  if (a != null && b != null && a.isAfter(b)) return mine;
+  // alterado aqui depois do backup: os dados daqui ficam
+  final mineNewer = a != null && b != null && a.isAfter(b);
   final out = Map<String, dynamic>.from(mine);
   theirs.forEach((k, v) {
     if (k == 'id') return;
-    if (_empty(v) && !_empty(mine[k])) return;
-    // o número do orçamento daqui não muda
-    if (col == 'claims' && k == 'number' && !_empty(mine[k])) return;
-    // usuário que já existe aqui: papel, senha e ativo/inativo são os daqui
-    // (um backup não promove ninguém a administrador nem tranca o app)
-    if (col == 'users') return;
-    // históricos e fotos: junta os dois, sem repetir
-    if (_unionKeys.contains(k) && mine[k] is List && v is List) {
+    // históricos e fotos: junta os dois, sem repetir (mesmo quando o
+    // registro daqui é o mais novo)
+    if (_unionKeys.contains(k) && v is List) {
       final seen = <String>{};
       out[k] = [
-        for (final e in [...mine[k] as List, ...v])
+        for (final e in [...(mine[k] is List ? mine[k] as List : const []), ...v])
           if (seen.add(e is Map && e['id'] != null ? 'id:${e['id']}' : jsonEncode(e))) e
       ];
       return;
     }
+    if (mineNewer) return;
+    if (_empty(v) && !_empty(mine[k])) return;
+    // o número do orçamento daqui não muda
+    if (col == 'claims' && k == 'number' && !_empty(mine[k])) return;
+    // peças baixadas do estoque: resolvido depois, item a item (_mergeTaken)
+    if (col == 'claims' && k == 'stockTaken') return;
+    // usuário que já existe aqui: papel, senha e ativo/inativo são os daqui
+    // (um backup não promove ninguém a administrador nem tranca o app)
+    if (col == 'users') return;
     out[k] = v;
   });
-  return out;
+  return (out, mineNewer);
 }
 
 const _unionKeys = {'timeline', 'photos', 'ins'};
+
+/// Peças que o orçamento já baixou do estoque ("stockTaken"). A baixa tem de
+/// combinar com o saldo que ficou valendo em cada item: se o saldo é o deste
+/// aparelho, vale a baixa registrada aqui; se veio do backup, vale a do
+/// backup. (O app ainda acerta estoque × orçamentos depois da mescla.)
+void _mergeTaken(_J claim, Object? mineTaken, Object? theirTaken, Set<String> localStock) {
+  final out = <String, dynamic>{};
+  if (mineTaken is Map) {
+    mineTaken.forEach((k, v) {
+      if (v is Map && localStock.contains('${v['s']}')) out['$k'] = v;
+    });
+  }
+  if (theirTaken is Map) {
+    theirTaken.forEach((k, v) {
+      if (v is Map && !localStock.contains('${v['s']}')) out['$k'] = v;
+    });
+  }
+  if (out.isEmpty) {
+    claim.remove('stockTaken');
+  } else {
+    claim['stockTaken'] = out;
+  }
+}
 
 /// Troca os ids do backup pelos ids daqui (registros reconhecidos como o
 /// mesmo), em todo o JSON — assim as ligações (orçamento ↔ lançamento,
 /// nota ↔ estoque…) continuam certas.
 Object? _remap(Object? v, Map<String, String> ids) {
   if (ids.isEmpty) return v;
-  if (v is String) return ids[v] ?? v;
+  if (v is String) {
+    final direct = ids[v];
+    if (direct != null) return direct;
+    // ids montados a partir de outros ("lucro-<orçamento>",
+    // "equipe-<orçamento>-<funcionário>")
+    if (v.contains('-') && v.length < 80 && !v.contains(' ')) {
+      final parts = v.split('-');
+      if (parts.any(ids.containsKey)) return parts.map((p) => ids[p] ?? p).join('-');
+    }
+    return v;
+  }
   if (v is List) return [for (final e in v) _remap(e, ids)];
   if (v is Map) {
     return <String, dynamic>{
@@ -216,24 +254,29 @@ bool _isEmptyData(_J j) =>
     }
     final used = <int>{};
     final m = <int, int>{};
+    // primeiro quem é o mesmo registro (mesmo id)…
     for (final (i, r) in there.indexed) {
-      final id = '${r['id'] ?? ''}';
-      int? hit = byId[id];
-      if (hit == null) {
-        for (final k in _keys(col, r)) {
-          if (k.isEmpty) continue;
-          final h = byKey[k];
-          if (h != null && !used.contains(h)) {
-            hit = h;
-            break;
-          }
-        }
-      }
+      final hit = byId['${r['id'] ?? ''}'];
       if (hit == null || used.contains(hit)) continue;
       used.add(hit);
       m[i] = hit;
-      final hereId = '${here[hit]['id'] ?? ''}';
-      if (id.isNotEmpty && hereId.isNotEmpty && id != hereId) ids[id] = hereId;
+    }
+    // …depois, entre os que sobraram, quem foi cadastrado de novo (mesmo
+    // nome/número). Assim um parecido não toma o lugar do registro certo.
+    for (final (i, r) in there.indexed) {
+      if (m.containsKey(i)) continue;
+      final id = '${r['id'] ?? ''}';
+      if (byId.containsKey(id)) continue; // o dono desse id já foi casado
+      for (final k in _keys(col, r)) {
+        if (k.isEmpty) continue;
+        final h = byKey[k];
+        if (h == null || used.contains(h)) continue;
+        used.add(h);
+        m[i] = h;
+        final hereId = '${here[h]['id'] ?? ''}';
+        if (id.isNotEmpty && hereId.isNotEmpty && id != hereId) ids[id] = hereId;
+        break;
+      }
     }
     matchOf[col] = m;
   }
@@ -241,9 +284,16 @@ bool _isEmptyData(_J j) =>
   // 2) ligações do backup passam a apontar para os ids daqui
   final t = _remap(theirs, ids) as _J;
 
-  // 3) atualiza o que existe, acrescenta o que é novo
+  // 3) atualiza o que existe, acrescenta o que é novo. O estoque vai
+  // primeiro: a baixa de peças de cada orçamento depende de qual aparelho
+  // ficou com o saldo de cada item.
   final out = Map<String, dynamic>.from(mine);
-  for (final col in MergeReport.labels.keys) {
+  final localStock = <String>{}; // itens cujo saldo que vale é o daqui
+  final matchedStock = matchOf['stock']!.values.toSet();
+  for (final (i, r) in _list(mine['stock']).indexed) {
+    if (!matchedStock.contains(i)) localStock.add('${r['id']}'); // só existe aqui
+  }
+  for (final col in ['stock', ...MergeReport.labels.keys.where((c) => c != 'stock')]) {
     final here = _list(mine[col]);
     final there = _list(t[col]);
     final m = matchOf[col]!;
@@ -258,11 +308,18 @@ bool _isEmptyData(_J j) =>
           r['active'] = false;
           report.inactiveUsers++;
         }
+        if (col == 'claims') _mergeTaken(r, null, r['stockTaken'], localStock);
         appended.add(r);
         add++;
         continue;
       }
-      final merged = _overlay(col, here[h], r);
+      final (merged, mineNewer) = _overlay(col, here[h], r);
+      if (col == 'stock' && mineNewer) {
+        localStock.add('${here[h]['id']}'); // saldo daqui é o mais novo
+      }
+      if (col == 'claims') {
+        _mergeTaken(merged, here[h]['stockTaken'], r['stockTaken'], localStock);
+      }
       if (jsonEncode(merged) == jsonEncode(here[h])) {
         same++;
       } else {

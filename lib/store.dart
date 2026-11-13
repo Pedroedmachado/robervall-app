@@ -13,7 +13,7 @@ import 'backup_merge.dart';
 import 'cash.dart';
 import 'docs.dart';
 import 'finance.dart';
-import 'format.dart' show hideMoney, num2;
+import 'format.dart' show hideMoney;
 import 'licensing.dart';
 import 'modules.dart';
 import 'receipt_parser.dart';
@@ -128,12 +128,18 @@ class AppStore extends ChangeNotifier {
     if (await f.exists()) {
       try {
         final j = jsonDecode(await f.readAsString());
-        if (j is Map) _fromJson(Map<String, dynamic>.from(j));
+        if (j is! Map) throw const FormatException('dados.json não é um objeto');
+        _fromJson(Map<String, dynamic>.from(j));
         return;
       } catch (e) {
         debugPrint('Falha ao ler dados: $e');
-        // guarda o arquivo corrompido para não perder nada
-        await f.copy('${f.path}.corrompido-${DateTime.now().millisecondsSinceEpoch}');
+        // guarda o arquivo como estava para não perder nada…
+        try {
+          await f.copy('${f.path}.corrompido-${DateTime.now().millisecondsSinceEpoch}');
+        } catch (_) {}
+        // …e começa limpo (nada do que foi lido pela metade é gravado por cima)
+        _fromJson({});
+        loadError = '$e';
       }
     }
     catalog.addAll(defaultCatalog());
@@ -159,9 +165,13 @@ class AppStore extends ChangeNotifier {
     claims
       ..clear()
       ..addAll(list(j['claims']).map(Claim.fromJson));
-    // versões anteriores criavam uma linha por operação da mesma peça
-    for (final c in claims) {
-      c.items = mergePartLines(c.items);
+    // versões anteriores (arquivo "version": 1) criavam uma linha por
+    // operação da mesma peça; hoje duas linhas iguais podem ser de propósito
+    final version = j['version'] is num ? (j['version'] as num).toInt() : 1;
+    if (version < 2) {
+      for (final c in claims) {
+        c.items = mergePartLines(c.items);
+      }
     }
     contacts
       ..clear()
@@ -190,7 +200,7 @@ class AppStore extends ChangeNotifier {
   Map<String, dynamic> toJson() => {
         ..._extra,
         'app': edition.package,
-        'version': 1,
+        'version': 2,
         'savedAt': DateTime.now().toIso8601String(),
         'settings': settings.toJson(),
         'claims': claims.map((e) => e.toJson()).toList(),
@@ -238,6 +248,14 @@ class AppStore extends ChangeNotifier {
 
   Future<void>? _writing;
 
+  /// O arquivo de dados não pôde ser lido ao abrir (ficou guardado como
+  /// dados.json.corrompido-…): a tela avisa.
+  String? loadError;
+
+  /// Muda a cada alteração dos dados (para telas guardarem contas prontas
+  /// enquanto nada mudou).
+  int revision = 0;
+
   /// Última gravação falhou (disco cheio, pasta sem permissão…): a tela
   /// avisa, porque o que for feito a partir daí pode não ficar salvo.
   String? saveError;
@@ -250,6 +268,8 @@ class AppStore extends ChangeNotifier {
 
   /// Notifica a interface e agenda gravação em disco.
   void changed() {
+    revision++;
+    settingsEpoch++;
     notifyListeners();
     _saveTimer?.cancel();
     _saveTimer = Timer(const Duration(milliseconds: 400), _write);
@@ -263,6 +283,8 @@ class AppStore extends ChangeNotifier {
     if (c != null) c.updatedAt = DateTime.now();
     _saveTimer?.cancel();
     _saveTimer = Timer(const Duration(milliseconds: 600), _write);
+    revision++;
+    settingsEpoch++;
     _notifyTimer?.cancel();
     _notifyTimer = Timer(const Duration(milliseconds: 350), notifyListeners);
   }
@@ -502,7 +524,15 @@ class AppStore extends ChangeNotifier {
   void syncCashProfit(Claim c) {
     if (!gate.active(Mod.financeiro)) return; // congelado até reativar
     final id = 'lucro-${c.id}';
-    final existing = cash.where((e) => e.id == id).toList();
+    // pelo orçamento (e não só pelo id): um lançamento de lucro que veio de
+    // outro aparelho para o mesmo carro não fica contando em dobro
+    final existing = cash
+        .where((e) => e.id == id || (e.autoKey == cashProfitKey && e.claimId == c.id))
+        .toList();
+    if (existing.length > 1) {
+      cash.removeWhere((e) => existing.skip(1).contains(e));
+      existing.removeRange(1, existing.length);
+    }
     final done = (c.status == ClaimStatus.concluido ||
             c.status == ClaimStatus.entregue) &&
         claims.contains(c);
@@ -518,7 +548,7 @@ class AppStore extends ChangeNotifier {
     e
       ..isIn = true
       ..planned = false
-      ..date = c.concludedAt ?? DateTime.now()
+      ..date = c.concludedAt ?? (existing.isNotEmpty ? existing.first.date : DateTime.now())
       ..amount = j.profit
       ..category = 'Lucro de orçamento'
       ..method = CashMethod.outro
@@ -563,6 +593,7 @@ class AppStore extends ChangeNotifier {
     gate.require(Mod.estoque);
     gate.requireWrite();
     if (!stock.contains(s)) stock.add(s);
+    s.updatedAt = DateTime.now();
     stock.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     changed();
   }
@@ -620,9 +651,14 @@ class AppStore extends ChangeNotifier {
     copy.status = ClaimStatus.aberto;
     copy.photos = [];
     copy.stockTaken = {};
+    // o que é só do original não vai para a cópia: insumos já liberados,
+    // o PDF da seguradora (apagar a cópia apagaria o arquivo) e a conclusão
+    copy.supplies = [];
+    copy.sourcePdf = '';
+    copy.concludedAt = null;
     final newIds = <String, String>{};
     copy.items = c.items.map((e) {
-      final n = e.copy();
+      final n = e.copy()..done = false;
       newIds[e.id] = n.id;
       return n;
     }).toList();
@@ -831,6 +867,9 @@ class AppStore extends ChangeNotifier {
     _fromJson(merged);
     _fixClaimNumbers();
     _applyAccess();
+    // estoque reservado, custos da equipe e lucro no caixa voltam a bater
+    // com os orçamentos depois da mescla
+    if (!report.fullRestore) _reconcileAll();
     changed();
     await flush();
     return report;

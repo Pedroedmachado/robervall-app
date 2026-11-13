@@ -247,13 +247,15 @@ ReceiptData parseReceipt(List<String> rawLines) {
   }
 
   // itens: descrição seguida de "qtd unidade preço total" (ou tudo na mesma linha)
-  final items = extractReceiptItems(lines, up);
+  final itemLines = <int>{};
+  final items = extractReceiptItems(lines, up, usedLines: itemLines);
   final sum = items.fold(0.0, (a, i) => a + i.total);
 
   // total: linha com "TOTAL" que não seja débito, subtotal, impostos...
   double? total;
   double bestScore = -1;
-  for (final l in up) {
+  for (final (li, l) in up.indexed) {
+    if (itemLines.contains(li)) continue; // produto com "TOTAL" no nome
     if (!l.contains('TOTAL') && !l.contains('A PAGAR')) continue;
     if (_ignoreTotal.any(l.contains)) continue;
     final vals = _moneys(l);
@@ -382,6 +384,10 @@ const _unitWords = {
   'BLOCO', 'CT', 'DISCO',
 };
 const _fillWords = {'X', '*', '=', 'R\$', 'RS', 'QTD', 'QTDE', 'QT.', 'VL', 'VLR', 'UNIT', 'UNIT.', 'VL.'};
+/// Linha que começa como total/pagamento (não é produto mesmo com 3 números).
+final _totalStart = RegExp(
+    r'^\W*(?:(?:VALOR|VL|VLR|SUB|QTD|QTDE|QT)\.?\s+)?(?:SUB\s?)?(?:TOTAL|TROCO|DESCONTO|PAGO|PAGAMENTO|DINHEIRO|CARTAO|CREDITO|DEBITO|PIX|SALDO|FRETE|JUROS|ICMS|IPI|TRIBUTOS?|IMPOSTOS?)\b');
+
 final _notItem = RegExp(
     r'\b(TOTAL|SUBTOTAL|TROCO|DESCONTO|ACRESC\w*|PAGO|PAGAMENTO|DINHEIRO|CARTAO|CREDITO|DEBITO|PIX|SALDO|TRIBUTOS?|IMPOSTOS?|LEI|APROX\w*|CNPJ|CPF|FONE|TEL|PARCELAS?|VENCIMENTO|JUROS|FRETE|ICMS|IPI|CHAVE|PROTOCOLO|CONSUMIDOR)\b|VALOR A PAGAR|QTDE UNID|PRC UNIT|VL UNIT|VALOR UNIT|BASE DE CALC');
 
@@ -444,11 +450,13 @@ List<String> _tokens(String upLine) {
 }
 
 class _Tail {
-  _Tail(this.start, this.qty, this.unitPrice, this.total, this.unit, this.strong);
+  _Tail(this.start, this.qty, this.unitPrice, this.total, this.unit, this.strong,
+      {this.exact = false});
   final int start; // primeira palavra que é da parte numérica
   final double qty, unitPrice, total;
   final String unit;
   final bool strong; // a conta qtd × preço = total confere
+  final bool exact; // os três números estão na linha (qtd, preço e total)
 }
 
 /// Interpreta o fim da linha. null = a linha não é item.
@@ -477,16 +485,26 @@ _Tail? _readTail(List<String> tk) {
 
   bool qtyOk(double q) => q > 0 && q <= 9999;
   final n = v.length;
+  // qtd × preço = preço × qtd: qual dos dois é a quantidade? O que tem
+  // unidade depois, não tem cara de dinheiro ou é número inteiro.
+  int qtyScore(int j) =>
+      (unitAfter(idx[j]).isNotEmpty ? 2 : 0) +
+      (_isMoney(tk[idx[j]]) ? 0 : 1) +
+      (v[j] == v[j].roundToDouble() ? 1 : 0);
+  List<(int, int)> orders(int k) => qtyScore(k - 1) > qtyScore(k - 2)
+      ? [(k - 1, k - 2), (k - 2, k - 1)]
+      : [(k - 2, k - 1), (k - 1, k - 2)];
+  bool near(double a, double b) => (a - b).abs() <= 0.05;
   // procura, da direita para a esquerda, três números em que a conta fecha:
   // (qtd, preço, total) ou (preço, qtd, total). Colunas de imposto depois do
   // total (DANFE) ficam de fora.
   for (var k = n - 1; k >= 2; k--) {
     final t = v[k];
     if (t <= 0 || !_isMoney(tk[idx[k]])) continue;
-    for (final (qi, pi) in [(k - 2, k - 1), (k - 1, k - 2)]) {
+    for (final (qi, pi) in orders(k)) {
       final q = v[qi], p = v[pi];
       if (qtyOk(q) && p > 0 && _close(q * p, t)) {
-        return _Tail(idx[k - 2], q, p, t, unitAfter(idx[qi]), true);
+        return _Tail(idx[k - 2], q, p, t, unitAfter(idx[qi]), true, exact: true);
       }
     }
     // com desconto no meio: (qtd, preço, desconto, total)
@@ -494,10 +512,10 @@ _Tail? _readTail(List<String> tk) {
       final q = v[k - 3], p = v[k - 2], d = v[k - 1];
       final gross = q * p;
       if (qtyOk(q) && p > 0 && t <= gross + 0.02 && t >= gross * 0.5) {
-        final asValue = _close(gross - d, t);
-        final asPct = d > 0 && d < 100 && _close(gross * (1 - d / 100), t);
-        if (asValue || asPct) {
-          return _Tail(idx[k - 3], q, t / q, t, unitAfter(idx[k - 3]), true);
+        final asValue = d > 0 && near(gross - d, t);
+        final asPct = d > 0 && d < 100 && near(gross * (1 - d / 100), t);
+        if ((asValue || asPct) && _hasLetters(tk.take(idx[k - 3]).join(' '))) {
+          return _Tail(idx[k - 3], q, t / q, t, unitAfter(idx[k - 3]), true, exact: true);
         }
       }
     }
@@ -510,10 +528,10 @@ _Tail? _readTail(List<String> tk) {
   if (m >= 3) {
     for (var k = m - 1; k >= 2; k--) {
       final t = v[k];
-      for (final (qi, pi) in [(k - 2, k - 1), (k - 1, k - 2)]) {
+      for (final (qi, pi) in orders(k)) {
         final q = v[qi], p = v[pi];
         if (qtyOk(q) && p > 0 && t > 0 && _close(q * p, t)) {
-          return _Tail(idx[k - 2], q, p, t, unitAfter(idx[qi]), true);
+          return _Tail(idx[k - 2], q, p, t, unitAfter(idx[qi]), true, exact: true);
         }
       }
     }
@@ -527,10 +545,13 @@ _Tail? _readTail(List<String> tk) {
       return _Tail(idx[m - 2], a, t / a, t, unitAfter(idx[m - 2]), false);
     }
     // "1,50 3,00": preço e total → qtd = total / preço
-    if (aMoney && a > 0 && t > 0) {
+    // (só com centavos de verdade: "5,000 5,000" é peso, não preço)
+    final cents = RegExp(r'[,.]\d{2}$');
+    if (aMoney && a > 0 && t > 0 && cents.hasMatch(tk[idx[m - 2]]) && cents.hasMatch(tk[idx[m - 1]])) {
       final q = t / a;
       if ((q - q.round()).abs() < 0.01 && q.round() >= 1 && q.round() <= 999) {
-        return _Tail(idx[m - 2], q.roundToDouble(), a, t, '', true);
+        // preço = total (1 unidade) é só um palpite; 2 ou mais confere a conta
+        return _Tail(idx[m - 2], q.roundToDouble(), a, t, '', q.round() >= 2);
       }
     }
   }
@@ -560,7 +581,8 @@ bool _hasLetters(String s) => RegExp(r'[A-Z]{2,}').hasMatch(s);
 }
 
 /// Itens da nota (qualquer layout comum).
-List<ReceiptItem> extractReceiptItems(List<String> lines, List<String> up) {
+List<ReceiptItem> extractReceiptItems(List<String> lines, List<String> up,
+    {Set<int>? usedLines}) {
   final found = <(ReceiptItem, bool)>[]; // (item, conta confere)
   var inItems = true;
   for (var i = 0; i < up.length; i++) {
@@ -569,14 +591,24 @@ List<ReceiptItem> extractReceiptItems(List<String> lines, List<String> up) {
       inItems = true;
       continue;
     }
-    if (_notItem.hasMatch(l)) {
-      if (l.contains('TOTAL')) inItems = false;
-      continue;
-    }
     if (l.contains('---') || l.contains('===')) continue;
     final tk = _tokens(l);
     final tail = _readTail(tk);
+    if (_notItem.hasMatch(l)) {
+      // "OLEO TOTAL QUARTZ 2 UN 45,00 90,00" e "CHAVE DE SETA 1 UN 89,00
+      // 89,00" são produtos: a linha tem qtd, preço e total e começa pelo nome
+      final product = tail != null &&
+          tail.exact &&
+          tail.start >= 2 &&
+          _hasLetters(tk.take(tail.start).join(' ')) &&
+          !_totalStart.hasMatch(l);
+      if (!product) {
+        if (l.contains('TOTAL')) inItems = false;
+        continue;
+      }
+    }
     if (tail == null || tail.total <= 0) continue;
+    usedLines?.add(i);
     // o que sobrou antes da conta é a descrição (sem colunas soltas no fim:
     // NCM, CFOP, "UN"…)
     var end = tail.start;

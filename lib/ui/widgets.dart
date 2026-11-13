@@ -359,11 +359,18 @@ class DateField extends StatelessWidget {
       borderRadius: BorderRadius.circular(10),
       onTap: () async {
         final now = DateTime.now();
+        // data guardada fora da janela (nota antiga, PDF importado) não
+        // pode derrubar o calendário
+        var first = DateTime(now.year - 10);
+        var last = DateTime(now.year + 5, 12, 31);
+        final init = value ?? now;
+        if (init.isBefore(first)) first = DateTime(init.year);
+        if (init.isAfter(last)) last = DateTime(init.year, 12, 31);
         final d = await showDatePicker(
           context: context,
-          initialDate: value ?? now,
-          firstDate: DateTime(now.year - 10),
-          lastDate: DateTime(now.year + 5),
+          initialDate: init,
+          firstDate: first,
+          lastDate: last,
         );
         if (d != null) onChanged(d);
       },
@@ -514,6 +521,9 @@ Future<T?> showFormDialog<T>({
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setS) => Dialog(
+        // no celular o formulário usa quase a largura toda
+        insetPadding: EdgeInsets.symmetric(
+            horizontal: MediaQuery.sizeOf(ctx).width < 480 ? 12 : 40, vertical: 24),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 540),
           child: Column(

@@ -91,14 +91,22 @@ class _ContactsPageState extends State<ContactsPage> {
             : 'Nenhum cadastro em ${k.label.toLowerCase()}.',
       );
     }
+    // quem recebeu em cada carro (montado uma vez, não a cada linha)
+    final paidTo = <String, Set<String>>{};
+    if (k == ContactKind.funcionario) {
+      for (final e in store.entries) {
+        if (e.claimId.isEmpty) continue;
+        (paidTo[e.claimId] ??= {}).add(e.contact.trim().toLowerCase());
+      }
+    }
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(8, 4, 8, 96),
       itemCount: list.length,
       separatorBuilder: (_, __) => const Divider(height: 1),
       itemBuilder: (context, i) {
         final c = list[i];
+        final n = c.name.trim().toLowerCase();
         final related = store.claims.where((cl) {
-          final n = c.name.trim().toLowerCase();
           switch (k) {
             case ContactKind.cliente:
               return cl.customerName.trim().toLowerCase() == n;
@@ -110,8 +118,7 @@ class _ContactsPageState extends State<ContactsPage> {
               return cl.items
                   .any((it) => it.supplier.trim().toLowerCase() == n);
             case ContactKind.funcionario:
-              return store.entries.any((e) =>
-                  e.claimId == cl.id && e.contact.trim().toLowerCase() == n);
+              return paidTo[cl.id]?.contains(n) ?? false;
           }
         }).toList();
         return ListTile(

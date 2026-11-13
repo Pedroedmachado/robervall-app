@@ -24,6 +24,13 @@ class BudgetTab extends StatelessWidget {
     final c = claim;
     final s = store.settings.forClaim(c);
     final totals = computeTotals(c, s);
+    // quem não edita orçamento consulta, mas não altera nem apaga itens
+    bool canEditBudget() {
+      if (gate.can(Perm.orcamentoEditar)) return true;
+      toast(context, 'Seu usuário não altera o orçamento.');
+      return false;
+    }
+
 
     final actions = Wrap(
       spacing: 8,
@@ -88,6 +95,7 @@ class BudgetTab extends StatelessWidget {
             itemCount: c.items.length,
             // ignore: deprecated_member_use
             onReorder: (a, b) {
+              if (!canEditBudget()) return;
               if (b > a) b--;
               final it = c.items.removeAt(a);
               c.items.insert(b, it);
@@ -112,9 +120,11 @@ class BudgetTab extends StatelessWidget {
                 onMarket: gate.active(Mod.integracoes)
                     ? () => openMarketSearch(context, it, c.vehicle)
                     : null,
-                onComplements: () => offerComplements(context, c, it,
-                    alwaysShow: true),
+                onComplements: () {
+                  if (canEditBudget()) offerComplements(context, c, it, alwaysShow: true);
+                },
                 onTap: () async {
+                  if (!canEditBudget()) return;
                   final edited = await editBudgetItem(context, it, vehicle: c.vehicle, claim: c);
                   if (edited != null) {
                     final becameReplace = it.op != ItemOp.troca &&
@@ -127,13 +137,15 @@ class BudgetTab extends StatelessWidget {
                   }
                 },
                 onToggle: (v) {
+                  if (!canEditBudget()) return;
                   it.approved = v;
                   store.touch(c);
                 },
                 onDelete: () {
+                  if (!canEditBudget()) return;
                   // apagar a peça principal leva junto os complementos
-                  final before = List<BudgetItem>.of(c.items);
                   final kids = childrenOf(c.items, it);
+                  final at = c.items.indexOf(it);
                   c.items.remove(it);
                   c.items.removeWhere(kids.contains);
                   store.touch(c);
@@ -143,7 +155,9 @@ class BudgetTab extends StatelessWidget {
                           ? '"${it.description}" removido'
                           : '"${it.description}" e ${kids.length} complementos removidos',
                       () {
-                    c.items = before;
+                    // devolve só o que saiu (o que foi editado depois fica)
+                    if (c.items.contains(it)) return;
+                    c.items.insertAll(at.clamp(0, c.items.length), [it, ...kids]);
                     store.touch(c);
                   });
                 },
@@ -250,7 +264,7 @@ class BudgetTab extends StatelessWidget {
               SizedBox(
                   width: 340,
                   child: Column(children: [
-                    if (gate.active(Mod.equipe)) _CrewCard(claim: c),
+                    if (gate.active(Mod.equipe) && gate.can(Perm.equipeEditar)) _CrewCard(claim: c),
                     summary,
                   ])),
             ],
@@ -261,7 +275,7 @@ class BudgetTab extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         children: [
           itemsCard,
-          if (gate.active(Mod.equipe)) _CrewCard(claim: c),
+          if (gate.active(Mod.equipe) && gate.can(Perm.equipeEditar)) _CrewCard(claim: c),
           summary
         ],
       );

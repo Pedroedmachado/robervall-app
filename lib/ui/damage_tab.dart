@@ -31,6 +31,10 @@ class _DamageTabState extends State<DamageTab> {
     final production = !gate.can(Perm.orcamentoEditar);
 
     void cycle(CarRegion r) {
+      if (!gate.can(Perm.vistoriaEditar)) {
+        toast(context, 'Seu usuário não altera a vistoria.');
+        return;
+      }
       final map = _pre ? c.preDamages : c.damages;
       final cur = map[r.id] ?? 0;
       final next = (cur + 1) % 4;

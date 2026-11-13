@@ -289,6 +289,10 @@ List<StockItem> applyStockEntry(List<StockEntryLine> lines,
           s.packCost = l.unitCost;
           s.syncPackCost();
         }
+      } else if (l.packSize > 0 && s.unit == l.unit) {
+        // item cadastrado direto em ml/g e a nota vem em latas/potes
+        added = l.qty * l.packSize;
+        if (l.unitCost > 0) s.cost = l.unitCost / l.packSize;
       } else {
         added = l.qty;
         if (l.unitCost > 0) s.cost = l.unitCost;

@@ -152,7 +152,7 @@ class StoredDoc {
       total: j['total'] is num ? (j['total'] as num).toDouble() : 0,
       payment: s(j['payment']),
       items: [
-        for (final i in (j['items'] as List? ?? const []))
+        for (final i in (j['items'] is List ? j['items'] as List : const []))
           if (i is Map) DocItem.fromJson(Map<String, dynamic>.from(i))
       ],
       financeId: s(j['finance']),

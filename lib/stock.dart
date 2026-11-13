@@ -71,7 +71,20 @@ class StockItem {
 
   /// Para quais carros serve (ex.: "Gol G5 2009-2012").
   String fits;
-  double qty;
+
+  /// Quantidade em estoque. Cada mudança marca [updatedAt], para a mescla de
+  /// backups saber qual aparelho tem o saldo mais novo.
+  double get qty => _qty;
+  set qty(double v) {
+    if (v == _qty) return;
+    _qty = v;
+    updatedAt = DateTime.now();
+  }
+
+  double _qty;
+
+  /// Última alteração (saldo ou cadastro).
+  DateTime? updatedAt;
   String unit;
 
   /// Quanto custou cada unidade de uso (ex.: por ml). Com embalagem é
@@ -117,7 +130,7 @@ class StockItem {
     this.name = '',
     this.partNumber = '',
     this.fits = '',
-    this.qty = 1,
+    double qty = 1,
     this.unit = 'un',
     this.cost = 0,
     this.packName = 'lata',
@@ -137,6 +150,7 @@ class StockItem {
     this.condition = '',
     List<VehicleFit>? applications,
   })  : id = id ?? newId(),
+        _qty = qty,
         applications = applications ?? [];
 
   /// Resumo da aplicação: "VW Gol 2013–2016 · Fiat Uno 2010–2014".
@@ -208,6 +222,7 @@ class StockItem {
         if (applications.isNotEmpty)
           'apps': applications.map((a) => a.toJson()).toList(),
         if (ins.isNotEmpty) 'ins': ins.map((e) => e.toJson()).toList(),
+        if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
       };
 
   factory StockItem.fromJson(Map<String, dynamic> j) {
@@ -242,13 +257,15 @@ class StockItem {
       mfrCode: s(j['mfrCode']),
       condition: s(j['condition']),
       applications: [
-        for (final a in (j['apps'] as List? ?? const []))
+        for (final a in (j['apps'] is List ? j['apps'] as List : const []))
           if (a is Map) VehicleFit.fromJson(Map<String, dynamic>.from(a))
       ],
-    )..ins = [
-        for (final a in (j['ins'] as List? ?? const []))
+    )
+      ..ins = [
+        for (final a in (j['ins'] is List ? j['ins'] as List : const []))
           if (a is Map) StockIn.fromJson(Map<String, dynamic>.from(a))
-      ];
+      ]
+      ..updatedAt = DateTime.tryParse('${j['updatedAt'] ?? ''}');
   }
 }
 
@@ -420,8 +437,8 @@ class VehicleFit {
   factory VehicleFit.fromJson(Map<String, dynamic> j) => VehicleFit(
         make: '${j['make'] ?? ''}',
         model: '${j['model'] ?? ''}',
-        yearFrom: (j['from'] as num?)?.toInt(),
-        yearTo: (j['to'] as num?)?.toInt(),
+        yearFrom: j['from'] is num ? (j['from'] as num).toInt() : int.tryParse('${j['from']}'),
+        yearTo: j['to'] is num ? (j['to'] as num).toInt() : int.tryParse('${j['to']}'),
         engine: '${j['engine'] ?? ''}',
         version: '${j['version'] ?? ''}',
       );

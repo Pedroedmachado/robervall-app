@@ -103,7 +103,9 @@ class CashEntry {
         isIn: j['in'] != false,
         date: DateTime.tryParse('${j['date']}') ?? DateTime.now(),
         description: '${j['description'] ?? ''}',
-        amount: (j['amount'] as num?)?.toDouble() ?? 0,
+        amount: j['amount'] is num
+            ? (j['amount'] as num).toDouble()
+            : double.tryParse('${j['amount']}'.replaceAll(',', '.')) ?? 0,
         method: CashMethod.values
                 .where((m) => m.name == j['method'])
                 .firstOrNull ??

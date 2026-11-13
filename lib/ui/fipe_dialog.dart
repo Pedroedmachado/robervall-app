@@ -57,7 +57,11 @@ class _FipeFlowState extends State<_FipeFlow> {
               ? 2
               : 3;
 
+  int _request = 0;
+
   Future<void> _loadStep() async {
+    // resposta atrasada de um passo anterior (a pessoa voltou) é ignorada
+    final req = ++_request;
     setState(() {
       _loading = true;
       _error = null;
@@ -67,20 +71,29 @@ class _FipeFlowState extends State<_FipeFlow> {
     try {
       switch (_step) {
         case 0:
-          _options = await fipe.brands(_kind);
+          final r = await fipe.brands(_kind);
+          if (req != _request) return;
+          _options = r;
         case 1:
-          _options = await fipe.models(_kind, _brand!.code);
+          final r = await fipe.models(_kind, _brand!.code);
+          if (req != _request) return;
+          _options = r;
         case 2:
-          _options = await fipe.years(_kind, _brand!.code, _model!.code);
+          final r = await fipe.years(_kind, _brand!.code, _model!.code);
+          if (req != _request) return;
+          _options = r;
         default:
-          _result =
+          final r =
               await fipe.price(_kind, _brand!.code, _model!.code, _year!.code);
+          if (req != _request) return;
+          _result = r;
       }
     } catch (e) {
+      if (req != _request) return;
       _error =
           'Não foi possível consultar a FIPE agora. Verifique a internet e tente de novo.\n($e)';
     }
-    if (mounted) setState(() => _loading = false);
+    if (mounted && req == _request) setState(() => _loading = false);
   }
 
   void _back() {

@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../format.dart';
 import '../models.dart';
+import '../modules.dart';
 import '../theme.dart';
 import 'widgets.dart';
 
@@ -298,6 +299,10 @@ class _PhotoViewerState extends State<PhotoViewer> {
             tooltip: 'Excluir foto',
             icon: const Icon(Icons.delete_outline),
             onPressed: () async {
+              if (!gate.can(Perm.vistoriaEditar)) {
+                toast(context, 'Seu usuário não exclui fotos.');
+                return;
+              }
               if (await confirm(context, 'Excluir foto?',
                   'A foto será apagada deste aparelho.',
                   ok: 'Excluir', danger: true)) {

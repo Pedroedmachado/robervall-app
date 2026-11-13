@@ -117,8 +117,8 @@ class _FunilarAppState extends State<FunilarApp>
             scaffoldMessengerKey: messengerKey,
             navigatorKey: navigatorKey,
             debugShowCheckedModeBanner: false,
-            theme: buildTheme(Brightness.light),
-            darkTheme: buildTheme(Brightness.dark),
+            theme: _lightTheme,
+            darkTheme: _darkTheme,
             themeMode: mode,
             locale: const Locale('pt', 'BR'),
             supportedLocales: const [Locale('pt', 'BR')],
@@ -134,3 +134,7 @@ class _FunilarAppState extends State<FunilarApp>
     );
   }
 }
+
+
+final ThemeData _lightTheme = buildTheme(Brightness.light);
+final ThemeData _darkTheme = buildTheme(Brightness.dark);

@@ -158,6 +158,27 @@ class _AccessBar extends StatelessWidget {
     final store = StoreScope.of(context);
     final t = Theme.of(context);
     final multi = store.activeUsers.length > 1;
+    if (store.loadError != null) {
+      // o arquivo de dados não abriu: avisa e diz onde ficou a cópia
+      return Material(
+        color: t.colorScheme.errorContainer,
+        child: SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: Row(children: [
+              Icon(Icons.report_problem_outlined, size: 18, color: t.colorScheme.onErrorContainer),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                    'Não consegui abrir os dados deste aparelho. O arquivo foi guardado como "dados.json.corrompido-…" na pasta do app; restaure um backup em Ajustes.',
+                    style: TextStyle(color: t.colorScheme.onErrorContainer)),
+              ),
+            ]),
+          ),
+        ),
+      );
+    }
     if (store.saveError != null) {
       // gravação falhando: o que for feito agora pode não ficar salvo
       return Material(

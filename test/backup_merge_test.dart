@@ -75,7 +75,9 @@ void main() {
     final lixas = b.stock.where((s) => s.name.toUpperCase() == 'LIXA P320').toList();
     expect(lixas.length, 1);
     expect(lixas.single.id, lixaB.id);
-    expect(lixas.single.qty, lixaA.qty); // valor do backup
+    // o saldo daqui foi lançado depois do backup: fica o daqui (o histórico
+    // de compras do backup entra junto)
+    expect(lixas.single.qty, 3);
     expect(b.stock.any((s) => s.name == 'Farol Gol G5'), isTrue);
     expect(r.updated['stock'], 1);
 
@@ -101,6 +103,16 @@ void main() {
     expect(b.contacts.where((c) => c.name.toLowerCase() == 'joão silva').length, 1);
     expect(b.docs.length, 1);
     expect(b.entries.where((e) => e.description == 'Pagamento Carlos').length, 1);
+
+    // usuários: quem já existe aqui não muda; os do backup não entram ativos
+    expect(b.users.where((u) => u.active).length, lessThanOrEqualTo(1));
+
+    // backup mais novo que o saldo daqui: aí o saldo do backup vale
+    lixaA.qty = 77;
+    a.upsertStock(lixaA);
+    await b.importBackup(await a.exportBackup());
+    expect(b.stock.where((s) => s.name.toUpperCase() == 'LIXA P320').single.qty, 77);
+    expect(b.claims.length, 2);
 
     // reabrir mantém tudo
     await b.flush();
@@ -141,3 +153,4 @@ void main() {
     expect((out['users'] as List).length, 1); // mesmo nome: não duplica
   });
 }
+
