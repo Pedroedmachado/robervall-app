@@ -213,7 +213,8 @@ class AppStore extends ChangeNotifier {
         'docs': docs.map((e) => e.toJson()).toList(),
       };
 
-  Future<void> _write() async {
+  /// Com [wait] (usado pelo flush) só volta depois que tudo está no disco.
+  Future<void> _write({bool wait = false}) async {
     // sem licença válida: só consulta, nada é gravado
     if (gate.readOnly) return;
     if (_saving) {
@@ -221,6 +222,7 @@ class AppStore extends ChangeNotifier {
       // seguinte (que leva o que mudou no meio), para o flush() só voltar
       // com tudo no disco
       _pendingSave = true;
+      if (!wait) return; // a gravação em andamento grava de novo ao terminar
       try {
         await _writing?.timeout(const Duration(seconds: 8));
         return;
@@ -329,7 +331,7 @@ class AppStore extends ChangeNotifier {
 
   Future<void> flush() async {
     _saveTimer?.cancel();
-    await _write();
+    await _write(wait: true);
   }
 
   // ---------------------------------------------------------------- sinistros
