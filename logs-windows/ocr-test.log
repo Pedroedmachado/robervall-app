@@ -1,0 +1,70 @@
+== leitor de notas por foto (OCR do Windows)
+
+Name                                   State
+----                                   -----
+Language.OCR~~~ar-SA~0.0.1.0      NotPresent
+Language.OCR~~~bg-BG~0.0.1.0      NotPresent
+Language.OCR~~~bs-LATN-BA~0.0.1.0 NotPresent
+Language.OCR~~~cs-CZ~0.0.1.0      NotPresent
+Language.OCR~~~da-DK~0.0.1.0      NotPresent
+Language.OCR~~~de-DE~0.0.1.0      NotPresent
+Language.OCR~~~el-GR~0.0.1.0      NotPresent
+Language.OCR~~~en-GB~0.0.1.0      NotPresent
+Language.OCR~~~en-US~0.0.1.0       Installed
+Language.OCR~~~es-ES~0.0.1.0      NotPresent
+Language.OCR~~~es-MX~0.0.1.0      NotPresent
+Language.OCR~~~fi-FI~0.0.1.0      NotPresent
+Language.OCR~~~fr-CA~0.0.1.0      NotPresent
+Language.OCR~~~fr-FR~0.0.1.0      NotPresent
+Language.OCR~~~hr-HR~0.0.1.0      NotPresent
+Language.OCR~~~hu-HU~0.0.1.0      NotPresent
+Language.OCR~~~it-IT~0.0.1.0      NotPresent
+Language.OCR~~~ja-JP~0.0.1.0      NotPresent
+Language.OCR~~~ko-KR~0.0.1.0      NotPresent
+Language.OCR~~~nb-NO~0.0.1.0      NotPresent
+Language.OCR~~~nl-NL~0.0.1.0      NotPresent
+Language.OCR~~~pl-PL~0.0.1.0      NotPresent
+Language.OCR~~~pt-BR~0.0.1.0      NotPresent
+Language.OCR~~~pt-PT~0.0.1.0      NotPresent
+Language.OCR~~~ro-RO~0.0.1.0      NotPresent
+Language.OCR~~~ru-RU~0.0.1.0      NotPresent
+Language.OCR~~~sk-SK~0.0.1.0      NotPresent
+Language.OCR~~~sl-SI~0.0.1.0      NotPresent
+Language.OCR~~~sr-CYRL-RS~0.0.1.0 NotPresent
+Language.OCR~~~sr-LATN-RS~0.0.1.0 NotPresent
+Language.OCR~~~sv-SE~0.0.1.0      NotPresent
+Language.OCR~~~tr-TR~0.0.1.0      NotPresent
+Language.OCR~~~zh-CN~0.0.1.0      NotPresent
+Language.OCR~~~zh-HK~0.0.1.0      NotPresent
+Language.OCR~~~zh-TW~0.0.1.0      NotPresent
+
+
+
+00:00 +0: loading D:/a/robervall-app/robervall-app/test/ocr_desktop_test.dart
+00:00 +0: saída do leitor do Windows vira linhas da nota
+00:00 +1: linhas como o leitor do Windows devolve (centavos separados, letras soltas)
+00:00 +2: saída tsv do Tesseract vira trechos por linha
+00:00 +3: PC: lê a foto da nota de exemplo e monta a entrada no estoque
+--- linhas lidas (windows)
+TINTAS EXEMPLO LTDA
+AV DAS CORES, 1000
+FONE: 1100000000
+RESERVA 0123456
+30/10/2026-13:50 VEND:   00010 -FULANO
+QTDE UNID   PRC UNIT   TOTAL
+VERNIZ A. SOLIDOS HS-2X1 13000 C/CAT.SKY
+3,00 QUART   89,00   267 , oo
+THINNER PIJ /POLIES.TH700 900ML SKY
+2,00 L ITRO   41,00   82,00
+MASSA POLIESTER M3500-750GR SHERWIN
+4,00 750GR   33,90   135,60
+FITA CREPE VERDE AUTOMOT . 18X40MTS
+6,00 UND   5,95   35,70
+L IXA DAGUA 1200 NORTON-AMARELA
+5,00 FL   6,95   34,75
+TOTAL   555,05
+A vista
+DOCUMENTO SEM VALOR FISCAL
+---
+00:03 +4: All tests passed!
+OCR_OK
