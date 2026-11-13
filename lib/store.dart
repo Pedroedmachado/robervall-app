@@ -329,9 +329,11 @@ class AppStore extends ChangeNotifier {
     super.dispose();
   }
 
-  Future<void> flush() async {
+  /// Grava agora. Com [wait] (antes de fechar o app para atualizar) só
+  /// volta quando tudo está no disco, mesmo com outra gravação em andamento.
+  Future<void> flush({bool wait = false}) async {
     _saveTimer?.cancel();
-    await _write(wait: true);
+    await _write(wait: wait);
   }
 
   // ---------------------------------------------------------------- sinistros

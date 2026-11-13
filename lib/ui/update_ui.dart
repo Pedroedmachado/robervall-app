@@ -58,7 +58,7 @@ class _UpdateCardState extends State<UpdateCard> {
             onProgress: (p) => mounted ? setState(() => _progress = p) : null);
         if (!mounted) return;
         final store = StoreScope.read(context);
-        await store.flush();
+        await store.flush(wait: true);
         await launchSwapScript(script);
         exit(0);
       } catch (e) {
@@ -79,7 +79,7 @@ class _UpdateCardState extends State<UpdateCard> {
         final script = await prepareLinuxUpdate(rel,
             onProgress: (p) => mounted ? setState(() => _progress = p) : null);
         if (!mounted) return;
-        await StoreScope.read(context).flush();
+        await StoreScope.read(context).flush(wait: true);
         await launchLinuxSwapScript(script);
         exit(0);
       } catch (e) {
@@ -98,7 +98,7 @@ class _UpdateCardState extends State<UpdateCard> {
       }
       setState(() => _progress = 0);
       try {
-        await StoreScope.read(context).flush();
+        await StoreScope.read(context).flush(wait: true);
         final dir = await getTemporaryDirectory();
         final apk = await downloadToFile(
             a.$1, a.$2, File('${dir.path}/${edition.asset}-${rel.tag}.apk'),
