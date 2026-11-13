@@ -54,7 +54,7 @@ Future<bool> authorize(BuildContext context, Perm p, {String reason = ''}) async
   );
   if (ok != true) return false;
   final good = await store.authorizeOnce(who, pinCtl.text.trim(), p);
-  if (!good && context.mounted) toast(context, 'PIN incorreto.');
+  if (!good && context.mounted) toast(context, store.pinMessage(who));
   return good;
 }
 

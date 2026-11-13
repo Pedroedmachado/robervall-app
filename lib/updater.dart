@@ -5,6 +5,7 @@ library;
 import 'edition.dart';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:http/http.dart' as http;
@@ -29,6 +30,17 @@ class ReleaseInfo {
   final Map<String, (String url, int size)> assets;
 
   (String, int)? asset(String name) => assets[name];
+}
+
+/// Só "v1.0.48" / "1.0.48" (nada de espaços, barras, aspas ou "$(…)").
+bool validReleaseTag(String tag) => RegExp(r'^v?\d+(\.\d+){1,3}$').hasMatch(tag);
+
+/// Os arquivos da atualização só vêm do GitHub, por HTTPS.
+bool trustedDownloadUrl(String url) {
+  final u = Uri.tryParse(url);
+  if (u == null || u.scheme != 'https') return false;
+  final h = u.host.toLowerCase();
+  return h == 'github.com' || h.endsWith('.github.com') || h.endsWith('.githubusercontent.com');
 }
 
 /// "v1.0.48" → [1, 0, 48]
@@ -58,8 +70,13 @@ Future<ReleaseInfo> fetchLatestRelease({http.Client? client}) async {
       throw HttpException('GitHub respondeu ${r.statusCode}');
     }
     final j = jsonDecode(r.body) as Map<String, dynamic>;
+    final tag = '${j['tag_name'] ?? ''}';
+    // a versão entra em nomes de arquivo e nos scripts de troca: só "v1.2.3"
+    if (!validReleaseTag(tag)) {
+      throw const FormatException('Versão publicada com nome inesperado.');
+    }
     return ReleaseInfo(
-      '${j['tag_name'] ?? ''}',
+      tag,
       '${j['body'] ?? ''}',
       {
         for (final a in (j['assets'] as List? ?? const []))
@@ -91,14 +108,13 @@ String windowsSwapScript({
   bool relaunch = true,
 }) {
   String q(String s) => "'${s.replaceAll("'", "''")}'";
-  String plain(String s) => s.replaceAll("'", '').replaceAll('"', '');
   final reopen = relaunch
       ? "Start-Process (Join-Path ${q(to)} '$_exe')"
       : "Log 'sem reabrir (teste)'";
   return '''
 \$log = Join-Path \$env:TEMP '$_log'
 function Log(\$m) { Add-Content -Path \$log -Value ("{0:yyyy-MM-dd HH:mm:ss}  {1}" -f (Get-Date), \$m) }
-Log "Atualizando para ${plain(tag)} de=${plain(from)} para=${plain(to)}"
+Log ('Atualizando para ' + ${q(tag)} + ' de=' + ${q(from)} + ' para=' + ${q(to)})
 try { Wait-Process -Id $pid -Timeout 60 -ErrorAction SilentlyContinue } catch {}
 Start-Sleep -Milliseconds 800
 \$ok = \$false
@@ -190,6 +206,9 @@ Future<void> launchSwapScript(File script) async {
 
 Future<List<int>> downloadAsset(
     String url, int size, void Function(double)? onProgress) async {
+  if (!trustedDownloadUrl(url)) {
+    throw const HttpException('Endereço de download fora do GitHub.');
+  }
   final client = http.Client();
   try {
     final req = http.Request('GET', Uri.parse(url))
@@ -204,6 +223,9 @@ Future<List<int>> downloadAsset(
       out.add(chunk);
       if (total > 0) onProgress?.call(out.length / total);
     }
+    if (size > 0 && out.length != size) {
+      throw HttpException('Download incompleto (${out.length} de $size bytes)');
+    }
     return out.takeBytes();
   } finally {
     client.close();
@@ -214,6 +236,9 @@ Future<List<int>> downloadAsset(
 /// memória do celular).
 Future<File> downloadToFile(String url, int size, File into,
     void Function(double)? onProgress) async {
+  if (!trustedDownloadUrl(url)) {
+    throw const HttpException('Endereço de download fora do GitHub.');
+  }
   final client = http.Client();
   IOSink? sink;
   try {
@@ -261,7 +286,7 @@ String linuxSwapScript({
   final exe = '$to/${edition.package}';
   return '''#!/bin/sh
 log="\${TMPDIR:-/tmp}/${edition.package}-atualizacao.log"
-echo "\$(date '+%F %T') atualizando para $tag" >> "\$log"
+echo "\$(date '+%F %T') atualizando para" ${q(tag)} >> "\$log"
 i=0
 while kill -0 $pid 2>/dev/null && [ \$i -lt 60 ]; do sleep 1; i=\$((i+1)); done
 if cp -a ${q(from)}/. ${q(to)}/; then

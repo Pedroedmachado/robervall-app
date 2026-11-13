@@ -158,6 +158,31 @@ class _AccessBar extends StatelessWidget {
     final store = StoreScope.of(context);
     final t = Theme.of(context);
     final multi = store.activeUsers.length > 1;
+    if (store.saveError != null) {
+      // gravação falhando: o que for feito agora pode não ficar salvo
+      return Material(
+        color: t.colorScheme.errorContainer,
+        child: SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: Row(children: [
+              Icon(Icons.save_outlined, size: 18, color: t.colorScheme.onErrorContainer),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                    'Não consegui salvar os dados neste aparelho (disco cheio ou pasta sem permissão). Exporte um backup em Ajustes antes de fechar o app.',
+                    style: TextStyle(color: t.colorScheme.onErrorContainer)),
+              ),
+              TextButton(
+                onPressed: () => store.flush(),
+                child: const Text('Tentar de novo'),
+              ),
+            ]),
+          ),
+        ),
+      );
+    }
     if (!gate.readOnly && !multi) return const SizedBox.shrink();
     return Material(
       color: gate.readOnly ? t.colorScheme.errorContainer : t.colorScheme.tertiaryContainer,

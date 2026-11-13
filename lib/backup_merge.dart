@@ -15,6 +15,9 @@ class MergeReport {
   /// Backup aberto num aparelho vazio: virou cópia do arquivo.
   bool fullRestore = false;
 
+  /// Usuários que só existiam no backup (entraram desativados).
+  int inactiveUsers = 0;
+
   int get totalAdded => added.values.fold(0, (a, b) => a + b);
   int get totalUpdated => updated.values.fold(0, (a, b) => a + b);
 
@@ -42,7 +45,10 @@ class MergeReport {
       ].join(' e ').replaceAll('  ', ' '));
     }
     if (parts.isEmpty) return 'Nada mudou: tudo do backup já estava neste aparelho.';
-    return 'Mesclado: ${parts.join(' · ')}.';
+    final users = inactiveUsers == 0
+        ? ''
+        : ' ${inactiveUsers == 1 ? 'O usuário novo entrou desativado' : 'Os usuários novos entraram desativados'} (ative em Ajustes › Usuários).';
+    return 'Mesclado: ${parts.join(' · ')}.$users';
   }
 }
 
@@ -123,9 +129,11 @@ _J _overlay(String col, _J mine, _J theirs) {
   theirs.forEach((k, v) {
     if (k == 'id') return;
     if (_empty(v) && !_empty(mine[k])) return;
-    // o número do orçamento e a senha do usuário daqui não mudam
+    // o número do orçamento daqui não muda
     if (col == 'claims' && k == 'number' && !_empty(mine[k])) return;
-    if (col == 'users' && (k == 'pin' || k == 'salt') && !_empty(mine[k])) return;
+    // usuário que já existe aqui: papel, senha e ativo/inativo são os daqui
+    // (um backup não promove ninguém a administrador nem tranca o app)
+    if (col == 'users') return;
     // históricos e fotos: junta os dois, sem repetir
     if (_unionKeys.contains(k) && mine[k] is List && v is List) {
       final seen = <String>{};
@@ -175,12 +183,19 @@ bool _isEmptyData(_J j) =>
       report.added[c] = _list(theirs[c]).length;
     }
     final out = Map<String, dynamic>.from(theirs);
-    // usuários deste aparelho que não estão no backup continuam
-    final users = _list(theirs['users']);
-    for (final u in _list(mine['users'])) {
-      if (users.every((x) => x['id'] != u['id'] && _n(x['name']) != _n(u['name']))) users.add(u);
+    // com usuários já criados neste aparelho, valem os daqui (papel e
+    // senha); os do backup só entram num aparelho sem nenhum usuário
+    final mineUsers = _list(mine['users']);
+    if (mineUsers.isNotEmpty) {
+      final users = [...mineUsers];
+      for (final u in _list(theirs['users'])) {
+        if (users.every((x) => x['id'] != u['id'] && _n(x['name']) != _n(u['name']))) {
+          users.add(u..['active'] = false);
+          report.inactiveUsers++;
+        }
+      }
+      out['users'] = users;
     }
-    out['users'] = users;
     return (out, report);
   }
 
@@ -237,6 +252,12 @@ bool _isEmptyData(_J j) =>
     for (final (i, r) in there.indexed) {
       final h = m[i];
       if (h == null) {
+        // usuário que só existe no backup entra desativado: quem administra
+        // este aparelho decide se ativa (Ajustes › Usuários)
+        if (col == 'users') {
+          r['active'] = false;
+          report.inactiveUsers++;
+        }
         appended.add(r);
         add++;
         continue;

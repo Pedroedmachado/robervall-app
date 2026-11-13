@@ -207,23 +207,45 @@ class AppStore extends ChangeNotifier {
     // sem licença válida: só consulta, nada é gravado
     if (gate.readOnly) return;
     if (_saving) {
+      // já tem uma gravação em andamento: quem chamou espera ela e a
+      // seguinte (que leva o que mudou no meio), para o flush() só voltar
+      // com tudo no disco
       _pendingSave = true;
+      await _writing;
       return;
     }
     _saving = true;
+    final done = Completer<void>();
+    _writing = done.future;
     try {
-      final tmp = File('${_dataFile.path}.tmp');
-      await tmp.writeAsString(jsonEncode(toJson()), flush: true);
-      await tmp.rename(_dataFile.path);
-    } catch (e) {
-      debugPrint('Falha ao salvar: $e');
+      do {
+        _pendingSave = false;
+        try {
+          final tmp = File('${_dataFile.path}.tmp');
+          await tmp.writeAsString(jsonEncode(toJson()), flush: true);
+          await tmp.rename(_dataFile.path);
+          _setSaveError(null);
+        } catch (e) {
+          debugPrint('Falha ao salvar: $e');
+          _setSaveError('$e');
+        }
+      } while (_pendingSave);
     } finally {
       _saving = false;
-      if (_pendingSave) {
-        _pendingSave = false;
-        await _write();
-      }
+      done.complete();
     }
+  }
+
+  Future<void>? _writing;
+
+  /// Última gravação falhou (disco cheio, pasta sem permissão…): a tela
+  /// avisa, porque o que for feito a partir daí pode não ficar salvo.
+  String? saveError;
+
+  void _setSaveError(String? e) {
+    if (saveError == e) return;
+    saveError = e;
+    notifyListeners();
   }
 
   /// Notifica a interface e agenda gravação em disco.
@@ -798,9 +820,17 @@ class AppStore extends ChangeNotifier {
       await photosDir.create(recursive: true);
       await out.writeAsBytes(f.content as List<int>, flush: true);
     }
-    final (merged, report) = mergeBackupJson(toJson(), data);
+    final before = toJson();
+    final (merged, report) = mergeBackupJson(before, data);
+    // cópia de segurança do que havia antes de mesclar (uma só, a mais
+    // recente): dados-antes-de-importar.json, na pasta do app
+    try {
+      await File('${baseDir.path}/dados-antes-de-importar.json')
+          .writeAsString(jsonEncode(before), flush: true);
+    } catch (_) {}
     _fromJson(merged);
     _fixClaimNumbers();
+    _applyAccess();
     changed();
     await flush();
     return report;
@@ -1337,8 +1367,45 @@ class AppStore extends ChangeNotifier {
     changed();
   }
 
+  // PIN errado várias vezes seguidas: espera crescente (30 s, 1 min, 2 min…
+  // até 15 min) antes de aceitar nova tentativa daquele usuário.
+  final Map<String, int> _pinFails = {};
+  final Map<String, DateTime> _pinLockedUntil = {};
+
+  /// Quanto falta para poder tentar o PIN de novo (zero = pode).
+  Duration pinWait(AppUser u) {
+    final until = _pinLockedUntil[u.id];
+    if (until == null) return Duration.zero;
+    final left = until.difference(DateTime.now());
+    return left.isNegative ? Duration.zero : left;
+  }
+
+  /// Texto para a tela depois de um PIN recusado.
+  String pinMessage(AppUser u) {
+    final w = pinWait(u);
+    if (w == Duration.zero) return 'PIN incorreto.';
+    final s = w.inSeconds + 1;
+    return 'Muitas tentativas erradas. Tente de novo em ${s >= 60 ? '${(s / 60).ceil()} min' : '$s s'}.';
+  }
+
+  Future<bool> _tryPin(AppUser u, String pin) async {
+    if (pinWait(u) > Duration.zero) return false;
+    if (await checkPin(u, pin)) {
+      _pinFails.remove(u.id);
+      _pinLockedUntil.remove(u.id);
+      return true;
+    }
+    final n = (_pinFails[u.id] ?? 0) + 1;
+    _pinFails[u.id] = n;
+    if (n >= 5) {
+      final secs = (30 * (1 << (n - 5).clamp(0, 5))).clamp(30, 900);
+      _pinLockedUntil[u.id] = DateTime.now().add(Duration(seconds: secs));
+    }
+    return false;
+  }
+
   Future<bool> login(AppUser u, String pin) async {
-    if (!u.active || !await checkPin(u, pin)) return false;
+    if (!u.active || !await _tryPin(u, pin)) return false;
     currentUser = u;
     _applyAccess();
     notifyListeners();
@@ -1354,7 +1421,7 @@ class AppStore extends ChangeNotifier {
   /// Autorização pontual de outro usuário (ex.: almoxarife libera insumo
   /// no tablet da produção) sem trocar o usuário logado.
   Future<bool> authorizeOnce(AppUser u, String pin, Perm p) async =>
-      u.active && u.can(p) && await checkPin(u, pin);
+      u.active && u.can(p) && await _tryPin(u, pin);
 }
 
 /// Resultado da análise de impacto.

@@ -26,7 +26,7 @@ class _LoginPageState extends State<LoginPage> {
     final ok = await store.login(u, _pin.text.trim());
     if (!ok && mounted) {
       _pin.clear();
-      toast(context, 'PIN incorreto.');
+      toast(context, store.pinMessage(u));
     }
   }
 

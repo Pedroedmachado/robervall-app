@@ -5,8 +5,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Os jobs de compilação só leem o repositório; só o "report" publica a
+# versão e os logs.
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: build-${{ github.ref }}
@@ -24,7 +26,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: stable
           cache: true
@@ -94,7 +96,7 @@ jobs:
       - name: Nome do sistema
         shell: bash
         run: cat tool/app.env >> "$GITHUB_ENV"
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: stable
           cache: true
@@ -139,7 +141,7 @@ jobs:
       - name: Nome do sistema
         shell: bash
         run: cat tool/app.env >> "$GITHUB_ENV"
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: stable
           cache: true
@@ -180,6 +182,8 @@ jobs:
     needs: [android-linux, windows, ios]
     if: always()
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - name: Nome do sistema

@@ -144,7 +144,7 @@ class StoredDoc {
           DocKind.notaCompra,
       source: DocSource.values.where((e) => e.name == j['source']).firstOrNull ??
           DocSource.manual,
-      file: s(j['file']),
+      file: safeFileName(j['file']),
       date: DateTime.tryParse(s(j['date'])),
       createdAt: DateTime.tryParse(s(j['createdAt'])),
       party: s(j['party']),

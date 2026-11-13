@@ -235,7 +235,7 @@ class StockItem {
       slot: s(j['slot']),
       location: s(j['location']),
       notes: s(j['notes']),
-      photo: s(j['photo']),
+      photo: safeFileName(j['photo']),
       claimId: s(j['claim']),
       sku: s(j['sku']),
       mfrBrand: s(j['mfrBrand']),

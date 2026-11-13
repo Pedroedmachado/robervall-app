@@ -22,6 +22,24 @@ int _i(Object? v, [int def = 0]) {
 
 String _s(Object? v, [String def = '']) => v == null ? def : v.toString();
 
+/// Nome de arquivo da pasta de fotos lido do JSON (dados.json ou backup):
+/// só vale um nome simples. Qualquer coisa com cara de caminho ("../",
+/// "C:\\…") é descartada, para um backup adulterado não fazer o app ler ou
+/// apagar arquivos fora da pasta dele.
+String safeFileName(Object? v) {
+  final s = v == null ? '' : v.toString().trim();
+  if (s.isEmpty ||
+      s.contains('/') ||
+      s.contains('\\') ||
+      s.contains('..') ||
+      s.contains(':') ||
+      s.startsWith('.') ||
+      s.codeUnits.any((c) => c < 32)) {
+    return '';
+  }
+  return s;
+}
+
 DateTime? _dt(Object? v) => v == null ? null : DateTime.tryParse(v.toString());
 
 T _enum<T extends Enum>(List<T> values, Object? name, T def) {
@@ -352,7 +370,7 @@ class ClaimPhoto {
 
   factory ClaimPhoto.fromJson(Map<String, dynamic> j) => ClaimPhoto(
         id: _s(j['id'], newId()),
-        fileName: _s(j['fileName']),
+        fileName: safeFileName(j['fileName']),
         category:
             _enum(PhotoCategory.values, j['category'], PhotoCategory.avaria),
         caption: _s(j['caption']),
@@ -619,7 +637,7 @@ class Claim {
       ..laborRate = _d(j['laborRate'])
       ..paintRate = _d(j['paintRate'])
       ..sourceSystem = _s(j['sourceSystem'])
-      ..sourcePdf = _s(j['sourcePdf']);
+      ..sourcePdf = safeFileName(j['sourcePdf']);
   }
 }
 
@@ -1407,7 +1425,7 @@ class FinanceEntry {
         pieces: _d(j['pieces']),
         pieceValue: _d(j['pieceValue']),
         autoKey: _s(j['auto']),
-        receiptFile: _s(j['receipt']),
+        receiptFile: safeFileName(j['receipt']),
         invoiceNumber: _s(j['invoice']),
         paymentMethod: _s(j['payment']),
       );
