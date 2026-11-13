@@ -29,6 +29,9 @@ jobs:
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: stable
+          # versão fixa: a 3.50.0 quebra a compilação do Android (falha no
+          # lint do plugin file_selector_android). Subir só depois de testar.
+          flutter-version: '3.47.9'
           cache: true
       - name: Chave fixa de assinatura do Android
         env:
@@ -99,6 +102,9 @@ jobs:
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: stable
+          # versão fixa: a 3.50.0 quebra a compilação do Android (falha no
+          # lint do plugin file_selector_android). Subir só depois de testar.
+          flutter-version: '3.47.9'
           cache: true
       - name: Build
         shell: bash
@@ -144,6 +150,9 @@ jobs:
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: stable
+          # versão fixa: a 3.50.0 quebra a compilação do Android (falha no
+          # lint do plugin file_selector_android). Subir só depois de testar.
+          flutter-version: '3.47.9'
           cache: true
       - name: Build
         shell: bash
